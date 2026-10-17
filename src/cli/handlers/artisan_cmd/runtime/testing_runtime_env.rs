@@ -1,9 +1,9 @@
 //! Unique testing runtime environment naming helpers.
 
 use anyhow::{Context, Result};
-use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -31,15 +31,15 @@ impl TestingRuntimeLease {
     }
 }
 
+/// A held test slot: an exclusive `flock` on the slot's lock file, released
+/// when the run ends or its process dies (a killed agent never leaves a
+/// stale slot; ledger decision D6).
 struct TestingRuntimeSlot {
-    path: std::path::PathBuf,
+    _file: std::fs::File,
 }
 
-impl Drop for TestingRuntimeSlot {
-    fn drop(&mut self) {
-        drop(std::fs::remove_file(&self.path));
-    }
-}
+/// How long a run waits for a free slot of its workspace's pool.
+const SLOT_WAIT: std::time::Duration = std::time::Duration::from_secs(180);
 
 pub(super) fn acquire_testing_runtime_lease(workspace_root: &Path) -> Result<TestingRuntimeLease> {
     let pool_size = testing_runtime_pool_size();
@@ -51,44 +51,45 @@ pub(super) fn acquire_testing_runtime_lease(workspace_root: &Path) -> Result<Tes
     }
 
     let workspace_key = workspace_pool_key(workspace_root);
-    let lock_root = pool_lock_root(&workspace_key);
-    std::fs::create_dir_all(&lock_root)
-        .with_context(|| format!("failed to create {}", lock_root.display()))?;
-
-    let max_attempts = 7_200;
-    for _ in 0..max_attempts {
+    let lock_root = pool_lock_root(&workspace_key)?;
+    let started = std::time::Instant::now();
+    loop {
         for slot in 1..=pool_size {
-            let slot_path = lock_root.join(format!("slot-{slot}.lock"));
-            match std::fs::OpenOptions::new()
-                .create_new(true)
-                .write(true)
-                .open(&slot_path)
-            {
-                Ok(mut file) => {
-                    if writeln!(file, "{}", std::process::id()).is_err() {
-                        // Best effort metadata write.
-                    }
-                    return Ok(TestingRuntimeLease {
-                        runtime_env: resolve_pooled_runtime_env_name(&workspace_key, slot),
-                        _slot: Some(TestingRuntimeSlot { path: slot_path }),
-                    });
-                }
-                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
-                    if should_reclaim_existing_slot(&slot_path) {
-                        drop(std::fs::remove_file(&slot_path));
-                    }
-                    continue;
-                }
-                Err(err) => {
-                    return Err(err)
-                        .with_context(|| format!("failed to acquire {}", slot_path.display()));
-                }
+            if let Some(file) = try_lock_slot(&lock_root.join(format!("slot-{slot}.lock")))? {
+                return Ok(TestingRuntimeLease {
+                    runtime_env: resolve_pooled_runtime_env_name(&workspace_key, slot),
+                    _slot: Some(TestingRuntimeSlot { _file: file }),
+                });
             }
+        }
+        if started.elapsed() >= SLOT_WAIT {
+            anyhow::bail!(
+                "all {pool_size} test slots of this workspace stayed busy for {}s; raise \
+                 BERTH_TEST_RUNTIME_POOL_SIZE or wait for the running test commands",
+                SLOT_WAIT.as_secs()
+            );
         }
         std::thread::sleep(std::time::Duration::from_millis(25));
     }
+}
 
-    anyhow::bail!("timed out waiting for testing runtime slot after {max_attempts} attempts")
+/// Takes the slot's lock without waiting: `None` when another run holds it.
+fn try_lock_slot(path: &Path) -> Result<Option<std::fs::File>> {
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .open(path)
+        .with_context(|| format!("failed to open {}", path.display()))?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+        Err(std::fs::TryLockError::Error(error)) => {
+            Err(error).with_context(|| format!("failed to lock {}", path.display()))
+        }
+    }
 }
 
 fn testing_runtime_pool_size() -> usize {
@@ -233,68 +234,36 @@ fn workspace_pool_key(workspace_root: &Path) -> String {
     format!("{hash:016x}")
 }
 
-fn pool_lock_root(workspace_key: &str) -> std::path::PathBuf {
-    std::env::temp_dir()
-        .join("berth-testing-runtime-pool")
-        .join(workspace_key)
+/// The workspace's slot locks, under the berth home (unit tests use a
+/// private temporary directory instead of the developer's home).
+fn pool_lock_root(workspace_key: &str) -> Result<std::path::PathBuf> {
+    if cfg!(test) {
+        let root = std::env::temp_dir()
+            .join(format!("berth-test-slots-{}", std::process::id()))
+            .join(workspace_key);
+        std::fs::create_dir_all(&root)
+            .with_context(|| format!("failed to create {}", root.display()))?;
+        return Ok(root);
+    }
+    crate::home::private_dir(&Path::new("locks").join("test-slots").join(workspace_key))
 }
 
 fn resolve_pooled_runtime_env_name(workspace_key: &str, slot: usize) -> String {
     format!("testing-pool-{workspace_key}-{slot}")
 }
 
-fn should_reclaim_existing_slot(slot_path: &Path) -> bool {
-    should_reclaim_existing_slot_with(slot_path, process_exists)
-}
-
-fn should_reclaim_existing_slot_with<F>(slot_path: &Path, process_exists: F) -> bool
-where
-    F: Fn(u32) -> bool,
-{
-    let Some(pid) = read_slot_pid(slot_path) else {
-        return false;
-    };
-
-    !process_exists(pid)
-}
-
-fn read_slot_pid(slot_path: &Path) -> Option<u32> {
-    let raw = std::fs::read_to_string(slot_path).ok()?;
-    raw.trim().parse::<u32>().ok()
-}
-
-fn process_exists(pid: u32) -> bool {
-    process_exists_with_command("kill", pid)
-}
-
-fn process_exists_with_command(command: &str, pid: u32) -> bool {
-    Command::new(command)
-        .args(["-0", &pid.to_string()])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
     use std::fs;
-    use std::io::Read;
-    use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
-    use std::sync::Mutex;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
         ResourceHint, acquire_testing_runtime_lease, adaptive_pool_size_from_signals,
-        process_exists_with_command, resolve_pooled_runtime_env_name,
-        should_reclaim_existing_slot_with, testing_runtime_env_name,
+        resolve_pooled_runtime_env_name, testing_runtime_env_name,
         testing_runtime_pool_size_from_env, workspace_pool_key,
     };
-
-    static PATH_MUTEX: Mutex<()> = Mutex::new(());
 
     fn temp_root(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
@@ -416,60 +385,22 @@ mod tests {
     }
 
     #[test]
-    fn stale_slot_with_dead_pid_is_reclaimed() {
-        let root = temp_root("stale-slot");
-        let slot_path = root.join("slot-1.lock");
-        fs::write(&slot_path, "424242\n").expect("write stale slot");
-
-        assert!(should_reclaim_existing_slot_with(&slot_path, |_| false));
-    }
-
-    #[test]
-    fn slot_with_live_pid_is_not_reclaimed() {
-        let root = temp_root("live-slot");
-        let slot_path = root.join("slot-1.lock");
-        fs::write(&slot_path, "12345\n").expect("write live slot");
-
-        assert!(!should_reclaim_existing_slot_with(&slot_path, |_| true));
-    }
-
-    #[test]
-    fn slot_without_pid_is_not_reclaimed() {
-        let root = temp_root("invalid-slot");
-        let slot_path = root.join("slot-1.lock");
-        fs::write(&slot_path, "not-a-pid\n").expect("write invalid slot");
-
-        assert!(!should_reclaim_existing_slot_with(&slot_path, |_| false));
-    }
-
-    #[test]
-    fn process_exists_with_command_checks_pid_quietly() {
-        let _guard = PATH_MUTEX.lock().unwrap_or_else(|err| err.into_inner());
-        let root = temp_root("fake-kill");
-        let binary = root.join("kill");
-        let args_file = root.join("kill-args.txt");
-        fs::write(
-            &binary,
-            format!(
-                "#!/bin/sh\nprintf '%s %s' \"$1\" \"$2\" > '{}'\nprintf '%s' 'No such process' >&2\nexit 1\n",
-                args_file.display()
-            ),
-        )
-        .expect("write fake kill");
-        let mut perms = fs::metadata(&binary).expect("kill metadata").permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&binary, perms).expect("chmod kill");
-
-        assert!(!process_exists_with_command(
-            binary.to_str().expect("binary path"),
-            424242
-        ));
-
-        let mut recorded_args = String::new();
-        fs::File::open(args_file)
-            .expect("open args file")
-            .read_to_string(&mut recorded_args)
-            .expect("read args file");
-        assert_eq!(recorded_args, "-0 424242");
+    fn a_held_slot_is_skipped_and_freed_when_its_holder_ends() {
+        let root = temp_root("held");
+        let first = acquire_testing_runtime_lease(&root).expect("first lease");
+        let second = acquire_testing_runtime_lease(&root).expect("second lease");
+        assert_ne!(
+            first.runtime_env_name(),
+            second.runtime_env_name(),
+            "a held slot is skipped"
+        );
+        let freed = first.runtime_env_name().to_owned();
+        drop(first);
+        let third = acquire_testing_runtime_lease(&root).expect("third lease");
+        assert_eq!(
+            third.runtime_env_name(),
+            freed,
+            "the slot frees as soon as its holder ends"
+        );
     }
 }

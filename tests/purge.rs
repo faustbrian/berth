@@ -114,7 +114,7 @@ impl Fixture {
     fn new(label: &str) -> Self {
         Self::with_project(
             label,
-            "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n    isolation: dedicated\n  cache:\n    preset: redis\n  app:\n    preset: laravel\n",
+            "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n    isolation: dedicated\n  cache:\n    preset: redis\n    isolation: dedicated\n  app:\n    preset: laravel\n",
         )
     }
 

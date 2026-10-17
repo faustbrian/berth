@@ -108,15 +108,24 @@ Creation and tenant provisioning run under a per-server host lock; a Docker
 ownership check. `berth gc` removes shared servers that no instance network
 uses and that hold no tenant.
 
-Known consequence: shared Redis/Valkey denies `FLUSHDB`/`FLUSHALL`, so
-`artisan cache:clear` fails against it; set `isolation: dedicated` on the
-service when a project needs it. Tenants may `SELECT` other logical databases
-because Laravel's cache defaults to database 1; key prefixes still isolate
-tenants. PostgreSQL databases that ParaTest creates accept connections from
-other roles (PostgreSQL's default `CONNECT` grant); their tables remain
-private to the owning tenant, but before PostgreSQL 15 another tenant could
-also create objects in their `public` schema. Tenants share one user's
-machine, so this guards against accidents, not a hostile neighbour.
+Redis and Valkey specifics: a tenant is an ACL user named like the SQL
+tenants, allowed only keys and channels under `{tenant}:`; berth injects
+`REDIS_USERNAME`, `REDIS_PASSWORD`, `REDIS_PREFIX={tenant}:` and
+`HORIZON_PREFIX={tenant}:horizon:`, so Laravel's keys, queues, broadcast
+channels and Horizon stay inside it. Users live in an ACL file on the
+server's volume, seeded with only the admin's password hash before first
+start. Known consequences: `KEYS`, `FLUSHDB` and `FLUSHALL` are denied, so
+`artisan cache:clear` fails against a shared server (set `isolation:
+dedicated` when a project needs it); `SCAN` is allowed and lists other
+tenants' key names (never values); tenants may `SELECT` other logical
+databases because Laravel's cache defaults to database 1, and key prefixes
+still isolate them; purges and test-lease resets delete the tenant's keys in
+every logical database. Server-wide script state (`SCRIPT FLUSH`, `SCRIPT
+KILL`, `FUNCTION`) is denied. Shared servers need Redis 7 or later (Valkey
+reports a Redis 7 version). Tools that publish outside the prefix, such as
+Reverb's scaling channel, and projects whose `config/database.php` Redis
+connections predate Laravel's `username` key (they authenticate as `default`
+and are refused) need `isolation: dedicated` or the key added.
 
 Lifecycle commands act on the tenant, never the server: `down`, `stop`,
 `kill` and `rm` remove the service's name from the server's endpoint on the
@@ -147,6 +156,11 @@ PostgreSQL 13 or later, run their admin SQL on stdin over TCP inside the
 container with the admin password in the environment (so readiness only
 passes once the image's temporary init server is gone), close `template1` to
 tenants, and keep data in a labeled volume mounted at the image's `PGDATA`.
+Databases that ParaTest creates accept connections from other roles
+(PostgreSQL's default `CONNECT` grant); their tables remain private to the
+owning tenant, but before PostgreSQL 15 another tenant could also create
+objects in their `public` schema. Tenants share one user's machine, so this
+guards against accidents, not a hostile neighbour.
 
 MySQL and MariaDB specifics: a tenant is a schema and a user
 `{instance hash}_{tenant hash}` (25 bytes, within MySQL's 32-byte user names)

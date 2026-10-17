@@ -8,6 +8,7 @@ mod listing;
 mod mysql;
 mod naming;
 mod postgres;
+mod redis;
 mod server;
 
 pub(crate) use assign::assign_shared_target;

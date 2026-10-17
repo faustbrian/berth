@@ -133,6 +133,10 @@ pub(super) fn ensure_running(target: &SharedTarget) -> Result<()> {
             postgres::ensure_supported_version(version.trim())?;
             admin_sql(target, &postgres::harden_server_sql())?;
         }
+        SharedEngine::Redis | SharedEngine::Valkey => {
+            let info = admin_sql(target, &super::redis::server_info_commands())?;
+            super::redis::ensure_supported_version(&info)?;
+        }
         SharedEngine::Mysql | SharedEngine::Mariadb => {}
     }
     Ok(())
@@ -166,7 +170,9 @@ fn create(target: &SharedTarget, installation: &str) -> Result<()> {
     let password_env = engine::server_password_env(target.engine);
     // The secret is passed by name from berth's environment, so it never
     // appears in berth's own argv or in `docker run`'s.
-    run.extend(["-e".to_owned(), password_env.to_owned()]);
+    if let Some(name) = password_env {
+        run.extend(["-e".to_owned(), name.to_owned()]);
+    }
     match target.engine {
         SharedEngine::Postgres => {
             run.extend([
@@ -181,12 +187,19 @@ fn create(target: &SharedTarget, installation: &str) -> Result<()> {
         SharedEngine::Mysql | SharedEngine::Mariadb => {
             run.extend(["-v".to_owned(), format!("{volume}:/var/lib/mysql")]);
         }
+        SharedEngine::Redis | SharedEngine::Valkey => {
+            seed_acl_file(target, &volume, installation, &secret)?;
+            run.extend(["-v".to_owned(), format!("{volume}:/data")]);
+        }
     }
     run.push(target.image.clone());
     run.extend(target.command.iter().cloned());
-    let output = Command::new(crate::docker::docker_command())
-        .args(&run)
-        .env(password_env, &secret)
+    let mut command = Command::new(crate::docker::docker_command());
+    command.args(&run);
+    if let Some(name) = password_env {
+        command.env(name, &secret);
+    }
+    let output = command
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -238,6 +251,55 @@ fn image_pgdata(image: &str, installation: &str) -> Result<String> {
         );
     }
     Ok(path)
+}
+
+/// Writes the server's initial ACL file (the admin's password hash) into
+/// its new volume, from stdin, before the server first starts.
+fn seed_acl_file(
+    target: &SharedTarget,
+    volume: &str,
+    installation: &str,
+    secret: &str,
+) -> Result<()> {
+    let mut args = vec!["run".to_owned(), "--rm".to_owned(), "-i".to_owned()];
+    args.extend([
+        "--label".to_owned(),
+        "dev.berth.managed=true".to_owned(),
+        "--label".to_owned(),
+        format!("dev.berth.installation={installation}"),
+        "--label".to_owned(),
+        "dev.berth.role=probe".to_owned(),
+        "-v".to_owned(),
+        format!("{volume}:/data"),
+        "--entrypoint".to_owned(),
+        "sh".to_owned(),
+        target.image.clone(),
+        "-c".to_owned(),
+        format!("cat > {}", super::redis::ACL_FILE),
+    ]);
+    let mut child = Command::new(crate::docker::docker_command())
+        .args(&args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("failed to seed the shared server's ACL file")?;
+    if let Some(mut input) = child.stdin.take() {
+        input
+            .write_all(super::redis::initial_acl_file(secret).as_bytes())
+            .context("failed to seed the shared server's ACL file")?;
+    }
+    let output = child
+        .wait_with_output()
+        .context("failed to seed the shared server's ACL file")?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "failed to seed the ACL file of {}: {}",
+            target.server,
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(())
 }
 
 fn ensure_image(image: &str) -> Result<()> {
@@ -294,7 +356,7 @@ fn wait_ready(target: &SharedTarget) -> Result<()> {
                 target.server
             ),
         }
-        match admin_sql(target, "SELECT 1;\n") {
+        match admin_sql(target, engine::ping(target.engine)) {
             Ok(_) => return Ok(()),
             // The data directory keeps the password it was created with; a
             // new admin secret never matches it, so waiting cannot help.
@@ -343,17 +405,43 @@ pub(super) fn admin_sql(target: &SharedTarget, sql: &str) -> Result<String> {
         if code == Some(0) {
             return Ok(stdout);
         }
-        if !engine::is_handoff(target.engine, code, &stderr) || started.elapsed() >= HANDOFF_TIMEOUT
+        let output = format!("{stdout}{stderr}");
+        if !engine::is_handoff(target.engine, code, &output) || started.elapsed() >= HANDOFF_TIMEOUT
         {
             anyhow::bail!(
                 "{} on {}: {}",
                 target.engine.as_str(),
                 target.server,
-                stderr.trim()
+                output.trim()
             );
         }
         std::thread::sleep(Duration::from_millis(250));
     }
+}
+
+/// Runs the admin client with extra arguments and no input (for example
+/// `redis-cli --scan`), failing on a non-zero exit.
+pub(super) fn admin_cli(target: &SharedTarget, args: &[&str]) -> Result<String> {
+    let secret = admin_secret(target)?;
+    let mut command = engine::admin_command(target.engine, &target.image);
+    command.extend_from_slice(args);
+    let (code, stdout, stderr) = exec_stdin(
+        &target.server,
+        engine::password_env(target.engine),
+        &secret,
+        &command,
+        "",
+    )?;
+    if code != Some(0) {
+        anyhow::bail!(
+            "{} on {}: {}{}",
+            target.engine.as_str(),
+            target.server,
+            stdout.trim(),
+            stderr.trim()
+        );
+    }
+    Ok(stdout)
 }
 
 fn exec_stdin(

@@ -78,7 +78,7 @@ impl Fixture {
         }
         std::fs::write(
             base.join("project/.berth.yaml"),
-            "schema_version: 9\nproject: api\nproject_type: project\nservices:\n  cache:\n    preset: redis\n",
+            "schema_version: 9\nproject: api\nproject_type: project\nservices:\n  cache:\n    preset: redis\n    isolation: dedicated\n",
         )
         .expect("project file");
         let docker = base.join("bin/docker");

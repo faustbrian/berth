@@ -9,7 +9,7 @@ use crate::config::{Driver, Isolation, ServiceConfig, SharedEngine, SharedTarget
 const DRY_RUN_PASSWORD: &str = "<berth-managed-password>";
 
 /// The engine a service shares, or `None` for a dedicated container.
-/// PostgreSQL, MySQL and MariaDB are shared by default (ledger decision 4);
+/// PostgreSQL, MySQL, MariaDB, Redis and Valkey are shared by default (ledger decision 4);
 /// `isolation: dedicated` opts out.
 #[must_use]
 pub(crate) fn shared_engine(service: &ServiceConfig) -> Option<SharedEngine> {
@@ -22,6 +22,8 @@ pub(crate) fn shared_engine(service: &ServiceConfig) -> Option<SharedEngine> {
             Some(SharedEngine::Mariadb)
         }
         Driver::Mysql => Some(SharedEngine::Mysql),
+        Driver::Redis => Some(SharedEngine::Redis),
+        Driver::Valkey => Some(SharedEngine::Valkey),
         _ => None,
     }
 }
@@ -44,7 +46,7 @@ pub(crate) fn assign_shared_target(
         if service.runtime.isolation == Some(Isolation::Shared) {
             anyhow::bail!(
                 "service '{}' asks for `isolation: shared`, which berth 9 supports only for \
-                 PostgreSQL, MySQL and MariaDB; remove it or use `isolation: dedicated`",
+                 PostgreSQL, MySQL, MariaDB, Redis and Valkey; remove it or use `isolation: dedicated`",
                 service.name
             );
         }
@@ -89,12 +91,16 @@ pub(crate) fn assign_shared_target(
     crate::docker::register_secret(&password);
 
     let username = match engine {
-        SharedEngine::Postgres => tenant.clone(),
+        SharedEngine::Postgres | SharedEngine::Redis | SharedEngine::Valkey => tenant.clone(),
         SharedEngine::Mysql | SharedEngine::Mariadb => {
             super::naming::mysql_user(project, instance, &service.name, env)
         }
     };
-    service.database = Some(tenant);
+    // A Redis tenant is its ACL user and key prefix; its `database` stays the
+    // logical database number the preset chose.
+    if !matches!(engine, SharedEngine::Redis | SharedEngine::Valkey) {
+        service.database = Some(tenant);
+    }
     service.username = Some(username);
     service.password = Some(password);
     service.resolved_container_name = Some(server.clone());

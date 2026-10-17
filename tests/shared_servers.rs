@@ -70,6 +70,7 @@ esac
 case "$1" in
   run)
     case "$*" in *"--entrypoint printenv"*) echo /var/lib/postgresql/data; exit 0 ;; esac
+    case "$*" in *"--entrypoint sh"*) cat > "$S/acl-seed"; exit 0 ;; esac
     name=""; prev=""; : > "$S/labels"
     for arg in "$@"; do
       [ "$prev" = "--name" ] && name="$arg"
@@ -95,8 +96,17 @@ case "$1" in
     esac
     exit 0 ;;
   exec)
+    case "$*" in *"'php' 'artisan' 'test'"*) [ -n "$FAKE_TEST_SLEEP" ] && sleep "$FAKE_TEST_SLEEP"; exit 0 ;; esac
     cat >> "$S/sql"
-    case "$*" in *psql*|*" mysql "*|*" mariadb "*) ;; *) exit 0 ;; esac
+    case "$*" in *psql*|*" mysql "*|*" mariadb "*|*redis-cli*) ;; *) exit 0 ;; esac
+    case "$*" in
+      *"-n 0 --scan"*) for k in $FAKE_KEYS; do echo "$k"; done; exit 0 ;;
+      *"-n 1 --scan"*) cat "$S/keys-db1" 2>/dev/null; exit 0 ;;
+      *"--scan"*) exit 0 ;;
+    esac
+    tail -n 1 "$S/sql" | grep -q '^ACL USERS' && { for n in $FAKE_NAMES; do echo "$n"; done; exit 0; }
+    tail -n 1 "$S/sql" | grep -q '^CONFIG GET databases' && { printf 'databases\n16\n'; exit 0; }
+    tail -n 1 "$S/sql" | grep -q '^INFO server' && { printf '# Server\nredis_version:7.2.4\n'; exit 0; }
     tail -n 3 "$S/sql" | grep -q 'server_version_num' && { echo 170004; exit 0; }
     if tail -n 3 "$S/sql" | grep -q 'FROM pg_roles\|FROM mysql.user'; then
       for n in $FAKE_NAMES; do printf 'd\t%s\tberth_admin\nr\t%s\t\n' "$n" "$n"; done
@@ -204,7 +214,14 @@ impl Host {
     }
 
     fn berth_with_owned(&self, checkout: &Path, args: &[&str], names: &str, owned: &str) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_berth"))
+        self.command(checkout, args, names, owned)
+            .output()
+            .expect("run berth")
+    }
+
+    fn command(&self, checkout: &Path, args: &[&str], names: &str, owned: &str) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_berth"));
+        command
             .current_dir(checkout)
             .args(args)
             .env(
@@ -222,10 +239,10 @@ impl Host {
             .env("FAKE_STATE", self.base.join("state"))
             .env("FAKE_NAMES", names)
             .env("FAKE_OWNED", owned)
+            .env("FAKE_KEYS", names)
             .env_remove("BERTH_INSTANCE")
-            .stdin(std::process::Stdio::null())
-            .output()
-            .expect("run berth")
+            .stdin(std::process::Stdio::null());
+        command
     }
 
     fn calls(&self) -> String {
@@ -561,10 +578,10 @@ fn what_a_tenant_cannot_have_fails_before_docker_is_touched() {
         );
         assert!(!host.calls().contains("run "), "{label}: {}", host.calls());
     }
-    let host = Host::new("reject-redis");
+    let host = Host::new("reject-memcached");
     let a = host.checkout(
         "a",
-        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  cache:\n    preset: redis\n    isolation: shared\n",
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  cache:\n    preset: memcached\n    isolation: shared\n",
     );
     let up = host.berth(&a, &["up", "--no-wait"]);
     assert_eq!(up.status.code(), Some(125));
@@ -987,5 +1004,189 @@ fn an_authored_server_command_reaches_the_shared_server_and_keys_it() {
                 && line.ends_with(" postgres -c max_connections=300")),
         "{}",
         host.calls()
+    );
+}
+
+const REDIS_PROJECT: &str = "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  cache:\n    preset: redis\n  app:\n    preset: laravel\n";
+
+#[test]
+fn redis_family_tenants_are_acl_users_confined_to_their_prefix() {
+    let host = Host::new("redis");
+    let a = host.checkout("a", REDIS_PROJECT);
+    let b = host.checkout("b", REDIS_PROJECT);
+    let v = host.checkout(
+        "v",
+        &REDIS_PROJECT.replace("preset: redis", "preset: valkey"),
+    );
+    for checkout in [&a, &b, &v] {
+        let up = host.berth(checkout, &["up", "--no-wait"]);
+        assert!(up.status.success(), "{}", text(&up.stderr));
+    }
+    assert_eq!(servers_named(&host, "berth_shared_redis_"), 1);
+    assert_eq!(servers_named(&host, "berth_shared_valkey_"), 1);
+    let env = env_json(&host, &a)["environment"].clone();
+    let user = env["REDIS_USERNAME"].as_str().expect("user");
+    assert!(
+        user.starts_with("shop__a-") && user.ends_with("__cache"),
+        "{user}"
+    );
+    assert_eq!(env["REDIS_PREFIX"], format!("{user}:"));
+    assert_eq!(env["HORIZON_PREFIX"], format!("{user}:horizon:"));
+    assert_eq!(env["REDIS_HOST"], "cache");
+    let password = env["REDIS_PASSWORD"].as_str().expect("password");
+    let sql = host.sql();
+    assert!(
+        sql.contains(&format!("ACL SETUSER {user} reset on #")),
+        "{sql}"
+    );
+    assert!(sql.contains(&format!("~{user}:* &{user}:*")), "{sql}");
+    assert!(
+        !sql.contains(password),
+        "only the password's hash reaches the server"
+    );
+    let seed = std::fs::read_to_string(host.base.join("state/acl-seed")).expect("seeded ACL file");
+    assert!(seed.starts_with("user default on #"), "{seed}");
+    let calls = host.calls();
+    assert!(
+        calls
+            .lines()
+            .any(|line| line.starts_with("run ") && line.contains("--aclfile /data/users.acl")),
+        "{calls}"
+    );
+    for secret in host.secrets() {
+        assert!(
+            !calls.contains(secret.as_str()) && !seed.contains(secret.as_str()),
+            "a secret leaked"
+        );
+    }
+}
+
+#[test]
+fn a_redis_purge_deletes_the_instance_users_and_their_keys_only() {
+    let host = Host::new("redis-purge");
+    let a = host.checkout("a", REDIS_PROJECT);
+    let b = host.checkout("b", REDIS_PROJECT);
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    assert!(host.berth(&b, &["up", "--no-wait"]).status.success());
+    let mine = env_json(&host, &a)["environment"]["REDIS_USERNAME"]
+        .as_str()
+        .expect("user")
+        .to_owned();
+    let theirs = env_json(&host, &b)["environment"]["REDIS_USERNAME"]
+        .as_str()
+        .expect("user")
+        .to_owned();
+    host.clear();
+    // Laravel's cache lives in database 1; a key name with a newline must
+    // never yield a fragment naming someone else's key.
+    std::fs::write(
+        host.base.join("state/keys-db1"),
+        format!("{mine}:cache\n{mine}:odd\n{theirs}:fragment\n"),
+    )
+    .expect("database 1 keys");
+    let names = format!("default {mine} {theirs} {mine}:k");
+    let purge = host.berth_with(&a, &["down", "--purge"], &names);
+    assert!(purge.status.success(), "{}", text(&purge.stderr));
+    let sql = host.sql();
+    assert!(sql.contains(&format!("ACL DELUSER {mine}\n")), "{sql}");
+    assert!(
+        sql.contains(&format!("SELECT 0\nUNLINK \"{mine}:k\"")),
+        "the tenant's keys are unlinked: {sql}"
+    );
+    assert!(
+        sql.contains(&format!(
+            "SELECT 1\nUNLINK \"{mine}:cache\" \"{mine}:odd\"\n"
+        )),
+        "keys in every logical database are unlinked: {sql}"
+    );
+    assert!(!sql.contains(&format!("\"{theirs}:fragment\"")), "{sql}");
+    assert!(
+        !sql.contains(&format!("ACL DELUSER {theirs}")) && !sql.contains("ACL DELUSER default"),
+        "{sql}"
+    );
+    assert!(
+        host.calls()
+            .lines()
+            .any(|line| line.contains(&format!("--scan --pattern {mine}:*"))),
+        "{}",
+        host.calls()
+    );
+}
+
+#[test]
+fn each_test_lease_gets_a_tenant_of_its_own() {
+    let host = Host::new("lease");
+    let a = host.checkout("a", PROJECT);
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    let tenant = env_json(&host, &a)["environment"]["DB_DATABASE"]
+        .as_str()
+        .expect("tenant")
+        .to_owned();
+    host.clear();
+    let test = host.berth(&a, &["artisan", "--no-tty", "--non-interactive", "test"]);
+    assert!(test.status.success(), "{}", text(&test.stderr));
+    let calls = host.calls();
+    let run = calls
+        .lines()
+        .find(|line| line.starts_with("run -d") && line.contains("_app-testing-pool-"))
+        .expect("the lease's app container");
+    let lease_db = run
+        .split(' ')
+        .find_map(|word| word.strip_prefix("DB_DATABASE="))
+        .expect("the lease's database")
+        .to_owned();
+    assert!(
+        lease_db.starts_with(&format!("{tenant}__")),
+        "{lease_db} is a tenant of the instance"
+    );
+    assert!(
+        host.sql().contains(&format!("CREATE ROLE \"{lease_db}\"")),
+        "{}",
+        host.sql()
+    );
+}
+
+#[test]
+fn a_killed_test_run_frees_its_slot_for_the_next_run_at_once() {
+    use std::os::unix::process::CommandExt;
+    let host = Host::new("killed");
+    let a = host.checkout("a", PROJECT);
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    let args = ["artisan", "--no-tty", "--non-interactive", "test"];
+    let mut first = host.command(&a, &args, "", "");
+    first
+        .env("BERTH_TEST_RUNTIME_POOL_SIZE", "1")
+        .env("FAKE_TEST_SLEEP", "60")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .process_group(0);
+    let mut child = first.spawn().expect("first run");
+    let started = std::time::Instant::now();
+    while !host.calls().contains("'php' 'artisan' 'test'") {
+        assert!(
+            started.elapsed().as_secs() < 30,
+            "the first run never started its tests"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let group = format!("-{}", child.id());
+    assert!(
+        Command::new("kill")
+            .args(["-9", "--", &group])
+            .status()
+            .expect("kill")
+            .success()
+    );
+    drop(child.wait());
+    let second_started = std::time::Instant::now();
+    let second = host
+        .command(&a, &args, "", "")
+        .env("BERTH_TEST_RUNTIME_POOL_SIZE", "1")
+        .output()
+        .expect("second run");
+    assert!(second.status.success(), "{}", text(&second.stderr));
+    assert!(
+        second_started.elapsed().as_secs() < 30,
+        "the killed run's slot was free at once, not after a timeout"
     );
 }

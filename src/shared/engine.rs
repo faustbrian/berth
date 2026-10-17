@@ -32,6 +32,17 @@ pub(super) fn admin_command(engine: SharedEngine, image: &str) -> Vec<&'static s
             "--batch",
             "--skip-column-names",
         ],
+        // `-e` makes an error reply a non-zero exit; without it redis-cli
+        // exits 0 after any reply.
+        SharedEngine::Redis | SharedEngine::Valkey => vec!["redis-cli", "-h", "127.0.0.1", "-e"],
+    }
+}
+
+/// The admin command that proves the server answers authenticated requests.
+pub(super) fn ping(engine: SharedEngine) -> &'static str {
+    match engine {
+        SharedEngine::Postgres | SharedEngine::Mysql | SharedEngine::Mariadb => "SELECT 1;\n",
+        SharedEngine::Redis | SharedEngine::Valkey => "PING\n",
     }
 }
 
@@ -59,6 +70,11 @@ pub(super) fn server_args(engine: SharedEngine, command: &[String]) -> Vec<Strin
             ("max_connections", &["--max-connections=1000"]),
         ],
         SharedEngine::Mariadb => &[("max_connections", &["--max-connections=1000"])],
+        // Users live in an ACL file on the data volume (see `redis.rs`), so
+        // tenants survive restarts and no password is a server argument.
+        SharedEngine::Redis | SharedEngine::Valkey => {
+            &[("aclfile", &["--aclfile", super::redis::ACL_FILE])]
+        }
     };
     let authored = command.join(" ").replace('-', "_");
     options
@@ -73,22 +89,28 @@ pub(super) fn password_env(engine: SharedEngine) -> &'static str {
     match engine {
         SharedEngine::Postgres => "PGPASSWORD",
         SharedEngine::Mysql | SharedEngine::Mariadb => "MYSQL_PWD",
+        SharedEngine::Redis | SharedEngine::Valkey => "REDISCLI_AUTH",
     }
 }
 
-/// The image variable that sets the admin password at initialization.
-pub(super) fn server_password_env(engine: SharedEngine) -> &'static str {
+/// The image variable that sets the admin password at initialization;
+/// Redis and Valkey read it from their ACL file instead.
+pub(super) fn server_password_env(engine: SharedEngine) -> Option<&'static str> {
     match engine {
-        SharedEngine::Postgres => "POSTGRES_PASSWORD",
-        SharedEngine::Mysql | SharedEngine::Mariadb => "MYSQL_ROOT_PASSWORD",
+        SharedEngine::Postgres => Some("POSTGRES_PASSWORD"),
+        SharedEngine::Mysql | SharedEngine::Mariadb => Some("MYSQL_ROOT_PASSWORD"),
+        SharedEngine::Redis | SharedEngine::Valkey => None,
     }
 }
 
 /// Whether a failed admin command could not reach the final server yet:
 /// the images' temporary init server listens only on the local socket, so
 /// TCP connections fail until it hands over (psql exit 2; MySQL client
-/// errors 2002, 2003 and 2013).
-pub(super) fn is_handoff(engine: SharedEngine, code: Option<i32>, stderr: &str) -> bool {
+/// errors 2002, 2003 and 2013). Redis and Valkey have no init server but
+/// refuse connections until they listen and answer `LOADING` while they
+/// read their data. `output` is the command's stdout and stderr.
+pub(super) fn is_handoff(engine: SharedEngine, code: Option<i32>, output: &str) -> bool {
+    let stderr = output;
     if is_auth_failure(engine, stderr) {
         return false;
     }
@@ -100,6 +122,12 @@ pub(super) fn is_handoff(engine: SharedEngine, code: Option<i32>, stderr: &str) 
                     .iter()
                     .any(|error| stderr.contains(error))
         }
+        SharedEngine::Redis | SharedEngine::Valkey => {
+            code == Some(1)
+                && ["Could not connect", "Connection refused", "LOADING"]
+                    .iter()
+                    .any(|error| stderr.contains(error))
+        }
     }
 }
 
@@ -108,6 +136,9 @@ pub(super) fn is_auth_failure(engine: SharedEngine, stderr: &str) -> bool {
     match engine {
         SharedEngine::Postgres => stderr.contains("authentication failed"),
         SharedEngine::Mysql | SharedEngine::Mariadb => stderr.contains("ERROR 1045"),
+        SharedEngine::Redis | SharedEngine::Valkey => {
+            stderr.contains("WRONGPASS") || stderr.contains("NOAUTH")
+        }
     }
 }
 
@@ -127,6 +158,11 @@ pub(super) fn lost_secret_recovery(engine: SharedEngine, server: &str) -> String
              password cannot be reset without it. Without a backup the only way forward is \
              removing the server and its volume (`docker rm -f -v {server} && docker volume \
              rm {server}-data`), which deletes every instance's shared databases"
+        ),
+        SharedEngine::Redis | SharedEngine::Valkey => format!(
+            "restore {secret} from a backup. Without one, removing the server and its volume \
+             (`docker rm -f -v {server} && docker volume rm {server}-data`) deletes only \
+             caches, sessions and queued jobs, which every instance recreates"
         ),
     }
 }

@@ -38,6 +38,17 @@ pub(super) fn apply(vars: &mut HashMap<String, String>, service: &ServiceConfig)
     insert_if_absent(vars, "REDIS_PASSWORD", redis_password.clone());
     insert_if_absent(vars, "REDIS_CACHE_HOST", redis_host);
     insert_if_absent(vars, "REDIS_CACHE_PORT", redis_port);
-    insert_if_absent(vars, "REDIS_CACHE_USERNAME", redis_username);
+    insert_if_absent(vars, "REDIS_CACHE_USERNAME", redis_username.clone());
     insert_if_absent(vars, "REDIS_CACHE_PASSWORD", redis_password);
+    // A shared server's tenant may touch only keys and channels under its
+    // prefix, so every Laravel key goes there: phpredis prefixes keys and
+    // broadcast channels with `REDIS_PREFIX`, and Horizon replaces that
+    // prefix with its own `HORIZON_PREFIX` (ledger decision D11).
+    if service.runtime.shared.is_some() {
+        vars.insert("REDIS_PREFIX".to_owned(), format!("{redis_username}:"));
+        vars.insert(
+            "HORIZON_PREFIX".to_owned(),
+            format!("{redis_username}:horizon:"),
+        );
+    }
 }

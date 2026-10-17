@@ -63,6 +63,10 @@ pub enum SharedEngine {
     Mysql,
     /// MariaDB: a schema and user per tenant.
     Mariadb,
+    /// Redis: an ACL user confined to a key prefix per tenant.
+    Redis,
+    /// Valkey: an ACL user confined to a key prefix per tenant.
+    Valkey,
 }
 
 impl SharedEngine {
@@ -76,6 +80,8 @@ impl SharedEngine {
             "postgres" => Ok(Self::Postgres),
             "mysql" => Ok(Self::Mysql),
             "mariadb" => Ok(Self::Mariadb),
+            "redis" => Ok(Self::Redis),
+            "valkey" => Ok(Self::Valkey),
             other => anyhow::bail!("unknown shared engine '{other}'"),
         }
     }
@@ -87,6 +93,8 @@ impl SharedEngine {
             Self::Postgres => "postgres",
             Self::Mysql => "mysql",
             Self::Mariadb => "mariadb",
+            Self::Redis => "redis",
+            Self::Valkey => "valkey",
         }
     }
 }

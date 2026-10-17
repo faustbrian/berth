@@ -6,10 +6,10 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
-- Added shared PostgreSQL, MySQL and MariaDB servers: every instance's
-  database service is a tenant (its own database and role or user, closed to
-  other tenants) in one server per compatible image, created on demand by
-  `up`. Parallel worktrees no longer start a database container each.
+- Added shared PostgreSQL, MySQL, MariaDB, Redis and Valkey servers: every
+  instance's database or cache service is a tenant (its own database and
+  role or user, or an ACL user confined to its key prefix, closed to other
+  tenants) in one server per compatible image, created on demand by `up`. Parallel worktrees no longer start a database container each.
   Tenants may create their own `_test_N` databases, so ParaTest works;
   `down` leaves the server running for other instances and `down --purge`
   drops the instance's tenants. Set `isolation: dedicated` for a container
@@ -116,6 +116,9 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- `artisan test` slots are held with `flock` under `~/.berth/locks` instead
+  of PID files in the temporary directory, so a killed run frees its slot at
+  once; each run's shared databases and caches are a tenant of their own.
 - YAML is now parsed with the maintained, safe-Rust `serde-saphyr` instead of
   the deprecated `serde_yaml`/`unsafe-libyaml`. Project files and lockfiles
   must be regular files of at most 1 MiB (verified by inode after opening),

@@ -7,7 +7,19 @@ use anyhow::Result;
 use crate::config::{ServiceConfig, SharedEngine, SharedTarget};
 use crate::output::{self, LogLevel, Persistence};
 
-use super::{mysql, postgres, server};
+use super::{mysql, postgres, redis, server};
+
+/// The tenant's name: its database, or for Redis and Valkey its ACL user
+/// (whose name is also its key prefix).
+fn tenant_name(service: &ServiceConfig, target: &SharedTarget) -> String {
+    match target.engine {
+        SharedEngine::Redis | SharedEngine::Valkey => service.username.clone(),
+        SharedEngine::Postgres | SharedEngine::Mysql | SharedEngine::Mariadb => {
+            service.database.clone()
+        }
+    }
+    .unwrap_or_default()
+}
 
 fn target(service: &ServiceConfig) -> Result<&SharedTarget> {
     service
@@ -26,7 +38,7 @@ fn target(service: &ServiceConfig) -> Result<&SharedTarget> {
 /// provisioned.
 pub(crate) fn up(service: &ServiceConfig) -> Result<()> {
     let target = target(service)?;
-    let tenant = service.database.clone().unwrap_or_default();
+    let tenant = tenant_name(service, target);
     if crate::docker::is_dry_run() {
         output::event(
             &service.name,
@@ -57,6 +69,9 @@ pub(crate) fn up(service: &ServiceConfig) -> Result<()> {
             SharedEngine::Mysql | SharedEngine::Mariadb => {
                 let user = service.username.clone().unwrap_or_default();
                 mysql::provision_tenant_sql(&tenant, &user, &password)
+            }
+            SharedEngine::Redis | SharedEngine::Valkey => {
+                redis::provision_tenant_commands(&tenant, &password)
             }
         };
         server::admin_sql(target, &sql)?;
@@ -133,7 +148,7 @@ pub(crate) fn detach(service: &ServiceConfig) -> Result<()> {
 /// Returns an error when the server cannot be reached or refuses the drop.
 pub(crate) fn drop_tenant(service: &ServiceConfig) -> Result<()> {
     let target = target(service)?;
-    let tenant = service.database.clone().unwrap_or_default();
+    let tenant = tenant_name(service, target);
     let user = service.username.clone().unwrap_or_default();
     let database = |name: &str| {
         name == tenant
@@ -172,6 +187,10 @@ pub(crate) fn drop_instance_tenants(project: &str, instance: &str) -> Result<()>
             SharedEngine::Postgres => drop_matching("down", &target, &database, &database),
             SharedEngine::Mysql | SharedEngine::Mariadb => {
                 drop_matching("down", &target, &database, &mysql_user)
+            }
+            // Redis tenants are ACL users named like the SQL databases.
+            SharedEngine::Redis | SharedEngine::Valkey => {
+                drop_matching("down", &target, &database, &database)
             }
         };
         if let Err(error) = dropped {
@@ -212,9 +231,13 @@ fn drop_matching(
     }
     let _lock = server::lock(target)?;
     server::ensure_running(target)?;
+    if matches!(target.engine, SharedEngine::Redis | SharedEngine::Valkey) {
+        return drop_redis_users(label, target, role);
+    }
     let listing_sql = match target.engine {
         SharedEngine::Postgres => postgres::list_names_sql(),
         SharedEngine::Mysql | SharedEngine::Mariadb => mysql::list_names_sql(),
+        SharedEngine::Redis | SharedEngine::Valkey => unreachable!("handled above"),
     };
     let listing = server::admin_sql(target, &listing_sql)?;
     let (databases, roles) = super::listing::select_names(&listing, database, role)?;
@@ -224,6 +247,7 @@ fn drop_matching(
     let drop = match target.engine {
         SharedEngine::Postgres => postgres::drop_sql(&databases, &roles),
         SharedEngine::Mysql | SharedEngine::Mariadb => mysql::drop_sql(&databases, &roles),
+        SharedEngine::Redis | SharedEngine::Valkey => unreachable!("handled above"),
     };
     server::admin_sql(target, &drop)?;
     let mut dropped = databases;
@@ -239,6 +263,65 @@ fn drop_matching(
         &format!(
             "Dropped {} from shared server {}",
             dropped.join(", "),
+            target.server
+        ),
+        Persistence::Persistent,
+    );
+    Ok(())
+}
+
+/// Deletes the keys of every ACL user `role` matches, then the users. Must
+/// hold the server's lock with the server ready.
+fn drop_redis_users(
+    label: &str,
+    target: &SharedTarget,
+    role: &impl Fn(&str) -> bool,
+) -> Result<()> {
+    let users: Vec<String> = server::admin_sql(target, &redis::list_users_commands())?
+        .lines()
+        .map(str::trim)
+        .filter(|user| !user.is_empty() && *user != "default" && role(user))
+        .map(ToOwned::to_owned)
+        .collect();
+    if users.is_empty() {
+        return Ok(());
+    }
+    // Tenants may SELECT any logical database (Laravel's cache defaults to
+    // database 1), and SCAN sees one database at a time, so every database
+    // is scanned. Only whole lines with the tenant's prefix are deleted, so
+    // a key whose name holds a newline can never yield a fragment naming
+    // someone else's key.
+    let databases = redis::parse_database_count(&server::admin_sql(
+        target,
+        &redis::database_count_commands(),
+    )?)?;
+    let mut keys: Vec<(u32, Vec<String>)> = Vec::new();
+    for database in 0..databases {
+        let number = database.to_string();
+        let mut found = Vec::new();
+        for user in &users {
+            let prefix = redis::prefix(user);
+            let pattern = format!("{prefix}*");
+            found.extend(
+                server::admin_cli(target, &["-n", &number, "--scan", "--pattern", &pattern])?
+                    .lines()
+                    .filter(|key| key.starts_with(&prefix))
+                    .map(ToOwned::to_owned),
+            );
+        }
+        if !found.is_empty() {
+            keys.push((database, found));
+        }
+    }
+    server::admin_sql(target, &redis::drop_commands(&keys, &users))?;
+    let total: usize = keys.iter().map(|(_, found)| found.len()).sum();
+    output::event(
+        label,
+        LogLevel::Success,
+        &format!(
+            "Dropped {} and {} keys from shared server {}",
+            users.join(", "),
+            total,
             target.server
         ),
         Persistence::Persistent,

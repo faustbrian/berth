@@ -44,6 +44,11 @@ pub(super) fn client_env(service: &ServiceConfig) -> Vec<String> {
             "MYSQL_PWD={}",
             service.password.as_deref().unwrap_or("secret")
         )],
+        Driver::Redis | Driver::Valkey | Driver::Dragonfly => service
+            .password
+            .iter()
+            .map(|password| format!("REDISCLI_AUTH={password}"))
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -69,13 +74,21 @@ pub(super) fn interactive_client_args(service: &ServiceConfig) -> Vec<String> {
                 .unwrap_or_else(|| "root".to_owned()),
             service.database.clone().unwrap_or_else(|| "app".to_owned()),
         ],
-        Driver::Redis | Driver::Valkey | Driver::Dragonfly => vec![
-            "redis-cli".to_owned(),
-            "-h".to_owned(),
-            "127.0.0.1".to_owned(),
-            "-p".to_owned(),
-            service.default_port().to_string(),
-        ],
+        Driver::Redis | Driver::Valkey | Driver::Dragonfly => {
+            let mut command = vec![
+                "redis-cli".to_owned(),
+                "-h".to_owned(),
+                "127.0.0.1".to_owned(),
+                "-p".to_owned(),
+                service.default_port().to_string(),
+            ];
+            // An ACL user (a shared server's tenant) authenticates by name;
+            // the password comes from `REDISCLI_AUTH` (see `client_env`).
+            if let Some(user) = &service.username {
+                command.extend(["--user".to_owned(), user.clone()]);
+            }
+            command
+        }
         Driver::Sqlserver => vec![
             "sqlcmd".to_owned(),
             "-S".to_owned(),

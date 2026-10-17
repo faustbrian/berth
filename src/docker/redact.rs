@@ -3,7 +3,8 @@
 //! never changed.
 
 /// Environment keys whose values are treated as secrets.
-const SECRET_MARKERS: [&str; 7] = [
+const SECRET_MARKERS: [&str; 8] = [
+    "AUTH",
     "PASSWORD",
     "SECRET",
     "TOKEN",
