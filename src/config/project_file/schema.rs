@@ -38,7 +38,7 @@ struct ProjectFile {
 /// Returns an error for malformed YAML, unknown fields, an unsupported schema
 /// version, an invalid project name, or a service entry that sets `name`.
 pub(crate) fn parse_project_file(content: &str, path: &Path) -> Result<RawConfig> {
-    let file: ProjectFile = serde_yaml::from_str(content)
+    let file: ProjectFile = crate::config::yaml::from_str(content)
         .with_context(|| format!("invalid berth project file {}", path.display()))?;
 
     if file.schema_version != PROJECT_SCHEMA_VERSION {

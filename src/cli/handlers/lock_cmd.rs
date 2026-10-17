@@ -173,7 +173,7 @@ mod tests {
             images: entries,
         };
         let path = root.join(".berth.lock.yaml");
-        let content = serde_yaml::to_string(&lockfile).expect("serialize lockfile");
+        let content = crate::config::yaml::to_string(&lockfile).expect("serialize lockfile");
         std::fs::write(&path, content).expect("write lockfile");
     }
 

@@ -43,8 +43,7 @@ pub(super) fn read_project_file(path: &Path) -> Result<RawConfig> {
         );
     }
 
-    let content = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read project file {}", path.display()))?;
+    let content = crate::config::yaml::read_bounded_file(path)?;
     project_file::parse_project_file(&content, path)
 }
 
@@ -52,9 +51,9 @@ pub(super) fn read_yaml_file<T>(path: &Path, label: &str) -> Result<T>
 where
     T: DeserializeOwned,
 {
-    let content = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read {label} at {}", path.display()))?;
-    serde_yaml::from_str(&content)
+    let content = crate::config::yaml::read_bounded_file(path)
+        .with_context(|| format!("failed to read {label}"))?;
+    crate::config::yaml::from_str(&content)
         .with_context(|| format!("failed to parse {label} at {}", path.display()))
 }
 
@@ -62,8 +61,8 @@ pub(super) fn write_yaml_file<T>(path: &Path, value: &T, label: &str) -> Result<
 where
     T: Serialize,
 {
-    let content =
-        serde_yaml::to_string(value).with_context(|| format!("failed to serialize {label}"))?;
-    std::fs::write(path, content)
+    let content = crate::config::yaml::to_string(value)
+        .with_context(|| format!("failed to serialize {label}"))?;
+    crate::config::yaml::write_file_atomically(path, &content)
         .with_context(|| format!("failed to write {label} at {}", path.display()))
 }

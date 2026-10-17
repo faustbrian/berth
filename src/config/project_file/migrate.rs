@@ -80,7 +80,8 @@ pub(crate) fn convert_legacy_config(
         },
     };
 
-    let content = serde_yaml::to_string(&rendered).context("failed to render .berth.yaml")?;
+    let content =
+        crate::config::yaml::to_string(&rendered).context("failed to render .berth.yaml")?;
     parse_project_file(&content, &legacy_path.with_file_name(PROJECT_FILE_NAME))
         .context("converted project file failed berth 9 validation")?;
     Ok(ConvertedProjectFile { content, notes })
@@ -127,8 +128,7 @@ pub(crate) fn migrate_project_file(dir: &Path) -> Result<Vec<MigratedProjectFile
                 target.display()
             );
         }
-        let content = std::fs::read_to_string(&source)
-            .with_context(|| format!("failed to read {}", source.display()))?;
+        let content = crate::config::yaml::read_bounded_file(&source)?;
         let converted = convert_legacy_config(&content, &source)
             .with_context(|| format!("failed to convert {}", source.display()))?;
         planned.push((source, target, converted));
@@ -304,9 +304,8 @@ fn parse_legacy_document(content: &str, path: &Path) -> Result<Value> {
         return serde_json::to_value(value).context("failed to normalize TOML document");
     }
     if name.ends_with(".yaml") {
-        let value: serde_yaml::Value = serde_yaml::from_str(content)
-            .with_context(|| format!("invalid YAML in {}", path.display()))?;
-        return serde_json::to_value(value).context("failed to normalize YAML document");
+        return crate::config::yaml::parse_text_tree(content)
+            .with_context(|| format!("invalid YAML in {}", path.display()));
     }
     anyhow::bail!("unsupported legacy project file {}", path.display())
 }

@@ -63,9 +63,10 @@ fn rejects_duplicate_service_keys() {
 fn rejects_duplicate_env_keys() {
     let error = parse("schema_version: 9\nproject: api\nservices:\n  app:\n    preset: laravel\n    env:\n      APP_DEBUG: \"true\"\n      APP_DEBUG: \"false\"\n")
         .expect_err("duplicate env keys must fail");
+    let message = format!("{error:#}");
     assert!(
-        format!("{error:#}").contains("duplicate key 'APP_DEBUG'"),
-        "{error:#}"
+        message.contains("duplicate") && message.contains("APP_DEBUG"),
+        "{message}"
     );
 }
 
@@ -335,4 +336,40 @@ fn rejects_unknown_fields_inside_hook_run_blocks() {
     let error = parse("schema_version: 9\nproject: api\nservices:\n  app:\n    preset: laravel\n    hook:\n      - name: warm\n        phase: post_up\n        run:\n          type: exec\n          argv: [\"true\"]\n          timout: 5\n")
         .expect_err("unknown hook run fields must fail");
     assert!(format!("{error:#}").contains("timout"), "{error:#}");
+}
+
+#[test]
+fn legacy_yaml_scalars_keep_their_exact_text_through_migration() -> anyhow::Result<()> {
+    let dir = temp_dir("yaml-text");
+    let converted = convert_legacy_config(
+        "container_prefix: api\nservice:\n  - preset: laravel\n    name: app\n    restart: no\n    port: 8080\n    env:\n      XDEBUG_MODE: off\n      APP_LOCALE: no\n      UMASK: 0022\n",
+        &dir.join(".stackctl.yaml"),
+    )?;
+    let raw = parse(&converted.content)?;
+    let app = raw
+        .service
+        .iter()
+        .find(|service| service.name.as_deref() == Some("app"))
+        .expect("app service");
+    let env = app.env.as_ref().expect("env");
+    assert_eq!(env.get("XDEBUG_MODE").map(String::as_str), Some("off"));
+    assert_eq!(env.get("APP_LOCALE").map(String::as_str), Some("no"));
+    assert_eq!(env.get("UMASK").map(String::as_str), Some("0022"));
+    assert_eq!(app.restart, Some(crate::config::RestartPolicy::No));
+    assert_eq!(app.port, Some(8080));
+    Ok(())
+}
+
+#[test]
+fn legacy_yaml_aliases_fail_with_an_instruction_to_inline_them() {
+    let dir = temp_dir("yaml-alias");
+    let error = convert_legacy_config(
+        "container_prefix: api\nservice:\n  - preset: redis\n    env: &shared\n      A: \"1\"\n  - preset: mysql\n    env: *shared\n",
+        &dir.join(".stackctl.yaml"),
+    )
+    .expect_err("aliases are not converted");
+    assert!(
+        format!("{error:#}").contains("write the value out in full"),
+        "{error:#}"
+    );
 }

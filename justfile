@@ -24,3 +24,6 @@ parity-smoke engine="docker":
 
 parity-full engine="docker":
     ./scripts/runtime-parity-full.sh {{engine}}
+
+audit-supply-chain:
+    ./scripts/audit-supply-chain.sh

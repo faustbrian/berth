@@ -27,8 +27,24 @@ All notable changes to this project are documented in this file.
   directory-based domain; projects that relied on having no generated domain
   (7.0 configs without `domain_strategy`) see a new `APP_URL`.
 
+- Added a supply-chain gate (`just audit-supply-chain`): `cargo audit` and
+  `cargo deny` (advisories, licenses, duplicate versions and sources) must
+  pass with warnings denied.
+
 ### Changed
 
+- YAML is now parsed with the maintained, safe-Rust `serde-saphyr` instead of
+  the deprecated `serde_yaml`/`unsafe-libyaml`. Project files and lockfiles
+  must be regular files of at most 1 MiB (verified by inode after opening),
+  and anchors, aliases, merge keys, duplicate keys, tags, multiple documents,
+  nesting deeper than 32 levels, documents over 10,000 nodes and YAML 1.1
+  boolean words such as `yes`/`off` are rejected. `config migrate` reads
+  legacy YAML with YAML 1.2 rules, so unquoted values like `off`, `no` and
+  `0022` keep their exact text. The lockfile is written atomically and never
+  through a symbolic link.
+- Removed the unused `tabled` dependency (and its unmaintained
+  `proc-macro-error2`) and updated locked dependencies past the
+  `crossbeam-epoch` and `anyhow` advisories.
 - Berth reads only `.berth.yaml` project files using the strict
   `schema_version: 9` schema: a required `project` name (lowercase DNS label
   of at most 24 bytes) replaces `container_prefix`, services are a `services`

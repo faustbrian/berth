@@ -1,6 +1,7 @@
 //! Map deserialization that rejects duplicate keys.
 //!
-//! `serde_yaml` keeps the last of two equal mapping keys silently. A project
+//! The YAML parser rejects duplicate keys itself; this visitor additionally keeps
+//! declaration order for `services`, and guards maps read from TOML. A project
 //! file declaring the same service or environment variable twice is
 //! ambiguous, so berth rejects it instead of guessing which entry wins.
 

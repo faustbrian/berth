@@ -21,6 +21,7 @@ mod tests;
 mod types;
 mod unique_map;
 mod validation;
+pub(crate) mod yaml;
 
 pub use api::{
     LoadConfigPathOptions, LockfileDiff, MigrateConfigOptions, ProjectRootPathOptions,
