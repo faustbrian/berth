@@ -29,7 +29,9 @@ pub(super) fn build_run_args(
     inject_server_name: bool,
 ) -> Result<Vec<String>> {
     let mut run_args = build_base_run_args(target)?;
-    if let Some(smtp_port) = mailhog_smtp_port(target) {
+    if let Some(smtp_port) = mailhog_smtp_port(target)
+        && crate::network::publishes_host_port(target)
+    {
         append_smtp_port_mapping(&mut run_args, &target.host, smtp_port);
     }
     append_host_gateway_mapping(&mut run_args, target, injected_env);

@@ -46,7 +46,10 @@ pub(super) fn print_dry_run_container_start(
         crate::docker::ContainerRole::Service,
     )?);
     run_args.extend(crate::network::network_run_args(target, true));
-    run_args.extend([mapping, runtime_image.to_owned()]);
+    if crate::network::publishes_host_port(target) {
+        run_args.push(mapping);
+    }
+    run_args.push(runtime_image.to_owned());
     output::event(
         &target.name,
         LogLevel::Info,

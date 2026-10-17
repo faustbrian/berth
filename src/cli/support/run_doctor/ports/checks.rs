@@ -21,6 +21,10 @@ pub(super) fn check_service_ports<'a>(
     used_ports: &mut HashMap<(String, u16), &'a str>,
 ) -> bool {
     let mut has_error = false;
+    // A service without a host port never binds one.
+    if !crate::network::is_published(service) {
+        return false;
+    }
 
     for (host, port) in cli::support::service_host_ports(service) {
         if let Some(existing) = used_ports.insert((host.clone(), port), service.name.as_str()) {

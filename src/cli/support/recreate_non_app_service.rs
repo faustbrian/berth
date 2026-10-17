@@ -34,7 +34,11 @@ fn emit_connection_string(service: &config::ServiceConfig) {
     output::event(
         &service.name,
         LogLevel::Success,
-        &format!("Connection string: {}", service.connection_url()),
+        &format!(
+            "Connection string: {}",
+            crate::network::host_url(service)
+                .unwrap_or_else(|| format!("({})", crate::network::PUBLISH_HINT))
+        ),
         Persistence::Persistent,
     );
 }

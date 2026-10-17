@@ -27,14 +27,16 @@ pub(super) fn build_run_args(
             .to_owned(),
         "--name".to_owned(),
         container_name.to_owned(),
-        "-p".to_owned(),
-        format!(
+    ];
+    if crate::network::publishes_host_port(service) {
+        args.push("-p".to_owned());
+        args.push(format!(
             "{}:{}:{}",
             service.host,
             service.port,
             service.default_port()
-        ),
-    ];
+        ));
+    }
 
     args.extend(crate::network::network_run_args(service, true));
     append_run_options(&mut args, service, container_name);
@@ -109,6 +111,35 @@ mod tests {
             resolved_container_name: Some("acme-db".to_owned()),
             runtime: Default::default(),
         }
+    }
+
+    #[test]
+    fn instance_services_publish_a_host_port_only_when_asked() {
+        let mut service = service();
+        service.runtime.network = Some("berth_acme_a-1".to_owned());
+        let unpublished = build_run_args(&service, "acme-db").expect("run args");
+        assert!(
+            !unpublished.iter().any(|arg| arg == "-p"),
+            "{unpublished:?}"
+        );
+
+        service.runtime.publish_host_port = true;
+        let published = build_run_args(&service, "acme-db").expect("run args");
+        let at = published.iter().position(|arg| arg == "-p").expect("-p");
+        assert_eq!(
+            published[at + 1],
+            format!("127.0.0.1:{}:{}", service.port, service.default_port())
+        );
+
+        // Without an instance network the host port is the only way in.
+        let mut bare = super::tests::service();
+        bare.runtime.network = None;
+        assert!(
+            build_run_args(&bare, "acme-db")
+                .expect("run args")
+                .iter()
+                .any(|arg| arg == "-p")
+        );
     }
 
     #[test]

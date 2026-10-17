@@ -2,11 +2,16 @@
 
 use crate::{config, docker};
 
-pub(super) fn database_runtime_url(service: &config::ServiceConfig) -> String {
+/// The database URL a host GUI can open, or `None` when the database is
+/// reachable only inside its instance network.
+pub(super) fn database_runtime_url(service: &config::ServiceConfig) -> Option<String> {
+    if !crate::network::is_published(service) {
+        return None;
+    }
     let runtime_binding = service.container_name().ok().and_then(|container_name| {
         docker::inspect_host_port_binding(&container_name, service.resolved_container_port())
     });
-    build_database_url_with_binding(service, runtime_binding)
+    Some(build_database_url_with_binding(service, runtime_binding))
 }
 
 pub(super) fn build_database_url_with_binding(

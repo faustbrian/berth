@@ -76,7 +76,22 @@ pub(crate) fn handle_up(config: &mut config::Config, options: HandleUpOptions<'_
         options.no_publish_all,
     );
     let use_wait = execution_flags.use_wait;
-    let use_publish_all = execution_flags.use_publish_all;
+    // A service with `publish: true` gets an allocated host port, like `-P`,
+    // so a committed opt-in never collides across parallel worktrees;
+    // `--no-publish-all` keeps configured ports.
+    let opted_in = config
+        .service
+        .iter()
+        .any(|service| service.runtime.publish_host_port && service.runtime.network.is_some());
+    let use_publish_all = execution_flags.use_publish_all || (opted_in && !options.no_publish_all);
+    // `-P` (random ports) and `--no-publish-all` (configured ports) keep
+    // 7.0.0's host ports for every service; by default only services with
+    // `publish: true` get one.
+    if options.publish_all || options.no_publish_all {
+        for service in &mut config.service {
+            service.runtime.publish_host_port = true;
+        }
+    }
     if use_publish_all {
         run_random_ports_up(
             config,

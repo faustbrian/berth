@@ -94,4 +94,9 @@ pub(crate) struct RawServiceConfig {
     pub javascript: Option<JavaScriptToolchain>,
     #[serde(default)]
     pub container_name: Option<String>,
+    /// Publish this service's port on the host. Off by default: apps reach
+    /// services inside the instance network and people reach web apps
+    /// through gateway routes, so parallel instances never race for ports.
+    #[serde(default)]
+    pub publish: Option<bool>,
 }

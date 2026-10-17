@@ -33,6 +33,7 @@ pub(super) fn ensure_container_running(
     project_root: &Path,
     injected_env: &HashMap<String, String>,
 ) -> Result<()> {
+    let target = &*crate::network::with_existing_publication(target);
     let container_name = target.container_name()?;
     crate::network::ensure_service_network(target)?;
 
@@ -47,7 +48,7 @@ pub(super) fn ensure_container_running(
         return Ok(());
     }
 
-    if recreate {
+    if recreate || crate::network::publication_drifted(target) {
         force_remove_container(&container_name);
     } else if handle_existing_container(&container_name)? {
         return Ok(());

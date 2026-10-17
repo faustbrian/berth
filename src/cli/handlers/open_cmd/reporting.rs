@@ -24,6 +24,7 @@ pub(super) fn render_open_json(
                 "name": svc.name,
                 "status": service_container_status(svc),
                 "url": database_runtime_url(svc),
+                "published": database_runtime_url(svc).is_some(),
             })
         })
         .collect();
@@ -56,7 +57,22 @@ pub(super) fn render_open_text(
 
     emit_open_info("DB status:");
     for svc in databases {
-        let url = database_runtime_url(svc);
+        let Some(url) = database_runtime_url(svc) else {
+            emit_open_info(&format!(
+                "{}: {} ({})",
+                svc.name,
+                service_container_status(svc),
+                crate::network::PUBLISH_HINT
+            ));
+            if database {
+                anyhow::bail!(
+                    "cannot open '{}' in a host client: it is {}",
+                    svc.name,
+                    crate::network::PUBLISH_HINT
+                );
+            }
+            continue;
+        };
         emit_open_info(&format!(
             "{}: {} ({})",
             svc.name,

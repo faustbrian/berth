@@ -24,6 +24,8 @@ pub(super) fn assign_testing_runtime_ports(config: &mut config::Config) -> Resul
             service.domain = None;
             service.domains = None;
         }
+        // Test leases keep 7.0.0's random published ports.
+        service.runtime.publish_host_port = true;
 
         let remap = cli::support::remap_random_ports(service, &mut used_ports, true)?;
         if remap.was_remapped() {

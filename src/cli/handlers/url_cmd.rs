@@ -20,18 +20,33 @@ pub(crate) fn handle_url(
         "json" => {
             let urls: Vec<serde_json::Value> = selected
                 .iter()
-                .map(|svc| serde_json::json!({"name": svc.name, "url": svc.connection_url()}))
+                .map(|svc| {
+                    serde_json::json!({
+                        "name": svc.name,
+                        "url": crate::network::host_url(svc),
+                        "published": crate::network::host_url(svc).is_some(),
+                    })
+                })
                 .collect();
             serialize::print_json_pretty(&urls)?;
         }
         _ => {
             if service.is_some() {
                 for svc in selected {
-                    println!("{}", svc.connection_url());
+                    let url = crate::network::host_url(svc).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "service '{}' is {}",
+                            svc.name,
+                            crate::network::PUBLISH_HINT
+                        )
+                    })?;
+                    println!("{url}");
                 }
             } else {
                 for svc in selected {
-                    println!("{}: {}", svc.name.bold(), svc.connection_url());
+                    let url = crate::network::host_url(svc)
+                        .unwrap_or_else(|| format!("({})", crate::network::PUBLISH_HINT));
+                    println!("{}: {url}", svc.name.bold());
                 }
             }
         }

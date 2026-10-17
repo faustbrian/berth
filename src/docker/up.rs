@@ -19,6 +19,7 @@ mod state;
 
 /// Ensures the service container is running.
 pub fn up(service: &ServiceConfig, pull: PullPolicy, recreate: bool) -> Result<()> {
+    let service = &*crate::network::with_existing_publication(service);
     let container_name = service.container_name()?;
     crate::network::ensure_service_network(service)?;
 
@@ -26,6 +27,7 @@ pub fn up(service: &ServiceConfig, pull: PullPolicy, recreate: bool) -> Result<(
         return dry_run::describe(service, pull, recreate, &container_name);
     }
 
+    let recreate = recreate || crate::network::publication_drifted(service);
     if state::ensure_or_start_existing(&container_name, recreate)? {
         ensure_object_store_bucket_ready(service)?;
         return Ok(());

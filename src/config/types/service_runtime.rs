@@ -21,4 +21,7 @@ pub struct ServiceRuntime {
     /// HTTPS port of the gateway serving this service's routes; set only for
     /// services that have gateway routes.
     pub gateway_https_port: Option<u16>,
+    /// Whether the service's port is published on the host (`publish: true`,
+    /// `--publish-all`, runtime environments and test leases).
+    pub publish_host_port: bool,
 }

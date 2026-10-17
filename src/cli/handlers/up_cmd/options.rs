@@ -34,9 +34,11 @@ pub(super) fn resolve_execution_flags(
     }
 }
 
-/// Returns the default value for publish all enabled.
+/// Returns the default value for publish all enabled. Off in berth 9:
+/// services are reached inside instance networks and through gateway
+/// routes, so nothing needs a (racy) random host port by default.
 const fn default_publish_all_enabled() -> bool {
-    true
+    false
 }
 
 /// Returns the default value for wait enabled.
@@ -61,7 +63,7 @@ mod tests {
     fn resolve_execution_flags_prefers_explicit_no_flags() {
         let flags = resolve_execution_flags(false, false, false, false);
         assert!(flags.use_wait);
-        assert!(flags.use_publish_all);
+        assert!(!flags.use_publish_all, "host ports are opt-in in berth 9");
         assert_eq!(flags.use_wait, default_wait_enabled());
         assert_eq!(flags.use_publish_all, default_publish_all_enabled());
     }

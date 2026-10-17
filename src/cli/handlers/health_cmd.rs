@@ -40,6 +40,8 @@ pub(crate) fn handle_health(
         options.kind,
         options.profile,
     )?;
+    // Inspection never starts the gateway or attaches it to networks.
+    crate::gateway::probe_without_starting_gateway();
     let statuses = Arc::new(Mutex::new(Vec::with_capacity(selected.len())));
     let statuses_shared = Arc::clone(&statuses);
     crate::cli::support::run_selected_services(&selected, options.parallel, move |service| {

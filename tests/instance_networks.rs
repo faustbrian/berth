@@ -131,3 +131,31 @@ fn down_keeps_a_network_that_a_stopped_container_still_references() {
         fixture.calls()
     );
 }
+
+#[test]
+fn services_publish_host_ports_only_when_opted_in() {
+    let first_run = |label: &str, args: &[&str]| {
+        let fixture = Fixture::new(label);
+        assert!(fixture.berth(args).status.success(), "{args:?}");
+        fixture
+            .calls()
+            .into_iter()
+            .find(|call| call.starts_with("run "))
+            .expect("run")
+    };
+    let default = first_run("publish", &["up", "--no-wait"]);
+    assert!(
+        !default.contains(" -p "),
+        "no host port by default: {default}"
+    );
+    let publish_all = first_run("publish-all", &["up", "--no-wait", "-P"]);
+    assert!(
+        publish_all.contains(" -p 127.0.0.1:"),
+        "-P publishes like 7.0.0: {publish_all}"
+    );
+    let env = first_run("publish-env", &["--env", "staging", "up", "--no-wait"]);
+    assert!(
+        env.contains(" -p 127.0.0.1:"),
+        "--env namespaces keep offset host ports: {env}"
+    );
+}

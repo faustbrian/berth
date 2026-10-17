@@ -5,10 +5,15 @@
 //! services are addressed by their service name.
 
 mod ensure;
+mod host_url;
 mod remove;
 mod run_args;
 mod subnet;
 
 pub(crate) use ensure::ensure_service_network;
+pub(crate) use host_url::{PUBLISH_HINT, host_url};
 pub(crate) use remove::remove_unused_networks;
-pub(crate) use run_args::network_run_args;
+pub(crate) use run_args::{
+    inherit_publication, is_published, network_run_args, publication_drifted, publishes_host_port,
+    with_existing_publication,
+};

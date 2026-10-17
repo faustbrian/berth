@@ -69,6 +69,12 @@ pub fn wait_until_healthy(
                 return Ok(());
             }
             Err(err) => {
+                if err
+                    .downcast_ref::<crate::gateway::ProbeSetupError>()
+                    .is_some()
+                {
+                    return Err(err);
+                }
                 if retries.is_some_and(|max| attempts >= max) {
                     anyhow::bail!(
                         "Failed health check for '{}' after {} retries: {}",

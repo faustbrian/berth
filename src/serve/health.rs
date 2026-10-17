@@ -43,6 +43,24 @@ pub(crate) fn wait_until_http_healthy(
         .unwrap_or_default()
         .into_iter()
         .collect();
+    // A service with neither a route nor a host port (Gotenberg, Selenium)
+    // is probed inside its instance network through the gateway.
+    let in_network =
+        !crate::gateway::has_gateway_routes(target) && !crate::network::is_published(target);
+    let probe_path = health_path
+        .or(target.health_path.as_deref())
+        .unwrap_or("/up")
+        .to_owned();
+    let health_url = if in_network {
+        format!(
+            "http://{}:{}{probe_path} (inside {})",
+            target.name,
+            target.resolved_container_port(),
+            target.runtime.network.as_deref().unwrap_or("its network")
+        )
+    } else {
+        health_url
+    };
     output::event(
         &target.name,
         LogLevel::Info,
@@ -50,11 +68,19 @@ pub(crate) fn wait_until_http_healthy(
         Persistence::Persistent,
     );
     let started = std::time::Instant::now();
-
     let timeout_details = loop {
-        let observation = run_curl_command_with_body(&health_url)
-            .map(|result| HealthProbeObservation::from_output(&result))
-            .unwrap_or_else(HealthProbeObservation::missing_output);
+        let result = if in_network {
+            crate::gateway::http_probe_output(target, &probe_path)
+        } else {
+            run_curl_command_with_body(&health_url)
+                .ok_or_else(|| anyhow::anyhow!("curl produced no output"))
+        };
+        let observation = match result {
+            Ok(output) => HealthProbeObservation::from_output(&output),
+            // Starting or attaching the gateway failed: retrying cannot help.
+            Err(error) if in_network => return Err(error),
+            Err(_) => HealthProbeObservation::missing_output(),
+        };
 
         if observation.is_healthy(target, &accepted_statuses) {
             let code = observation

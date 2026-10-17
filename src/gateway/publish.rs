@@ -75,13 +75,7 @@ pub(crate) fn publish_routes(mode: PublishMode<'_>) -> Result<()> {
     let plan = plan_routes(&labeled)?;
     let current = dirs.config.join("caddy.json");
     let candidate = dirs.config.join("caddy.next.json");
-    if !current.exists() {
-        // A gateway always starts from a document the renderer produces for
-        // an empty route set; routes are then applied by a validated reload.
-        let empty = serde_json::to_string_pretty(&render_config(&[], ports))
-            .context("failed to render gateway config")?;
-        crate::config::yaml::write_file_atomically(&current, &empty)?;
-    }
+    ensure_start_document(&dirs, ports)?;
     let rendered = serde_json::to_string_pretty(&render_config(&plan.routes, ports))
         .context("failed to render gateway config")?;
     crate::config::yaml::write_file_atomically(&candidate, &rendered)?;
@@ -89,10 +83,7 @@ pub(crate) fn publish_routes(mode: PublishMode<'_>) -> Result<()> {
     let gateway = gateway_container_name(&installation);
     let running = match mode {
         PublishMode::Claim(_, _, baked_port) => {
-            if ensure_gateway(&installation, ports, &dirs)? == GatewayState::Started {
-                wait_until_admin_ready(&gateway)?;
-            }
-            ports.record()?;
+            start_gateway(&installation, ports, &dirs)?;
             // A first run that loaded its config before another process
             // recorded different ports would serve URLs on the wrong port.
             if baked_port != ports.https {
@@ -345,6 +336,51 @@ fn attach(
         "failed to attach the berth gateway to {network}: {}",
         stderr.trim()
     )
+}
+
+/// Writes the document a gateway starts from when none exists: the
+/// renderer's output for an empty route set. Routes are then applied by a
+/// validated reload.
+fn ensure_start_document(dirs: &GatewayDirs, ports: GatewayPorts) -> Result<()> {
+    let current = dirs.config.join("caddy.json");
+    if current.exists() {
+        return Ok(());
+    }
+    let empty = serde_json::to_string_pretty(&render_config(&[], ports))
+        .context("failed to render gateway config")?;
+    crate::config::yaml::write_file_atomically(&current, &empty)
+}
+
+/// Ensures the gateway runs on `ports` and records them once it does. Must
+/// be called under the gateway lock.
+///
+/// # Errors
+///
+/// Returns an error when the gateway cannot be started or its ports
+/// recorded.
+pub(super) fn start_gateway(
+    installation: &str,
+    ports: GatewayPorts,
+    dirs: &GatewayDirs,
+) -> Result<()> {
+    ensure_start_document(dirs, ports)?;
+    if ensure_gateway(installation, ports, dirs)? == GatewayState::Started {
+        wait_until_admin_ready(&gateway_container_name(installation))?;
+    }
+    ports.record()
+}
+
+/// Attaches the gateway to `network` for health probes, keeping whatever
+/// route aliases it already has there. Must be called under the gateway lock.
+///
+/// # Errors
+///
+/// Returns an error when Docker fails.
+pub(super) fn attach_for_probes(gateway: &str, network: &str) -> Result<()> {
+    if attached_aliases(gateway)?.contains_key(network) {
+        return Ok(());
+    }
+    attach(gateway, network, &BTreeSet::new(), None)
 }
 
 /// Whether the gateway exists and is attached to `network`.

@@ -85,6 +85,9 @@ find / -path '*/pki/authorities/local/root.crt' 2>/dev/null | head -n 1
 
 /// Sends a short TLS request to trigger lazy certificate materialization.
 fn warm_up_container_tls_endpoint(target: &ServiceConfig) {
+    if !crate::network::is_published(target) {
+        return;
+    }
     let url = format!("https://{}:{}", target.host, target.port);
     drop(
         Command::new("curl")

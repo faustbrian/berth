@@ -19,15 +19,17 @@ pub(super) fn build_base_run_args(target: &ServiceConfig) -> Result<Vec<String>>
         crate::docker::ContainerRole::Service,
     )?);
     args.extend(crate::network::network_run_args(target, true));
-    args.extend([
-        "-p".to_owned(),
-        format!(
-            "{}:{}:{}",
-            target.host,
-            target.port,
-            target.resolved_container_port()
-        ),
-    ]);
+    if crate::network::publishes_host_port(target) {
+        args.extend([
+            "-p".to_owned(),
+            format!(
+                "{}:{}:{}",
+                target.host,
+                target.port,
+                target.resolved_container_port()
+            ),
+        ]);
+    }
     Ok(args)
 }
 

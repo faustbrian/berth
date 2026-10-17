@@ -38,7 +38,15 @@ pub(crate) fn handle_recreate(
     )?;
     let start_context = runtime.service_start_context();
 
+    // Recreating removes the container first, so a host port it was given
+    // by an earlier `up -P` is read before that.
+    for service in &mut config.service {
+        crate::network::inherit_publication(service);
+    }
     if options.random_ports {
+        for service in &mut config.service {
+            service.runtime.publish_host_port = true;
+        }
         return random_ports::handle_random_ports_recreate(
             config,
             RandomPortsRecreateOptions {

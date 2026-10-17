@@ -36,8 +36,10 @@ fn print_service_section(service: &ServiceConfig) {
 
     let published_port =
         docker::inspect_host_port_binding(&container_name, service.resolved_container_port())
-            .map(|(host, port)| format!("{host}:{port}"))
-            .unwrap_or_else(|| format!("{}:{}", service.host, service.port));
+            .map_or_else(
+                || "not published".to_owned(),
+                |(host, port)| format!("{host}:{port}"),
+            );
 
     let mut rows = vec![
         AboutRow::plain("Kind", format!("{:?}", service.kind).to_lowercase()),

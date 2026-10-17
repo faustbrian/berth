@@ -42,6 +42,9 @@ pub(super) fn apply_runtime_env(config: &mut Config, env_name: &str) -> Result<(
         service.domain = None;
         service.domains = None;
         service.runtime.gateway_https_port = None;
+        // Without routes, the namespace's services are reached on their
+        // offset host ports, as in 7.0.0.
+        service.runtime.publish_host_port = true;
         service.port = shift_port(service.port, port_offset, &service.name, "port")?;
         if let Some(smtp_port) = service.smtp_port {
             service.smtp_port = Some(shift_port(

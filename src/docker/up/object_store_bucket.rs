@@ -27,7 +27,10 @@ pub(super) fn ensure_bucket_exists(service: &ServiceConfig) -> Result<()> {
         region,
         container_name,
     );
-    let legacy = build_host_gateway_bootstrap(service, bucket, access_key, secret_key, region);
+    // The host-gateway fallback dials the host port, which exists only when
+    // the service publishes one.
+    let legacy = build_host_gateway_bootstrap(service, bucket, access_key, secret_key, region)
+        .filter(|_| crate::network::is_published(service));
 
     if crate::docker::is_dry_run() {
         crate::docker::print_docker_command(&primary.head_args);

@@ -57,5 +57,6 @@ pub fn preset_preview(preset: &str) -> Result<ServiceConfig> {
         env_mapping: None,
         javascript: None,
         container_name: None,
+        publish: None,
     })
 }

@@ -14,6 +14,14 @@ All notable changes to this project are documented in this file.
   are named `berth_{project}_{instance}_{service}`, and service, app and
   one-off containers carry `dev.berth.*` ownership labels for their project,
   instance and root.
+- Changed `up` to publish no host ports by default. Services are reached
+  inside the instance network and web apps through gateway routes; health
+  probes for unpublished services run inside the gateway. Opt in per service
+  with `publish: true` (an allocated port), or for every service with `-P`
+  (random ports) or `--no-publish-all` (configured ports); later commands and
+  `recreate` read the published port from the container. `--env` namespaces and test leases
+  keep 7.0.0's published ports. `url`, `open --database`, `share` and status
+  now say when a service has no host port instead of showing a dead one.
 - Added the berth gateway: one Caddy container per installation serves every
   instance at `https://{instance}-{project}[-{service}].berth.localhost:8443`
   (ports via `BERTH_GATEWAY_HTTPS_PORT`/`BERTH_GATEWAY_HTTP_PORT`, bound to

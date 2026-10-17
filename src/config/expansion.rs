@@ -110,6 +110,7 @@ mod tests {
             env_mapping: None,
             javascript: None,
             container_name: None,
+            publish: None,
         })?;
 
         assert!(service.octane);

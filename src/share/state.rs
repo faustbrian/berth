@@ -84,6 +84,15 @@ pub(super) fn start_session(
     timeout_secs: u64,
 ) -> Result<ShareStartResult> {
     ensure_provider_available(provider)?;
+    // Tunnels forward to a host port; gateway routes need the route's Host
+    // header, which the providers do not send.
+    if !crate::network::is_published(target) {
+        anyhow::bail!(
+            "cannot share '{}': it is {}",
+            target.name,
+            crate::network::PUBLISH_HINT
+        );
+    }
 
     let local_url = super::target::local_target_url(target);
     let command_args = provider.command_args(&local_url);

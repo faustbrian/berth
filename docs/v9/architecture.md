@@ -80,7 +80,15 @@ explicit `/24` from `10.128.0.0/9`, chosen deterministically and probed
 forward under a host lock on collision (FI-59). Services join it under their
 service name as alias, so applications reach them by name. Shared servers and
 the gateway are attached to the instance networks they serve and nothing
-else. Host ports are published only when a service opts in.
+else. Host ports are published only when a service opts in (`publish: true`
+for an allocated port, or `-P`/`--no-publish-all` for every service);
+`--env` namespaces and test leases keep 7.0.0's published ports because they
+have no routes. Whether a service is published is read from its container's
+port binding (`HostConfig.PortBindings`, which survives a stop), so every
+later command, `recreate` and a stopped container's restart keep the port an
+earlier `up -P` assigned. A container keeps its publication until it is
+removed with `down`. Unpublished services are health-probed from inside the
+gateway; `health` never starts the gateway to do so.
 
 Networks are created on demand by any command that starts a container and
 removed by `down` (and after each test run) once no container, running or

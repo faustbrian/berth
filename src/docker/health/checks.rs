@@ -60,11 +60,20 @@ pub(super) fn check_service_health(service: &ServiceConfig, container_name: &str
 }
 
 fn health_check_tcp(service: &ServiceConfig) -> Result<bool> {
+    if !crate::network::is_published(service) {
+        return crate::gateway::tcp_open(service);
+    }
     let address = format!("{}:{}", service.host, service.port);
     Ok(TcpStream::connect(address).is_ok())
 }
 
 fn health_check_http(service: &ServiceConfig, path: &str) -> Result<bool> {
+    if !crate::network::is_published(service) {
+        return match crate::gateway::http_status(service, path)? {
+            Some(status_code) => Ok(status_code < 500),
+            None => anyhow::bail!("{} is not reachable yet", service.name),
+        };
+    }
     let status_code = http_status_code(&service.host, service.port, path)?;
     Ok(status_code < 500)
 }

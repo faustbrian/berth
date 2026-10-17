@@ -110,10 +110,11 @@ pub(crate) struct UpArgs {
     /// Recreate containers even if their configuration and image haven't changed
     #[arg(long, default_value_t = false)]
     pub(crate) force_recreate: bool,
-    /// Publish all exposed ports to random host ports (enabled by default for `up`)
+    /// Publish every service on random host ports (off by default: services
+    /// are reached inside the instance network and through gateway routes)
     #[arg(long, short = 'P', default_value_t = false)]
     pub(crate) publish_all: bool,
-    /// Keep configured host ports instead of forcing random published ports
+    /// Publish every service on its configured host port
     #[arg(long, default_value_t = false, conflicts_with = "publish_all")]
     pub(crate) no_publish_all: bool,
     /// Strategy for assigning ports when randomization is enabled
