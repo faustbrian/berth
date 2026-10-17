@@ -12,6 +12,8 @@ pub struct ProjectRootPathOptions<'a> {
     pub config_path: Option<&'a Path>,
     pub project_root: Option<&'a Path>,
     pub runtime_env: Option<&'a str>,
+    /// Requested instance ID (`--instance`); derived from the root when absent.
+    pub instance: Option<&'a str>,
 }
 
 impl<'a> ProjectRootPathOptions<'a> {
@@ -20,7 +22,14 @@ impl<'a> ProjectRootPathOptions<'a> {
             config_path,
             project_root,
             runtime_env: None,
+            instance: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_instance(mut self, instance: Option<&'a str>) -> Self {
+        self.instance = instance;
+        self
     }
 
     #[must_use]

@@ -91,6 +91,7 @@ mod tests {
             javascript: None,
             container_name: None,
             resolved_container_name: None,
+            runtime: Default::default(),
         }
     }
 

@@ -40,6 +40,7 @@ pub(super) fn mysql_service(name: &str) -> ServiceConfig {
         javascript: None,
         container_name: None,
         resolved_container_name: Some(format!("test-{name}")),
+        runtime: Default::default(),
     }
 }
 
@@ -84,5 +85,6 @@ pub(super) fn app_service(name: &str, domain: &str, port: u16, driver: Driver) -
         javascript: None,
         container_name: None,
         resolved_container_name: None,
+        runtime: Default::default(),
     }
 }

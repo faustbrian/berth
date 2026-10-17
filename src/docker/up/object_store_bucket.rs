@@ -331,6 +331,7 @@ mod tests {
             javascript: None,
             container_name: Some("acme-s3".to_owned()),
             resolved_container_name: Some("acme-s3".to_owned()),
+            runtime: Default::default(),
         }
     }
 

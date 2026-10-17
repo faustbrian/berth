@@ -63,18 +63,13 @@ pub(super) fn handle_setup_commands(
 
 /// Loads config for this CLI invocation and applies `--env` overrides.
 pub(super) fn load_config_for_cli(
-    cli: &Cli,
     context: &super::context::CliDispatchContext<'_>,
 ) -> Result<Config> {
-    let mut config =
-        if cli.config.is_none() && cli.project_root.is_none() && context.runtime_env().is_none() {
-            config::load_config()?
-        } else {
-            config::load_config_with(
-                config::LoadConfigPathOptions::new(context.config_path(), context.project_root())
-                    .with_runtime_env(context.runtime_env()),
-            )?
-        };
+    let mut config = config::load_config_with(
+        config::LoadConfigPathOptions::new(context.config_path(), context.project_root())
+            .with_runtime_env(context.runtime_env())
+            .with_instance(context.instance()),
+    )?;
     if let Some(runtime_env) = context.runtime_env() {
         config::apply_runtime_env(&mut config, runtime_env)?;
     }
@@ -124,7 +119,7 @@ mod tests {
             "status",
         ]);
         let context = CliDispatchContext::from_cli(&cli);
-        let config = load_config_for_cli(&cli, &context).expect("load config");
+        let config = load_config_for_cli(&context).expect("load config");
         assert_eq!(config.schema_version, 1);
         assert!(config.service.is_empty());
     }

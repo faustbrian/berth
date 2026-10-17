@@ -879,3 +879,9 @@ fn daemon_command_variants_parse() {
         panic!("expected daemon command");
     }
 }
+
+#[test]
+fn instance_is_read_from_the_flag() {
+    let cli = Cli::parse_from(["berth", "--instance", "agent-3", "ps"]);
+    assert_eq!(cli.instance(), Some("agent-3"));
+}

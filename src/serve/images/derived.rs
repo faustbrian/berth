@@ -212,6 +212,7 @@ mod tests {
             javascript: None,
             container_name: Some("audit-app".to_owned()),
             resolved_container_name: Some("audit-app".to_owned()),
+            runtime: Default::default(),
         }
     }
 
@@ -256,6 +257,7 @@ mod tests {
             javascript: None,
             container_name: Some("audit-mailhog".to_owned()),
             resolved_container_name: Some("audit-mailhog".to_owned()),
+            runtime: Default::default(),
         }
     }
 

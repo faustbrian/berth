@@ -97,6 +97,7 @@ mod tests {
                 javascript: None,
                 container_name: Some(format!("{name}-container")),
                 resolved_container_name: None,
+                runtime: Default::default(),
             }],
             swarm: Vec::new(),
         }

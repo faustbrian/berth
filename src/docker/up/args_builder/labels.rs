@@ -3,22 +3,14 @@
 //! Contains docker run label arguments used by Berth command workflows.
 
 use crate::config::ServiceConfig;
-use crate::docker::{
-    LABEL_CONTAINER, LABEL_KIND, LABEL_MANAGED, LABEL_SERVICE, VALUE_MANAGED_TRUE, kind_label_value,
-};
+use crate::docker::{ContainerRole, ownership_label_args};
 
 pub(super) fn append_labels(args: &mut Vec<String>, service: &ServiceConfig, container_name: &str) {
-    args.push("--label".to_owned());
-    args.push(format!("{LABEL_MANAGED}={VALUE_MANAGED_TRUE}"));
-
-    args.push("--label".to_owned());
-    args.push(format!("{LABEL_SERVICE}={}", service.name));
-
-    args.push("--label".to_owned());
-    args.push(format!("{LABEL_KIND}={}", kind_label_value(service.kind)));
-
-    args.push("--label".to_owned());
-    args.push(format!("{LABEL_CONTAINER}={container_name}"));
+    args.extend(ownership_label_args(
+        service,
+        container_name,
+        ContainerRole::Service,
+    ));
 }
 
 #[cfg(test)]
@@ -68,6 +60,7 @@ mod tests {
             javascript: None,
             container_name: None,
             resolved_container_name: Some("acme-db".to_owned()),
+            runtime: Default::default(),
         };
         let mut args = Vec::new();
 

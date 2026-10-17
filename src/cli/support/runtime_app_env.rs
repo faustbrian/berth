@@ -62,6 +62,7 @@ mod tests {
             javascript: None,
             container_name: None,
             resolved_container_name: Some("app-service".to_owned()),
+            runtime: Default::default(),
         }
     }
 

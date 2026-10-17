@@ -112,5 +112,6 @@ pub(super) fn expand_raw_service(raw: RawServiceConfig) -> Result<ServiceConfig>
         javascript: raw.javascript,
         container_name: raw.container_name,
         resolved_container_name: None,
+        runtime: Default::default(),
     })
 }

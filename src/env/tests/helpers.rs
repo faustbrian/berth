@@ -43,6 +43,7 @@ pub(super) fn svc(name: &str, kind: Kind, driver: Driver, port: u16) -> ServiceC
         javascript: None,
         container_name: None,
         resolved_container_name: None,
+        runtime: Default::default(),
     }
 }
 

@@ -6,11 +6,19 @@ use std::path::Path;
 use crate::config::ServiceConfig;
 
 pub(super) fn build_base_run_args(target: &ServiceConfig) -> Result<Vec<String>> {
-    Ok(vec![
+    let container_name = target.container_name()?;
+    let mut args = vec![
         "run".to_owned(),
         "-d".to_owned(),
         "--name".to_owned(),
-        target.container_name()?,
+        container_name.clone(),
+    ];
+    args.extend(crate::docker::ownership_label_args(
+        target,
+        &container_name,
+        crate::docker::ContainerRole::Service,
+    ));
+    args.extend([
         "-p".to_owned(),
         format!(
             "{}:{}:{}",
@@ -18,7 +26,8 @@ pub(super) fn build_base_run_args(target: &ServiceConfig) -> Result<Vec<String>>
             target.port,
             target.resolved_container_port()
         ),
-    ])
+    ]);
+    Ok(args)
 }
 
 pub(super) fn append_smtp_port_mapping(run_args: &mut Vec<String>, host: &str, smtp_port: u16) {

@@ -60,6 +60,15 @@ pub(crate) fn parse_project_file(content: &str, path: &Path) -> Result<RawConfig
                 path.display()
             );
         }
+        validate_service_name(&name)
+            .with_context(|| format!("invalid service name in {}", path.display()))?;
+        if service.container_name.is_some() {
+            anyhow::bail!(
+                "service '{name}' in {} sets `container_name`; berth names containers \
+                 berth_{{project}}_{{instance}}_{{service}} so parallel instances never collide",
+                path.display()
+            );
+        }
         service.name = Some(name);
         services.push(service);
     }
@@ -75,6 +84,32 @@ pub(crate) fn parse_project_file(content: &str, path: &Path) -> Result<RawConfig
         service: services,
         swarm: file.swarm,
     })
+}
+
+/// Validates a service name as a lowercase DNS label.
+///
+/// Service names become part of container, volume and route names, which use
+/// `_` as separator, so they may not contain `_` themselves.
+///
+/// # Errors
+///
+/// Returns an error naming the exact rejected input.
+pub(crate) fn validate_service_name(name: &str) -> Result<()> {
+    if !is_dns_label(name) || name.len() > 63 {
+        anyhow::bail!(
+            "service name '{name}' must be lowercase letters, digits and inner hyphens (at most 63 bytes)"
+        );
+    }
+    Ok(())
+}
+
+fn is_dns_label(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    bytes
+        .iter()
+        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'-')
+        && bytes.first().is_some_and(u8::is_ascii_alphanumeric)
+        && bytes.last().is_some_and(u8::is_ascii_alphanumeric)
 }
 
 /// Validates a project name as a lowercase DNS label of bounded length.

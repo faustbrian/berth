@@ -90,6 +90,7 @@ mod tests {
             javascript: None,
             container_name: Some(container_name.to_owned()),
             resolved_container_name: None,
+            runtime: Default::default(),
         }
     }
 

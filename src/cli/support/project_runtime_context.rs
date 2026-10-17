@@ -83,6 +83,7 @@ mod tests {
                 javascript: None,
                 container_name: Some("db".to_owned()),
                 resolved_container_name: None,
+                runtime: Default::default(),
             }],
             swarm: Vec::new(),
         }

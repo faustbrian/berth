@@ -345,6 +345,7 @@ fn convert_v7(
     let container_engine = root.remove("container_engine");
 
     let mut services = Map::new();
+    let mut dropped_container_names = false;
     if let Some(list) = root.remove("service") {
         let Value::Array(items) = list else {
             anyhow::bail!("`service` must be a list of service tables");
@@ -353,6 +354,9 @@ fn convert_v7(
             let Value::Object(mut service) = item else {
                 anyhow::bail!("every `service` entry must be a table");
             };
+            if service.remove("container_name").is_some() {
+                dropped_container_names = true;
+            }
             let name = match service.remove("name") {
                 Some(Value::String(name)) => name,
                 Some(other) => anyhow::bail!("service `name` must be a string, found {other}"),
@@ -364,6 +368,14 @@ fn convert_v7(
             services.insert(name, Value::Object(service));
         }
     }
+
+    if dropped_container_names {
+        notes.push("dropped `container_name`: berth 9 names containers per instance".to_owned());
+    }
+    notes.push(
+        "berth 9 names containers and data volumes per instance, so existing 6/7 data volumes are not reused; restore data with `berth restore` after `berth up`"
+            .to_owned(),
+    );
 
     let swarm = match root.remove("swarm") {
         None => Vec::new(),

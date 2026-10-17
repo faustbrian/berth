@@ -91,6 +91,7 @@ mod tests {
             javascript: None,
             container_name: Some("acme-api-app".to_owned()),
             resolved_container_name: Some("acme-api-app".to_owned()),
+            runtime: Default::default(),
         }
     }
 
@@ -148,6 +149,36 @@ mod tests {
             .count();
 
         assert_eq!(override_count, 1);
+    }
+
+    #[test]
+    fn app_containers_carry_instance_ownership_labels() {
+        let mut service = app_service();
+        service.runtime.project = Some("acme-api".to_owned());
+        service.runtime.instance = Some("agent-1-97fe08".to_owned());
+
+        let args = build_run_args(
+            &service,
+            "runtime-image",
+            Path::new("."),
+            &HashMap::new(),
+            false,
+        )
+        .expect("run args");
+        let rendered = args.join(" ");
+
+        assert!(
+            rendered.contains("--label dev.berth.managed=true"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("--label dev.berth.instance=agent-1-97fe08"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("--label dev.berth.project=acme-api"),
+            "{rendered}"
+        );
     }
 
     #[test]

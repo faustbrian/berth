@@ -66,6 +66,7 @@ mod tests {
             javascript: None,
             container_name: Some(format!("{name}-container")),
             resolved_container_name: Some(format!("{name}-container")),
+            runtime: Default::default(),
         }
     }
 

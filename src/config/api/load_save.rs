@@ -11,15 +11,6 @@ use super::project::ProjectRootPathOptions;
 pub type RawConfigPathOptions<'a> = ProjectRootPathOptions<'a>;
 pub type LoadConfigPathOptions<'a> = ProjectRootPathOptions<'a>;
 
-/// Loads the configuration file using default discovery.
-///
-/// # Errors
-///
-/// Returns an error if the config cannot be found, read, or parsed.
-pub fn load_config() -> Result<Config> {
-    load_config_with(LoadConfigPathOptions::new(None, None))
-}
-
 /// Loads configuration from explicit config path or project root override.
 ///
 /// # Errors
@@ -36,6 +27,8 @@ pub fn load_config_with(options: LoadConfigPathOptions<'_>) -> Result<Config> {
     validation::validate_and_resolve_domains(&mut config, &project_root)?;
     validation::validate_and_resolve_container_names(&mut config)?;
     validation::validate_swarm_targets(&config)?;
+    let identity = crate::instance::resolve_instance(&project_root, options.instance)?;
+    super::super::instance_naming::apply_instance_identity(&mut config, &identity)?;
 
     Ok(config)
 }

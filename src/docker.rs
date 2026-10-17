@@ -286,7 +286,7 @@ pub use inspect::{
     inspect_env, inspect_host_port_binding, inspect_json, inspect_label, inspect_status,
 };
 pub(crate) use labels::{
-    LABEL_CONTAINER, LABEL_KIND, LABEL_MANAGED, LABEL_SERVICE, VALUE_MANAGED_TRUE, kind_label_value,
+    ContainerRole, LABEL_CONTAINER, LABEL_MANAGED, VALUE_MANAGED_TRUE, ownership_label_args,
 };
 pub use logs::{LogsOptions, logs, logs_many, logs_prefixed};
 pub use manage::{down, pull, recreate, restart, rm, stop};

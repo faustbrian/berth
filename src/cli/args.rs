@@ -71,6 +71,9 @@ pub(crate) struct Cli {
     /// Runtime environment namespace (for example: `test`)
     #[arg(global = true, long, value_name = "NAME")]
     pub(crate) env: Option<String>,
+    /// Instance ID for this checkout's environment (default: derived from the project path)
+    #[arg(global = true, long, value_name = "ID", env = "BERTH_INSTANCE")]
+    pub(crate) instance: Option<String>,
     /// Container runtime engine (`docker` or `podman`)
     #[arg(global = true, long, value_name = "ENGINE")]
     pub(crate) engine: Option<ContainerEngine>,
@@ -105,6 +108,10 @@ impl Cli {
 
     pub(crate) fn runtime_env(&self) -> Option<&str> {
         self.env.as_deref()
+    }
+
+    pub(crate) fn instance(&self) -> Option<&str> {
+        self.instance.as_deref()
     }
 }
 

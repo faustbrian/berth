@@ -71,6 +71,7 @@ mod tests {
             javascript: None,
             container_name: None,
             resolved_container_name: None,
+            runtime: Default::default(),
         };
 
         let values = collect_service_json(vec![&service], |svc| {
@@ -128,6 +129,7 @@ mod tests {
             javascript: None,
             container_name: None,
             resolved_container_name: None,
+            runtime: Default::default(),
         };
 
         let error =

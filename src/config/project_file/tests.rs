@@ -112,7 +112,7 @@ fn converts_v7_toml_service_lists() -> anyhow::Result<()> {
         .expect("preset name becomes the service key");
     assert_eq!(redis.hook.len(), 1, "hooks survive conversion");
     assert!(
-        converted.notes.is_empty(),
+        !converted.notes.iter().any(|note| note.contains("domain")),
         "the directory strategy maps exactly: {:?}",
         converted.notes
     );
@@ -372,4 +372,33 @@ fn legacy_yaml_aliases_fail_with_an_instruction_to_inline_them() {
         format!("{error:#}").contains("write the value out in full"),
         "{error:#}"
     );
+}
+
+#[test]
+fn migration_drops_container_names_once_and_warns_about_data_volumes() -> anyhow::Result<()> {
+    let dir = temp_dir("container-names");
+    let converted = convert_legacy_config(
+        "container_prefix = \"api\"\n\n[[service]]\npreset = \"mysql\"\nname = \"db\"\ncontainer_name = \"legacy-db\"\n\n[[service]]\npreset = \"redis\"\ncontainer_name = \"legacy-redis\"\n",
+        &dir.join(".stackctl.toml"),
+    )?;
+    assert!(
+        !converted.content.contains("container_name"),
+        "{}",
+        converted.content
+    );
+    let container_notes = converted
+        .notes
+        .iter()
+        .filter(|note| note.contains("container_name"))
+        .count();
+    assert_eq!(container_notes, 1, "{:?}", converted.notes);
+    assert!(
+        converted
+            .notes
+            .iter()
+            .any(|note| note.contains("data volumes are not reused")),
+        "{:?}",
+        converted.notes
+    );
+    Ok(())
 }

@@ -42,7 +42,10 @@ pub(super) fn run_swarm_target(
     cancel: Option<Arc<AtomicBool>>,
 ) -> Result<SwarmRunResult> {
     let mut command = Command::new(berth_executable);
+    // Each swarm target is its own project with its own path-derived instance;
+    // the caller's requested instance belongs to the caller's project only.
     command
+        .env_remove("BERTH_INSTANCE")
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

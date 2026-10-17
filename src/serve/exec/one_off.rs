@@ -21,6 +21,11 @@ pub(super) fn run_command_one_off(
 ) -> Result<()> {
     let runtime_image = resolve_runtime_image(target, true, injected_env, project_root)?;
     let mut args = vec!["run".to_owned(), "--rm".to_owned()];
+    args.extend(crate::docker::ownership_label_args(
+        target,
+        &format!("{}-one-off", target.container_name()?),
+        crate::docker::ContainerRole::OneOff,
+    ));
     args.push(if tty { "-it" } else { "-i" }.to_owned());
     args.push("-w".to_owned());
     args.push("/app".to_owned());

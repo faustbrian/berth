@@ -14,8 +14,7 @@ mod sql_client_flavor;
 
 pub(crate) use load_save::load_raw_config_with;
 pub use load_save::{
-    LoadConfigPathOptions, RawConfigPathOptions, load_config, load_config_with,
-    load_container_engine_with,
+    LoadConfigPathOptions, RawConfigPathOptions, load_config_with, load_container_engine_with,
 };
 pub use lockfile::{
     LockfileDiff, build_image_lock, load_lockfile_with, lockfile_diff, save_lockfile_with,

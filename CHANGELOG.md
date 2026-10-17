@@ -6,6 +6,16 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Added instances: every checkout of a project is its own environment. The
+  instance ID (`{slug}-{hash6}`) is derived from the canonical project root,
+  so parallel git worktrees never share containers or named volumes, and
+  `--instance <id>` or `BERTH_INSTANCE` selects an explicit ID for the
+  current project (swarm dependencies keep their own instances). Containers
+  are named `berth_{project}_{instance}_{service}`, and service, app and
+  one-off containers carry `dev.berth.*` ownership labels for their project,
+  instance and root.
+- Added `docs/v9/architecture.md`, the berth 9.x design for instances,
+  ownership, leases, shared servers, the gateway and exit codes.
 - Added the berth 9.x ledger (`docs/v9/ledger.md`), which records one Port,
   Reimplement, Drop or Defer decision for every stackctl 8.x behavior, and
   `scripts/check-v9-ledger.sh`, which fails when any 8.x source directory or
@@ -53,6 +63,11 @@ All notable changes to this project are documented in this file.
   `.berth.lock.yaml`. A legacy helm, stackctl or TOML project file fails with
   an error naming `berth config migrate` instead of being read.
 - `berth init` writes a `schema_version: 9` `.berth.yaml` starter file.
+- `container_name` is no longer accepted in project files (berth names
+  containers per instance), service names must be lowercase DNS labels, and
+  named volumes of non-application services are namespaced per instance;
+  host-path mounts are unchanged. Migrated 6/7 projects therefore start with
+  fresh data volumes, which `config migrate` reports.
 - Renamed the project from Stackctl to Berth: the crate and binary are now
   `berth`, configuration files use the `.berth.*` prefix, environment
   variables use `BERTH_*`, Docker labels use the `dev.berth.*` namespace, and

@@ -34,14 +34,18 @@ pub(super) fn print_dry_run_container_start(
         mapping.push_str(&format!(" -p {}:{}:1025", target.host, smtp_port));
     }
 
-    let run_args = vec![
+    let mut run_args = vec![
         "run".to_owned(),
         "-d".to_owned(),
         "--name".to_owned(),
         container_name.to_owned(),
-        mapping,
-        runtime_image.to_owned(),
     ];
+    run_args.extend(crate::docker::ownership_label_args(
+        target,
+        container_name,
+        crate::docker::ContainerRole::Service,
+    ));
+    run_args.extend([mapping, runtime_image.to_owned()]);
     output::event(
         &target.name,
         LogLevel::Info,

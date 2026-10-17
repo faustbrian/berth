@@ -114,4 +114,7 @@ pub struct ServiceConfig {
     /// Resolved container name at runtime (not serialized).
     #[serde(skip)]
     pub resolved_container_name: Option<String>,
+    /// Project, instance and root this service runs under (not serialized).
+    #[serde(skip)]
+    pub runtime: super::ServiceRuntime,
 }

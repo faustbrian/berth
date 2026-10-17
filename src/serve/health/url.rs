@@ -68,6 +68,7 @@ mod tests {
             javascript: None,
             container_name: Some("api".to_owned()),
             resolved_container_name: Some("api".to_owned()),
+            runtime: Default::default(),
         }
     }
 

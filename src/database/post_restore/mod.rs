@@ -224,6 +224,7 @@ mod tests {
             javascript: None,
             container_name: None,
             resolved_container_name: Some("acme-shipit".to_owned()),
+            runtime: Default::default(),
         }
     }
 

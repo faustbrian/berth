@@ -130,6 +130,7 @@ mod tests {
             javascript: None,
             container_name: Some(format!("acme-{name}")),
             resolved_container_name: Some(format!("acme-{name}-testing")),
+            runtime: Default::default(),
         }
     }
 }

@@ -67,6 +67,7 @@ mod tests {
             javascript: None,
             container_name: Some("test-app".to_owned()),
             resolved_container_name: None,
+            runtime: Default::default(),
         }
     }
 

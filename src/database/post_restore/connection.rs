@@ -173,6 +173,7 @@ mod tests {
             javascript: None,
             container_name: None,
             resolved_container_name: Some(format!("test-{name}")),
+            runtime: Default::default(),
         }
     }
 

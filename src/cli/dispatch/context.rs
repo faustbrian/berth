@@ -11,6 +11,7 @@ pub(crate) struct CliDispatchContext<'a> {
     non_interactive: bool,
     repro: bool,
     runtime_env: Option<&'a str>,
+    instance: Option<&'a str>,
     config_path: Option<&'a Path>,
     project_root: Option<&'a Path>,
 }
@@ -24,6 +25,7 @@ impl<'a> CliDispatchContext<'a> {
             non_interactive: cli.non_interactive,
             repro: cli.repro,
             runtime_env: cli.runtime_env(),
+            instance: cli.instance(),
             config_path: cli.config_path(),
             project_root: cli.project_root_path(),
         }
@@ -51,6 +53,10 @@ impl<'a> CliDispatchContext<'a> {
 
     pub(crate) const fn runtime_env(&self) -> Option<&'a str> {
         self.runtime_env
+    }
+
+    pub(crate) const fn instance(&self) -> Option<&'a str> {
+        self.instance
     }
 
     pub(crate) const fn config_path(&self) -> Option<&'a Path> {

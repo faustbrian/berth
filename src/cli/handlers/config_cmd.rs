@@ -23,6 +23,7 @@ pub(crate) fn handle_config_migrate(
         config_path,
         project_root,
         runtime_env: None,
+        instance: None,
     })?;
     for file in migrated {
         log::info_if_not_quiet(
@@ -92,6 +93,7 @@ mod tests {
             javascript: None,
             container_name: Some(format!("{name}-container")),
             resolved_container_name: None,
+            runtime: Default::default(),
         }
     }
 

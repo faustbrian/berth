@@ -46,7 +46,7 @@ pub(crate) fn run(cli: Cli) -> Result<()> {
     )?;
     docker::set_container_engine(cli.engine.or(configured_engine).unwrap_or_default());
 
-    let mut config = bootstrap::load_config_for_cli(&cli, &dispatch_context)?;
+    let mut config = bootstrap::load_config_for_cli(&dispatch_context)?;
     if let Some(result) = primary::dispatch_primary(&cli, &mut config, &dispatch_context) {
         return result;
     }

@@ -150,6 +150,7 @@ mod tests {
             javascript: None,
             container_name: container_name.map(ToOwned::to_owned),
             resolved_container_name: None,
+            runtime: Default::default(),
         }
     }
 

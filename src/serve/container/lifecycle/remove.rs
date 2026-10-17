@@ -122,6 +122,7 @@ mod tests {
             javascript: None,
             container_name: Some(name.to_owned()),
             resolved_container_name: None,
+            runtime: Default::default(),
         }
     }
 }

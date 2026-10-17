@@ -107,5 +107,6 @@ fn app_service() -> ServiceConfig {
         javascript: None,
         container_name: Some("acme-api-app".to_owned()),
         resolved_container_name: Some("acme-api-app".to_owned()),
+        runtime: Default::default(),
     }
 }
