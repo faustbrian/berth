@@ -7,7 +7,7 @@ use anyhow::Result;
 use crate::config::{ServiceConfig, SharedEngine, SharedTarget};
 use crate::output::{self, LogLevel, Persistence};
 
-use super::{postgres, server};
+use super::{mysql, postgres, server};
 
 fn target(service: &ServiceConfig) -> Result<&SharedTarget> {
     service
@@ -44,7 +44,7 @@ pub(crate) fn up(service: &ServiceConfig) -> Result<()> {
         let _lock = server::lock(target)?;
         server::ensure_running(target)?;
         let password = service.password.clone().unwrap_or_default();
-        match target.engine {
+        let sql = match target.engine {
             SharedEngine::Postgres => {
                 let base = match (&service.runtime.project, &service.runtime.instance) {
                     (Some(project), Some(instance)) => {
@@ -52,12 +52,14 @@ pub(crate) fn up(service: &ServiceConfig) -> Result<()> {
                     }
                     _ => anyhow::bail!("service '{}' has no instance identity", service.name),
                 };
-                server::psql(
-                    target,
-                    &postgres::provision_tenant_sql(&tenant, &password, &base),
-                )?;
+                postgres::provision_tenant_sql(&tenant, &password, &base)
             }
-        }
+            SharedEngine::Mysql | SharedEngine::Mariadb => {
+                let user = service.username.clone().unwrap_or_default();
+                mysql::provision_tenant_sql(&tenant, &user, &password)
+            }
+        };
+        server::admin_sql(target, &sql)?;
         attach(service, target)?;
     }
     output::event(
@@ -132,12 +134,14 @@ pub(crate) fn detach(service: &ServiceConfig) -> Result<()> {
 pub(crate) fn drop_tenant(service: &ServiceConfig) -> Result<()> {
     let target = target(service)?;
     let tenant = service.database.clone().unwrap_or_default();
-    drop_matching(&service.name, target, |name| {
+    let user = service.username.clone().unwrap_or_default();
+    let database = |name: &str| {
         name == tenant
             || name
                 .strip_prefix(&tenant)
                 .is_some_and(|rest| rest.starts_with("_test_"))
-    })
+    };
+    drop_matching(&service.name, target, &database, &|name: &str| name == user)
 }
 
 /// Drops every tenant of the instance on every shared server of this
@@ -158,11 +162,18 @@ pub(crate) fn drop_instance_tenants(project: &str, instance: &str) -> Result<()>
         );
         return Ok(());
     }
+    let database = |name: &str| super::naming::belongs_to_instance(name, project, instance);
+    let mysql_prefix = super::naming::mysql_user_prefix(project, instance);
+    let mysql_user = |name: &str| name.starts_with(&mysql_prefix);
     let mut failures = Vec::new();
     for target in server::installation_servers()? {
-        let dropped = drop_matching("down", &target, |name| {
-            super::naming::belongs_to_instance(name, project, instance)
-        });
+        let dropped = match target.engine {
+            // PostgreSQL roles are named like their databases.
+            SharedEngine::Postgres => drop_matching("down", &target, &database, &database),
+            SharedEngine::Mysql | SharedEngine::Mariadb => {
+                drop_matching("down", &target, &database, &mysql_user)
+            }
+        };
         if let Err(error) = dropped {
             failures.push(format!("{error:#}"));
         }
@@ -173,10 +184,16 @@ pub(crate) fn drop_instance_tenants(project: &str, instance: &str) -> Result<()>
     }
 }
 
-/// Drops the databases and roles whose names `matches`, and every database
-/// a matching role owns (a tenant may have created one outside its
-/// namespace; it would otherwise keep its role from being dropped).
-fn drop_matching(label: &str, target: &SharedTarget, matches: impl Fn(&str) -> bool) -> Result<()> {
+/// Drops the databases `database` matches and the roles (users) `role`
+/// matches, and every database a matching role owns (a PostgreSQL tenant
+/// may have created one outside its namespace; it would otherwise keep its
+/// role from being dropped).
+fn drop_matching(
+    label: &str,
+    target: &SharedTarget,
+    database: &impl Fn(&str) -> bool,
+    role: &impl Fn(&str) -> bool,
+) -> Result<()> {
     if crate::docker::is_dry_run() {
         output::event(
             label,
@@ -195,33 +212,37 @@ fn drop_matching(label: &str, target: &SharedTarget, matches: impl Fn(&str) -> b
     }
     let _lock = server::lock(target)?;
     server::ensure_running(target)?;
-    match target.engine {
-        SharedEngine::Postgres => {
-            let listing = server::psql(target, &postgres::list_names_sql())?;
-            let (databases, roles) = postgres::parse_names(&listing, &matches)?;
-            if databases.is_empty() && roles.is_empty() {
-                return Ok(());
-            }
-            server::psql(target, &postgres::drop_sql(&databases, &roles))?;
-            let mut dropped = databases;
-            dropped.extend(
-                roles
-                    .into_iter()
-                    .filter(|role| !dropped.contains(role))
-                    .collect::<Vec<_>>(),
-            );
-            output::event(
-                label,
-                LogLevel::Success,
-                &format!(
-                    "Dropped {} from shared server {}",
-                    dropped.join(", "),
-                    target.server
-                ),
-                Persistence::Persistent,
-            );
-        }
+    let listing_sql = match target.engine {
+        SharedEngine::Postgres => postgres::list_names_sql(),
+        SharedEngine::Mysql | SharedEngine::Mariadb => mysql::list_names_sql(),
+    };
+    let listing = server::admin_sql(target, &listing_sql)?;
+    let (databases, roles) = super::listing::select_names(&listing, database, role)?;
+    if databases.is_empty() && roles.is_empty() {
+        return Ok(());
     }
+    let drop = match target.engine {
+        SharedEngine::Postgres => postgres::drop_sql(&databases, &roles),
+        SharedEngine::Mysql | SharedEngine::Mariadb => mysql::drop_sql(&databases, &roles),
+    };
+    server::admin_sql(target, &drop)?;
+    let mut dropped = databases;
+    dropped.extend(
+        roles
+            .into_iter()
+            .filter(|role| !dropped.contains(role))
+            .collect::<Vec<_>>(),
+    );
+    output::event(
+        label,
+        LogLevel::Success,
+        &format!(
+            "Dropped {} from shared server {}",
+            dropped.join(", "),
+            target.server
+        ),
+        Persistence::Persistent,
+    );
     Ok(())
 }
 

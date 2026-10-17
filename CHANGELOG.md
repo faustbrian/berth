@@ -6,13 +6,15 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
-- Added shared PostgreSQL servers: every instance's PostgreSQL service is a
-  tenant (its own database and role, closed to other tenants) in one server
-  per compatible image, created on demand by `up`. Parallel worktrees no
-  longer start a database container each. Tenants may create their own
-  `_test_N` databases, so ParaTest works; `down` leaves the server running
-  for other instances and `down --purge` drops the instance's tenants. Set
-  `isolation: dedicated` for a container of the instance's own, as in 7.0.0.
+- Added shared PostgreSQL, MySQL and MariaDB servers: every instance's
+  database service is a tenant (its own database and role or user, closed to
+  other tenants) in one server per compatible image, created on demand by
+  `up`. Parallel worktrees no longer start a database container each.
+  Tenants may create their own `_test_N` databases, so ParaTest works;
+  `down` leaves the server running for other instances and `down --purge`
+  drops the instance's tenants. Set `isolation: dedicated` for a container
+  of the instance's own, as in 7.0.0; a shared database rejects settings for
+  a container of its own (`volumes`, `env`, `port`, `restart`, hooks).
 - Added secret-safe docker invocations: secret environment values (`APP_KEY`,
   database passwords) are passed to docker by name, never as arguments that
   other local processes can read.
@@ -170,6 +172,9 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Fixed the `mariadb` preset's health check, `exec` shell and `dump`, which
+  called `mysql*` programs that MariaDB 11 images no longer ship. MySQL
+  client passwords now travel in `MYSQL_PWD` instead of `-p<password>`.
 - `--dry-run` no longer probes application health URLs, which made a dry-run
   `up` wait 30 seconds and then fail.
 - Isolated the swarm bootstrap test's fixture repository from the developer's
@@ -180,6 +185,9 @@ All notable changes to this project are documented in this file.
   references keep the previous mount so existing data is never hidden.
 - Made test-only container engine overrides thread-local so tests no longer
   observe another test's Podman engine selection intermittently.
+- Fake-Docker integration tests claim their own gateway ports instead of the
+  default 8443/8080, so parallel test binaries (or a running gateway) no
+  longer fail them intermittently with "gateway port … is in use".
 
 ## [7.0.0] - 2026-07-12
 

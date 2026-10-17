@@ -22,10 +22,12 @@ pub(super) fn run_dump_command(service: &ServiceConfig) -> Result<std::process::
             &[ctx.db_name.clone()],
             "Failed to execute pg_dump",
         ),
+        // `--no-tablespaces`: dumping tablespaces needs the global PROCESS
+        // privilege, which a shared server's tenant does not have.
         Driver::Mysql => run_mysql_exec(
             &ctx,
-            "mysqldump",
-            &[ctx.db_name.clone()],
+            crate::docker::MysqlProgram::Dump,
+            &["--no-tablespaces".to_owned(), ctx.db_name.clone()],
             "Failed to execute mysqldump",
         ),
         _ => unreachable!("validated SQL drivers in sql_context"),

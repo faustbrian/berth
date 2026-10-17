@@ -29,6 +29,10 @@ pub struct ServiceRuntime {
     /// Whether `.berth.yaml` sets `database`, `username` or `password` for
     /// the service (rather than its preset).
     pub authored_credentials: bool,
+    /// Settings `.berth.yaml` sets for the service's own container
+    /// (`volumes`, `env`, `port`, `container_port`, `restart`, `hook`),
+    /// which a shared server's tenant does not have.
+    pub authored_container_fields: Vec<&'static str>,
     /// The shared server and tenant backing the service, if it is shared.
     pub shared: Option<SharedTarget>,
 }
@@ -42,6 +46,10 @@ pub struct SharedTarget {
     pub server: String,
     /// Image the shared server runs.
     pub image: String,
+    /// Arguments after the image: the service's authored `command`, then the
+    /// options berth runs every server of the engine with. Empty for a
+    /// target read back from labels.
+    pub command: Vec<String>,
     /// Compatibility fingerprint (hex) the server is keyed by.
     pub fingerprint: String,
 }
@@ -51,14 +59,34 @@ pub struct SharedTarget {
 pub enum SharedEngine {
     /// PostgreSQL: a database and login role per tenant.
     Postgres,
+    /// MySQL: a schema and user per tenant.
+    Mysql,
+    /// MariaDB: a schema and user per tenant.
+    Mariadb,
 }
 
 impl SharedEngine {
+    /// The engine named by a `dev.berth.shared.engine` label.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a name this berth does not know.
+    pub fn from_label(name: &str) -> anyhow::Result<Self> {
+        match name {
+            "postgres" => Ok(Self::Postgres),
+            "mysql" => Ok(Self::Mysql),
+            "mariadb" => Ok(Self::Mariadb),
+            other => anyhow::bail!("unknown shared engine '{other}'"),
+        }
+    }
+
     /// The engine's name in container names and labels.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Postgres => "postgres",
+            Self::Mysql => "mysql",
+            Self::Mariadb => "mariadb",
         }
     }
 }

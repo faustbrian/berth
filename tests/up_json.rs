@@ -66,8 +66,41 @@ const FAKE_CURL: &str = "#!/bin/sh\nprintf 'ok\\n200'\n";
 
 const PROJECT: &str = "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n    isolation: dedicated\n    password: canary-s3cret-value\n    env:\n      DATABASE_URL: postgres://u:canary-s3cret-value@db/x\n  app:\n    preset: laravel\n    hook:\n      - name: greet\n        phase: post_up\n        run:\n          type: script\n          path: hook.sh\n";
 
+/// Two free loopback ports for this fixture's gateway, so parallel test
+/// binaries (and a real gateway on the developer's machine) never contend
+/// for the default 8443/8080. They come from 20000–39999, below the OS
+/// ephemeral range, and each is claimed with an exclusive marker file, so
+/// fixtures in other test processes never pick the same port (berth binds
+/// it briefly to check that it is free). [`release_ports`] drops the claims.
+fn free_ports() -> (u16, u16) {
+    let claims = std::env::temp_dir().join("berth-test-port-claims");
+    std::fs::create_dir_all(&claims).expect("claims dir");
+    let mut port = 20_000 + u16::try_from(std::process::id() % 20_000).expect("below 20000");
+    let mut pick = || loop {
+        port = 20_000 + (port - 20_000 + 7_919) % 20_000;
+        let claimed = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(claims.join(port.to_string()))
+            .is_ok();
+        if claimed && std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    };
+    let https = pick();
+    (https, pick())
+}
+
+fn release_ports(ports: (u16, u16)) {
+    let claims = std::env::temp_dir().join("berth-test-port-claims");
+    for port in [ports.0, ports.1] {
+        drop(std::fs::remove_file(claims.join(port.to_string())));
+    }
+}
+
 struct Fixture {
     base: PathBuf,
+    ports: (u16, u16),
 }
 
 impl Fixture {
@@ -86,7 +119,10 @@ impl Fixture {
             std::fs::write(&path, script).expect("fake");
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
         }
-        Self { base }
+        Self {
+            base,
+            ports: free_ports(),
+        }
     }
 
     fn berth(&self, args: &[&str], env: &[(&str, &str)]) -> Output {
@@ -104,10 +140,10 @@ impl Fixture {
             )
             .env("HOME", self.base.join("user-home"))
             .env("BERTH_HOME", self.base.join("home"))
+            .env("BERTH_GATEWAY_HTTPS_PORT", self.ports.0.to_string())
+            .env("BERTH_GATEWAY_HTTP_PORT", self.ports.1.to_string())
             .env("FAKE_STATE", self.base.join("state"))
-            .env_remove("BERTH_INSTANCE")
-            .env_remove("BERTH_GATEWAY_HTTPS_PORT")
-            .env_remove("BERTH_GATEWAY_HTTP_PORT");
+            .env_remove("BERTH_INSTANCE");
         for pair in env {
             command.env(pair.0, pair.1);
         }
@@ -133,6 +169,7 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        release_ports(self.ports);
         drop(std::fs::remove_dir_all(&self.base));
     }
 }
@@ -170,7 +207,7 @@ fn up_json_prints_one_ready_document_and_keeps_progress_and_hooks_on_stderr() {
     let urls = document["urls"].as_array().expect("urls");
     assert!(urls.iter().any(|url| {
         url.as_str()
-            .is_some_and(|text| text.ends_with(".berth.localhost:8443"))
+            .is_some_and(|text| text.ends_with(&format!(".berth.localhost:{}", fixture.ports.0)))
     }));
     let services = document["services"].as_array().expect("services");
     let db = services.iter().find(|svc| svc["name"] == "db").expect("db");

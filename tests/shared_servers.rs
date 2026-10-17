@@ -1,6 +1,7 @@
-//! Shared `PostgreSQL` servers through the real `berth` binary against a fake
-//! Docker: one server per compatible image, one tenant per instance, and
-//! lifecycle commands that never touch the server other instances use.
+//! Shared `PostgreSQL`, `MySQL` and `MariaDB` servers through the real `berth`
+//! binary against a fake Docker: one server per compatible image, one tenant
+//! per instance, and lifecycle commands that never touch the server other
+//! instances use.
 
 // Integration tests are their own crate: panicking on setup failures and
 // top-level `#[test]` functions are the idiom here.
@@ -75,7 +76,7 @@ case "$1" in
       [ "$prev" = "--label" ] && echo "$arg" >> "$S/labels"
       prev="$arg"
     done
-    mkdir -p "$S/c"; mv "$S/labels" "$S/c/$name"
+    mkdir -p "$S/c"; mv "$S/labels" "$S/c/$name"; echo "$prev" > "$S/img-$name"
     [ -n "$POSTGRES_PASSWORD" ] && echo "set" > "$S/run-env-$name"
     exit 0 ;;
   rm|stop|start|kill|pause|unpause) [ "$1" = rm ] && for arg in "$@"; do rm -f "$S/c/$arg"; done; exit 0 ;;
@@ -88,15 +89,16 @@ case "$1" in
         for f in "$S"/c/berth_shared_*; do
           [ -f "$f" ] || continue
           fp=$(grep '^dev.berth.shared.fingerprint=' "$f" | cut -d= -f2)
-          printf '%s\tpostgres\t%s\ttimescale/timescaledb-ha:pg18\n' "$(basename "$f")" "$fp"
+          engine=$(grep '^dev.berth.shared.engine=' "$f" | cut -d= -f2)
+          printf '%s\t%s\t%s\t%s\n' "$(basename "$f")" "$engine" "$fp" "$(cat "$S/img-$(basename "$f")")"
         done ;;
     esac
     exit 0 ;;
   exec)
     cat >> "$S/sql"
-    case "$*" in *psql*) ;; *) exit 0 ;; esac
+    case "$*" in *psql*|*" mysql "*|*" mariadb "*) ;; *) exit 0 ;; esac
     tail -n 3 "$S/sql" | grep -q 'server_version_num' && { echo 170004; exit 0; }
-    if tail -n 3 "$S/sql" | grep -q 'FROM pg_roles'; then
+    if tail -n 3 "$S/sql" | grep -q 'FROM pg_roles\|FROM mysql.user'; then
       for n in $FAKE_NAMES; do printf 'd\t%s\tberth_admin\nr\t%s\t\n' "$n" "$n"; done
       for pair in $FAKE_OWNED; do printf 'd\t%s\t%s\n' "${pair%%:*}" "${pair#*:}"; done
       exit 0
@@ -130,8 +132,41 @@ exit 0
 const PROJECT: &str = "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n  app:\n    preset: laravel\n";
 
 /// One fake Docker and berth home, shared by every checkout in a test.
+/// Two free loopback ports for this fixture's gateway, so parallel test
+/// binaries (and a real gateway on the developer's machine) never contend
+/// for the default 8443/8080. They come from 20000–39999, below the OS
+/// ephemeral range, and each is claimed with an exclusive marker file, so
+/// fixtures in other test processes never pick the same port (berth binds
+/// it briefly to check that it is free). [`release_ports`] drops the claims.
+fn free_ports() -> (u16, u16) {
+    let claims = std::env::temp_dir().join("berth-test-port-claims");
+    std::fs::create_dir_all(&claims).expect("claims dir");
+    let mut port = 20_000 + u16::try_from(std::process::id() % 20_000).expect("below 20000");
+    let mut pick = || loop {
+        port = 20_000 + (port - 20_000 + 7_919) % 20_000;
+        let claimed = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(claims.join(port.to_string()))
+            .is_ok();
+        if claimed && std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    };
+    let https = pick();
+    (https, pick())
+}
+
+fn release_ports(ports: (u16, u16)) {
+    let claims = std::env::temp_dir().join("berth-test-port-claims");
+    for port in [ports.0, ports.1] {
+        drop(std::fs::remove_file(claims.join(port.to_string())));
+    }
+}
+
 struct Host {
     base: PathBuf,
+    ports: (u16, u16),
 }
 
 impl Host {
@@ -145,7 +180,10 @@ impl Host {
         let docker = base.join("bin/docker");
         std::fs::write(&docker, FAKE_DOCKER).expect("fake docker");
         std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).expect("chmod");
-        Self { base }
+        Self {
+            base,
+            ports: free_ports(),
+        }
     }
 
     /// A checkout `name` holding `project` as its `.berth.yaml`.
@@ -179,6 +217,8 @@ impl Host {
             )
             .env("HOME", self.base.join("user-home"))
             .env("BERTH_HOME", self.base.join("home"))
+            .env("BERTH_GATEWAY_HTTPS_PORT", self.ports.0.to_string())
+            .env("BERTH_GATEWAY_HTTP_PORT", self.ports.1.to_string())
             .env("FAKE_STATE", self.base.join("state"))
             .env("FAKE_NAMES", names)
             .env("FAKE_OWNED", owned)
@@ -236,6 +276,7 @@ impl Host {
 
 impl Drop for Host {
     fn drop(&mut self) {
+        release_ports(self.ports);
         drop(std::fs::remove_dir_all(&self.base));
     }
 }
@@ -500,6 +541,9 @@ fn what_a_tenant_cannot_have_fails_before_docker_is_touched() {
             "generated credentials",
         ),
         ("database", "    database: mine\n", "generated credentials"),
+        ("volumes", "    volumes: [\"./dump:/dump\"]\n", "`volumes`"),
+        ("env", "    env:\n      TZ: UTC\n", "`env`"),
+        ("port", "    port: 5433\n", "`port`"),
     ];
     for (label, extra, message) in cases {
         let host = Host::new(&format!("reject-{label}"));
@@ -783,6 +827,164 @@ fn pausing_the_whole_instance_skips_the_shared_server() {
         !host.calls().lines().any(|line| (line.starts_with("pause")
             || line.starts_with("unpause"))
             && line.contains(&server)),
+        "{}",
+        host.calls()
+    );
+}
+
+fn mysql_project(image: &str) -> String {
+    format!(
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: mysql\n    image: {image}\n  app:\n    preset: laravel\n"
+    )
+}
+
+fn servers_named(host: &Host, prefix: &str) -> usize {
+    std::fs::read_dir(host.base.join("state/c"))
+        .expect("containers")
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_name().to_string_lossy().starts_with(prefix))
+        .count()
+}
+
+#[test]
+fn mysql_family_instances_get_a_schema_and_a_short_user_on_one_server_per_flavor() {
+    let host = Host::new("mysql");
+    let a = host.checkout("a", &mysql_project("mysql:8.4"));
+    let b = host.checkout("b", &mysql_project("mysql:8.4"));
+    let m = host.checkout("m", &mysql_project("mariadb:11"));
+    for checkout in [&a, &b, &m] {
+        let up = host.berth(checkout, &["up", "--no-wait"]);
+        assert!(up.status.success(), "{}", text(&up.stderr));
+    }
+    assert_eq!(servers_named(&host, "berth_shared_mysql_"), 1);
+    assert_eq!(servers_named(&host, "berth_shared_mariadb_"), 1);
+    let env = env_json(&host, &a)["environment"].clone();
+    let user = env["DB_USERNAME"].as_str().expect("user");
+    let database = env["DB_DATABASE"].as_str().expect("database");
+    assert_eq!(user.len(), 25, "fits MySQL's 32-byte user names: {user}");
+    assert!(
+        database.starts_with("shop__a-") && database.ends_with("__db"),
+        "{database}"
+    );
+    assert_eq!(env["DB_HOST"], "db");
+    let pattern = database.replace('_', "\\_");
+    let sql = host.sql();
+    assert!(
+        sql.contains(&format!(
+            "GRANT ALL PRIVILEGES ON `{pattern}`.* TO '{user}'@'%'"
+        )),
+        "{sql}"
+    );
+    assert!(
+        sql.contains(&format!(
+            "GRANT ALL PRIVILEGES ON `{pattern}\\_test\\_%`.* TO '{user}'@'%'"
+        )),
+        "{sql}"
+    );
+    let calls = host.calls();
+    assert!(
+        calls
+            .lines()
+            .any(|line| line.contains("MYSQL_PWD") && line.contains(" mariadb --protocol=tcp")),
+        "{calls}"
+    );
+    assert!(
+        calls
+            .lines()
+            .any(|line| line.contains(" mysql --protocol=tcp")),
+        "{calls}"
+    );
+    assert!(
+        calls
+            .lines()
+            .any(|line| line.starts_with("run ") && line.contains("-e MYSQL_ROOT_PASSWORD ")),
+        "{calls}"
+    );
+    assert!(
+        calls.lines().any(|line| line.starts_with("run ")
+            && line.ends_with("mysql:8.4 --skip-log-bin --max-connections=1000")),
+        "MySQL 8's binary log would deny tenants triggers and routines: {calls}"
+    );
+    assert!(
+        calls
+            .lines()
+            .any(|line| line.starts_with("run ")
+                && line.ends_with(" mariadb:11 --max-connections=1000")),
+        "{calls}"
+    );
+    for secret in host.secrets() {
+        assert!(
+            !calls.contains(secret.as_str()),
+            "a secret reached a docker argument"
+        );
+    }
+}
+
+#[test]
+fn a_mysql_purge_drops_the_instance_schemas_and_users_only() {
+    let host = Host::new("mysql-purge");
+    let a = host.checkout("a", &mysql_project("mysql:8.4"));
+    let b = host.checkout("b", &mysql_project("mysql:8.4"));
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    assert!(host.berth(&b, &["up", "--no-wait"]).status.success());
+    let mine = env_json(&host, &a)["environment"].clone();
+    let theirs = env_json(&host, &b)["environment"].clone();
+    let (my_db, my_user) = (
+        mine["DB_DATABASE"].as_str().expect("db"),
+        mine["DB_USERNAME"].as_str().expect("user"),
+    );
+    let (their_db, their_user) = (
+        theirs["DB_DATABASE"].as_str().expect("db"),
+        theirs["DB_USERNAME"].as_str().expect("user"),
+    );
+    let names = format!("mysql sys root {my_db} {my_db}_test_1 {my_user} {their_db} {their_user}");
+    host.clear();
+    let purge = host.berth_with(&a, &["down", "--purge"], &names);
+    assert!(purge.status.success(), "{}", text(&purge.stderr));
+    let sql = host.sql();
+    assert!(
+        sql.contains(&format!("DROP DATABASE IF EXISTS `{my_db}`;")),
+        "{sql}"
+    );
+    assert!(
+        sql.contains(&format!("DROP DATABASE IF EXISTS `{my_db}_test_1`;")),
+        "{sql}"
+    );
+    assert!(
+        sql.contains(&format!("DROP USER IF EXISTS '{my_user}'@'%';")),
+        "{sql}"
+    );
+    for kept in [their_db, their_user, "mysql", "sys", "root"] {
+        assert!(
+            !sql.contains(&format!("`{kept}`")) && !sql.contains(&format!("'{kept}'@")),
+            "{kept}: {sql}"
+        );
+    }
+}
+
+#[test]
+fn an_authored_server_command_reaches_the_shared_server_and_keys_it() {
+    let host = Host::new("command");
+    let tuned = PROJECT.replace(
+        "    preset: postgres\n",
+        "    preset: postgres\n    command: [\"postgres\", \"-c\", \"max_connections=300\"]\n",
+    );
+    let a = host.checkout("a", &tuned);
+    let b = host.checkout("b", PROJECT);
+    for checkout in [&a, &b] {
+        let up = host.berth(checkout, &["up", "--no-wait"]);
+        assert!(up.status.success(), "{}", text(&up.stderr));
+    }
+    assert_eq!(
+        host.servers().len(),
+        2,
+        "different settings, different servers"
+    );
+    assert!(
+        host.calls()
+            .lines()
+            .any(|line| line.starts_with("run ")
+                && line.ends_with(" postgres -c max_connections=300")),
         "{}",
         host.calls()
     );

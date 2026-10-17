@@ -73,8 +73,41 @@ esac
 exit 0
 "#;
 
+/// Two free loopback ports for this fixture's gateway, so parallel test
+/// binaries (and a real gateway on the developer's machine) never contend
+/// for the default 8443/8080. They come from 20000–39999, below the OS
+/// ephemeral range, and each is claimed with an exclusive marker file, so
+/// fixtures in other test processes never pick the same port (berth binds
+/// it briefly to check that it is free). [`release_ports`] drops the claims.
+fn free_ports() -> (u16, u16) {
+    let claims = std::env::temp_dir().join("berth-test-port-claims");
+    std::fs::create_dir_all(&claims).expect("claims dir");
+    let mut port = 20_000 + u16::try_from(std::process::id() % 20_000).expect("below 20000");
+    let mut pick = || loop {
+        port = 20_000 + (port - 20_000 + 7_919) % 20_000;
+        let claimed = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(claims.join(port.to_string()))
+            .is_ok();
+        if claimed && std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    };
+    let https = pick();
+    (https, pick())
+}
+
+fn release_ports(ports: (u16, u16)) {
+    let claims = std::env::temp_dir().join("berth-test-port-claims");
+    for port in [ports.0, ports.1] {
+        drop(std::fs::remove_file(claims.join(port.to_string())));
+    }
+}
+
 struct Fixture {
     base: PathBuf,
+    ports: (u16, u16),
 }
 
 impl Fixture {
@@ -96,7 +129,10 @@ impl Fixture {
         let docker = base.join("bin/docker");
         std::fs::write(&docker, FAKE_DOCKER).expect("fake docker");
         std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).expect("chmod");
-        Self { base }
+        Self {
+            base,
+            ports: free_ports(),
+        }
     }
 
     fn berth(&self, args: &[&str]) -> Output {
@@ -113,6 +149,8 @@ impl Fixture {
             )
             .env("HOME", self.base.join("user-home"))
             .env("BERTH_HOME", self.base.join("home"))
+            .env("BERTH_GATEWAY_HTTPS_PORT", self.ports.0.to_string())
+            .env("BERTH_GATEWAY_HTTP_PORT", self.ports.1.to_string())
             .env("FAKE_STATE", self.base.join("state"))
             .env_remove("BERTH_INSTANCE")
             .stdin(std::process::Stdio::null())
@@ -143,6 +181,7 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        release_ports(self.ports);
         drop(std::fs::remove_dir_all(&self.base));
     }
 }

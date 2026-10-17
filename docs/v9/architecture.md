@@ -129,22 +129,41 @@ and any database a tenant role owns, included), detaches the servers from
 all of the instance's networks, and removes its credentials; each step runs
 even when an earlier one fails. Each
 `--env` namespace and each `artisan test` lease gets a tenant of its own on the
-same server. A shared tenant cannot publish a host port or take authored
-`database`, `username` or `password` values (its credentials are generated);
-both are configuration errors that point at `isolation: dedicated`, which `config
-migrate` sets for 7.0.0 services that authored credentials. A lost credentials
+same server. A shared tenant cannot publish a host port, take authored
+`database`, `username` or `password` values (its credentials are generated),
+or carry settings for a container of its own (`volumes`, `env`, `port`,
+`container_port`, `restart`, hooks, which would run inside the server every
+instance uses); each is a configuration error that points at `isolation:
+dedicated`, which `config migrate` sets for 7.0.0 services with any of them. A lost credentials
 file gives the tenant a new password on the next `up`.
 
-PostgreSQL specifics: tenant roles have `CREATEDB` (for ParaTest) and nothing
-else, so extensions that need a superuser (PostGIS, TimescaleDB) and
-restores of dumps that set other owners need `isolation: dedicated`; since that lets a tenant create any database name, provisioning drops
+PostgreSQL specifics: tenant roles have `CREATEDB` (for ParaTest) and
+nothing else, so extensions that need a superuser (PostGIS, TimescaleDB) and
+restores of dumps that set other owners need `isolation: dedicated`. Since
+`CREATEDB` lets a tenant create any database name, provisioning drops
 databases in an instance's namespace (`{project}__{instance}`, then `_…`)
 owned by a role outside it before the instance uses them. Shared servers need
 PostgreSQL 13 or later, run their admin SQL on stdin over TCP inside the
 container with the admin password in the environment (so readiness only
 passes once the image's temporary init server is gone), close `template1` to
-tenants, and keep data in a labeled volume mounted at the image's
-`PGDATA`. Secrets never appear in a docker argument: berth passes a secret
+tenants, and keep data in a labeled volume mounted at the image's `PGDATA`.
+
+MySQL and MariaDB specifics: a tenant is a schema and a user
+`{instance hash}_{tenant hash}` (25 bytes, within MySQL's 32-byte user names)
+granted everything on its schema and on `{schema}_test_%` and nothing else;
+grant patterns escape `_`, which would otherwise match any character. MySQL
+and MariaDB images get separate servers. Shared MySQL servers run with
+`--skip-log-bin`: MySQL 8's default binary log would deny non-`SUPER`
+tenants triggers and stored routines. Restoring a dump that needs more than a
+tenant has (`DEFINER` clauses naming another account, `SET
+@@GLOBAL.GTID_PURGED`) needs `isolation: dedicated`. Admin SQL runs as
+`root` over TCP with `MYSQL_PWD` set; MySQL does not trust the local socket,
+so a lost admin secret can only be restored, not reset.
+
+An authored `command` replaces the image's server command and keys a server
+of its own.
+
+Secrets never appear in a docker argument: berth passes a secret
 `-e NAME=value` as `-e NAME` with the value in the docker CLI's environment.
 
 ## Gateway

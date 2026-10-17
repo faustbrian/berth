@@ -75,9 +75,12 @@ fn run_sql_admin(ctx: &SqlContext, sql: &str, action: &str) -> Result<()> {
             ],
             &context,
         )?,
-        Driver::Mysql => {
-            run_mysql_exec(ctx, "mysql", &["-e".to_owned(), sql.to_owned()], &context)?
-        }
+        Driver::Mysql => run_mysql_exec(
+            ctx,
+            crate::docker::MysqlProgram::Client,
+            &["-e".to_owned(), sql.to_owned()],
+            &context,
+        )?,
         _ => unreachable!("validated SQL drivers in sql_context"),
     };
 

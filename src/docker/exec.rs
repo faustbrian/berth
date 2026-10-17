@@ -10,7 +10,7 @@ use crate::docker::command_failed_in_container;
 
 use super::{is_dry_run, print_docker_command};
 pub(crate) use args::build_exec_args;
-use args::{interactive_client_args, piped_client_args};
+use args::{build_client_exec_args, client_env, interactive_client_args, piped_client_args};
 use run::{dry_run_process, run_docker_status, spawn_docker_piped};
 
 mod args;
@@ -20,7 +20,7 @@ mod run;
 pub fn exec_interactive(service: &ServiceConfig, tty: bool) -> Result<()> {
     let container_name = service.container_name()?;
     let client_args = interactive_client_args(service);
-    let args = build_exec_args(&container_name, &client_args, tty);
+    let args = build_client_exec_args(&container_name, &client_env(service), &client_args, tty);
 
     if is_dry_run() {
         print_docker_command(&args);
@@ -61,7 +61,7 @@ fn ensure_container_running(service: &ServiceConfig, container_name: &str) -> Re
 pub fn exec_piped(service: &ServiceConfig, tty: bool) -> Result<Child> {
     let container_name = service.container_name()?;
     let client_args = piped_client_args(service)?;
-    let args = build_exec_args(&container_name, &client_args, tty);
+    let args = build_client_exec_args(&container_name, &client_env(service), &client_args, tty);
 
     if is_dry_run() {
         print_docker_command(&args);

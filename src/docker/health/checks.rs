@@ -93,12 +93,16 @@ fn health_check_mysql(service: &ServiceConfig, container_name: &str) -> Result<b
 fn mysql_ping(service: &ServiceConfig, container_name: &str) -> Result<bool> {
     let args = vec![
         "exec".to_owned(),
+        "-e".to_owned(),
+        format!(
+            "MYSQL_PWD={}",
+            service.password.as_deref().unwrap_or("secret")
+        ),
         container_name.to_owned(),
-        "mysqladmin".to_owned(),
+        crate::docker::mysql_program(&service.image, crate::docker::MysqlProgram::Admin).to_owned(),
         "ping".to_owned(),
         "-u".to_owned(),
         service.username.as_deref().unwrap_or("root").to_owned(),
-        format!("-p{}", service.password.as_deref().unwrap_or("secret")),
         "--silent".to_owned(),
     ];
     docker_exec_succeeds_owned(&args, "mysql health check command failed")

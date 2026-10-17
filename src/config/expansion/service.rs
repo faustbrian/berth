@@ -36,6 +36,17 @@ pub(super) fn expand_raw_service(raw: RawServiceConfig) -> Result<ServiceConfig>
     let (name, image) = resolve_name_and_image(&raw, defaults.as_ref(), driver)?;
     let authored_credentials =
         raw.database.is_some() || raw.username.is_some() || raw.password.is_some();
+    let authored_container_fields: Vec<&'static str> = [
+        ("volumes", raw.volumes.is_some()),
+        ("env", raw.env.is_some()),
+        ("port", raw.port.is_some()),
+        ("container_port", raw.container_port.is_some()),
+        ("restart", raw.restart.is_some()),
+        ("hook", !raw.hook.is_empty()),
+    ]
+    .into_iter()
+    .filter_map(|(field, set)| set.then_some(field))
+    .collect();
 
     let mut env = raw.env;
     if let Some(forced_env) = defaults.as_ref().and_then(|d| d.forced_env.as_ref()) {
@@ -117,7 +128,8 @@ pub(super) fn expand_raw_service(raw: RawServiceConfig) -> Result<ServiceConfig>
         runtime: crate::config::types::ServiceRuntime {
             publish_host_port: raw.publish.unwrap_or(false),
             isolation: raw.isolation,
-            authored_credentials: authored_credentials,
+            authored_credentials,
+            authored_container_fields,
             ..Default::default()
         },
     })

@@ -9,8 +9,8 @@ use crate::config::{Driver, Isolation, ServiceConfig, SharedEngine, SharedTarget
 const DRY_RUN_PASSWORD: &str = "<berth-managed-password>";
 
 /// The engine a service shares, or `None` for a dedicated container.
-/// PostgreSQL is shared by default (ledger decision 4); `isolation:
-/// dedicated` opts out.
+/// PostgreSQL, MySQL and MariaDB are shared by default (ledger decision 4);
+/// `isolation: dedicated` opts out.
 #[must_use]
 pub(crate) fn shared_engine(service: &ServiceConfig) -> Option<SharedEngine> {
     if service.runtime.isolation == Some(Isolation::Dedicated) {
@@ -18,6 +18,10 @@ pub(crate) fn shared_engine(service: &ServiceConfig) -> Option<SharedEngine> {
     }
     match service.driver {
         Driver::Postgres => Some(SharedEngine::Postgres),
+        Driver::Mysql if crate::docker::is_mariadb_image(&service.image) => {
+            Some(SharedEngine::Mariadb)
+        }
+        Driver::Mysql => Some(SharedEngine::Mysql),
         _ => None,
     }
 }
@@ -40,7 +44,7 @@ pub(crate) fn assign_shared_target(
         if service.runtime.isolation == Some(Isolation::Shared) {
             anyhow::bail!(
                 "service '{}' asks for `isolation: shared`, which berth 9 supports only for \
-                 PostgreSQL; remove it or use `isolation: dedicated`",
+                 PostgreSQL, MySQL and MariaDB; remove it or use `isolation: dedicated`",
                 service.name
             );
         }
@@ -53,6 +57,20 @@ pub(crate) fn assign_shared_target(
             service.name
         );
     }
+    if !service.runtime.authored_container_fields.is_empty() {
+        anyhow::bail!(
+            "service '{}' sets {}, which configure a container of its own, but it is a tenant \
+             of a shared server; remove them or set `isolation: dedicated`",
+            service.name,
+            service
+                .runtime
+                .authored_container_fields
+                .iter()
+                .map(|field| format!("`{field}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
     if service.runtime.authored_credentials {
         anyhow::bail!(
             "service '{}' sets `database`, `username` or `password`, but a shared server's \
@@ -61,15 +79,23 @@ pub(crate) fn assign_shared_target(
         );
     }
     let installation = crate::home::installation_id()?;
-    let fingerprint =
-        super::naming::fingerprint(engine, &service.image, service.command.as_deref());
+    let mut command = service.command.clone().unwrap_or_default();
+    let options = super::engine::server_args(engine, &command);
+    command.extend(options);
+    let fingerprint = super::naming::fingerprint(engine, &service.image, Some(&command));
     let server = super::naming::server_name(engine, &installation, &fingerprint);
     let tenant = super::naming::tenant_name(project, instance, &service.name, env);
     let password = tenant_password(project, instance, &tenant)?;
     crate::docker::register_secret(&password);
 
-    service.database = Some(tenant.clone());
-    service.username = Some(tenant);
+    let username = match engine {
+        SharedEngine::Postgres => tenant.clone(),
+        SharedEngine::Mysql | SharedEngine::Mariadb => {
+            super::naming::mysql_user(project, instance, &service.name, env)
+        }
+    };
+    service.database = Some(tenant);
+    service.username = Some(username);
     service.password = Some(password);
     service.resolved_container_name = Some(server.clone());
     // The tenant is reached inside the instance network; it never has a
@@ -79,6 +105,7 @@ pub(crate) fn assign_shared_target(
         engine,
         server,
         image: service.image.clone(),
+        command,
         fingerprint,
     });
     Ok(())

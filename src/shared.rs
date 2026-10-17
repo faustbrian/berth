@@ -2,7 +2,10 @@
 //! logical tenant (database and role) per instance and runtime environment.
 
 mod assign;
+mod engine;
 mod lifecycle;
+mod listing;
+mod mysql;
 mod naming;
 mod postgres;
 mod server;

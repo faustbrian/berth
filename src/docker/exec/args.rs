@@ -17,6 +17,37 @@ pub(crate) fn build_exec_args(container_name: &str, command: &[String], tty: boo
     args
 }
 
+/// Builds exec args for a database client: `env` (`NAME=value`) is set in
+/// the client's environment, so a password passed as `MYSQL_PWD` never
+/// becomes a client argument (and berth moves its value out of docker's
+/// argv).
+pub(crate) fn build_client_exec_args(
+    container_name: &str,
+    env: &[String],
+    command: &[String],
+    tty: bool,
+) -> Vec<String> {
+    let mut args = vec!["exec".to_owned(), if tty { "-it" } else { "-i" }.to_owned()];
+    for pair in env {
+        args.extend(["-e".to_owned(), pair.clone()]);
+    }
+    args.push(container_name.to_owned());
+    args.extend(command.iter().cloned());
+    args
+}
+
+/// The environment a database client needs: MySQL-family clients read the
+/// password from `MYSQL_PWD`.
+pub(super) fn client_env(service: &ServiceConfig) -> Vec<String> {
+    match service.driver {
+        Driver::Mysql => vec![format!(
+            "MYSQL_PWD={}",
+            service.password.as_deref().unwrap_or("secret")
+        )],
+        _ => Vec::new(),
+    }
+}
+
 pub(super) fn interactive_client_args(service: &ServiceConfig) -> Vec<String> {
     match service.driver {
         Driver::Postgres => vec![
@@ -29,13 +60,13 @@ pub(super) fn interactive_client_args(service: &ServiceConfig) -> Vec<String> {
             service.database.clone().unwrap_or_else(|| "app".to_owned()),
         ],
         Driver::Mysql => vec![
-            "mysql".to_owned(),
+            crate::docker::mysql_program(&service.image, crate::docker::MysqlProgram::Client)
+                .to_owned(),
             "-u".to_owned(),
             service
                 .username
                 .clone()
                 .unwrap_or_else(|| "root".to_owned()),
-            format!("-p{}", service.password.as_deref().unwrap_or("secret")),
             service.database.clone().unwrap_or_else(|| "app".to_owned()),
         ],
         Driver::Redis | Driver::Valkey | Driver::Dragonfly => vec![
@@ -93,13 +124,13 @@ pub(super) fn piped_client_args(service: &ServiceConfig) -> Result<Vec<String>> 
             service.database.clone().unwrap_or_else(|| "app".to_owned()),
         ]),
         Driver::Mysql => Ok(vec![
-            "mysql".to_owned(),
+            crate::docker::mysql_program(&service.image, crate::docker::MysqlProgram::Client)
+                .to_owned(),
             "-u".to_owned(),
             service
                 .username
                 .clone()
                 .unwrap_or_else(|| "root".to_owned()),
-            format!("-p{}", service.password.as_deref().unwrap_or("secret")),
             service.database.clone().unwrap_or_else(|| "app".to_owned()),
         ]),
         Driver::Sqlserver => Ok(vec![
@@ -150,7 +181,10 @@ pub(super) fn piped_client_args(service: &ServiceConfig) -> Result<Vec<String>> 
 mod tests {
     use crate::config::{Driver, ServiceConfig};
 
-    use super::{build_exec_args, interactive_client_args, piped_client_args};
+    use super::{
+        build_client_exec_args, build_exec_args, client_env, interactive_client_args,
+        piped_client_args,
+    };
 
     fn service(
         name: &str,
@@ -235,7 +269,6 @@ mod tests {
                 "mysql".to_owned(),
                 "-u".to_owned(),
                 "root".to_owned(),
-                "-psecret".to_owned(),
                 "db".to_owned()
             ]
         );
@@ -254,6 +287,23 @@ mod tests {
 
         let web = service("app", Driver::Frankenphp, None, None, None);
         assert_eq!(interactive_client_args(&web), vec!["sh".to_owned()]);
+    }
+
+    #[test]
+    fn mysql_clients_follow_the_image_and_keep_the_password_out_of_arguments() {
+        let mut mariadb = service(
+            "db",
+            Driver::Mysql,
+            Some("u"),
+            Some("pw-12345"),
+            Some("app"),
+        );
+        mariadb.image = "mariadb:11".to_owned();
+        let command = interactive_client_args(&mariadb);
+        assert_eq!(command[0], "mariadb", "MariaDB 11 images have no `mysql`");
+        assert!(!command.iter().any(|arg| arg.contains("pw-12345")));
+        let args = build_client_exec_args("c", &client_env(&mariadb), &command, false);
+        assert_eq!(args[..5], ["exec", "-i", "-e", "MYSQL_PWD=pw-12345", "c"]);
     }
 
     #[test]

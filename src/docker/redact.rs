@@ -3,7 +3,15 @@
 //! never changed.
 
 /// Environment keys whose values are treated as secrets.
-const SECRET_MARKERS: [&str; 6] = ["PASSWORD", "SECRET", "TOKEN", "KEY", "PASS", "CREDENTIAL"];
+const SECRET_MARKERS: [&str; 7] = [
+    "PASSWORD",
+    "SECRET",
+    "TOKEN",
+    "KEY",
+    "PASS",
+    "PWD",
+    "CREDENTIAL",
+];
 
 const REDACTED: &str = "<redacted>";
 

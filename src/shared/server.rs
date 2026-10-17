@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use crate::config::{SharedEngine, SharedTarget};
 
-use super::postgres;
+use super::{engine, postgres};
 
 /// How long a process waits for another to finish creating a server.
 const LOCK_TIMEOUT: Duration = Duration::from_secs(300);
@@ -68,14 +68,13 @@ pub(super) fn installation_servers() -> Result<Vec<SharedTarget>> {
             let [server, engine, fingerprint, image] = fields[..] else {
                 anyhow::bail!("unexpected shared server listing '{line}'");
             };
-            let engine = match engine {
-                "postgres" => SharedEngine::Postgres,
-                other => anyhow::bail!("shared server {server} has unknown engine '{other}'"),
-            };
+            let engine = SharedEngine::from_label(engine)
+                .with_context(|| format!("shared server {server}"))?;
             Ok(SharedTarget {
                 engine,
                 server: server.to_owned(),
                 image: image.to_owned(),
+                command: Vec::new(),
                 fingerprint: fingerprint.to_owned(),
             })
         })
@@ -130,10 +129,11 @@ pub(super) fn ensure_running(target: &SharedTarget) -> Result<()> {
     wait_ready(target)?;
     match target.engine {
         SharedEngine::Postgres => {
-            let version = psql(target, &postgres::server_version_sql())?;
+            let version = admin_sql(target, &postgres::server_version_sql())?;
             postgres::ensure_supported_version(version.trim())?;
-            psql(target, &postgres::harden_server_sql())?;
+            admin_sql(target, &postgres::harden_server_sql())?;
         }
+        SharedEngine::Mysql | SharedEngine::Mariadb => {}
     }
     Ok(())
 }
@@ -163,6 +163,10 @@ fn create(target: &SharedTarget, installation: &str) -> Result<()> {
         "unless-stopped".to_owned(),
     ];
     run.extend(labels(target, installation));
+    let password_env = engine::server_password_env(target.engine);
+    // The secret is passed by name from berth's environment, so it never
+    // appears in berth's own argv or in `docker run`'s.
+    run.extend(["-e".to_owned(), password_env.to_owned()]);
     match target.engine {
         SharedEngine::Postgres => {
             run.extend([
@@ -170,19 +174,19 @@ fn create(target: &SharedTarget, installation: &str) -> Result<()> {
                 format!("POSTGRES_USER={}", postgres::ADMIN_USER),
                 "-e".to_owned(),
                 "POSTGRES_DB=postgres".to_owned(),
-                // The secret is passed by name from berth's environment, so it
-                // never appears in berth's own argv or in `docker run`'s.
-                "-e".to_owned(),
-                "POSTGRES_PASSWORD".to_owned(),
                 "-v".to_owned(),
                 format!("{volume}:{}", image_pgdata(&target.image, installation)?),
             ]);
         }
+        SharedEngine::Mysql | SharedEngine::Mariadb => {
+            run.extend(["-v".to_owned(), format!("{volume}:/var/lib/mysql")]);
+        }
     }
     run.push(target.image.clone());
+    run.extend(target.command.iter().cloned());
     let output = Command::new(crate::docker::docker_command())
         .args(&run)
-        .env("POSTGRES_PASSWORD", &secret)
+        .env(password_env, &secret)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
@@ -290,23 +294,20 @@ fn wait_ready(target: &SharedTarget) -> Result<()> {
                 target.server
             ),
         }
-        match psql(target, "SELECT 1;\n") {
+        match admin_sql(target, "SELECT 1;\n") {
             Ok(_) => return Ok(()),
             // The data directory keeps the password it was created with; a
             // new admin secret never matches it, so waiting cannot help.
-            Err(error) if format!("{error:#}").contains("authentication failed") => {
-                // The recovery resets the password over the container's local
-                // socket; removing the server would delete every instance's
-                // shared data.
+            // Removing the server would delete every instance's shared data,
+            // so the recovery keeps it.
+            Err(error) if engine::is_auth_failure(target.engine, &format!("{error:#}")) => {
                 anyhow::bail!(
                     "shared server {server} rejects berth's admin password \
-                     (~/.berth/shared/{server}/admin was replaced or lost). Reset it without \
-                     losing data: `printf \"ALTER ROLE {admin} PASSWORD '%s';\" \"$(cat \
-                     ~/.berth/shared/{server}/admin)\" | docker exec -i {server} psql -U {admin} \
-                     -d postgres`, then run `berth up` again. Do not remove the server or its \
+                     (~/.berth/shared/{server}/admin was replaced or lost). To keep the data, \
+                     {recovery}, then run `berth up` again. Do not remove the server or its \
                      volume: it holds every instance's shared databases",
                     server = target.server,
-                    admin = postgres::ADMIN_USER
+                    recovery = engine::lost_secret_recovery(target.engine, &target.server)
                 );
             }
             Err(_) => {}
@@ -324,37 +325,26 @@ fn wait_ready(target: &SharedTarget) -> Result<()> {
 }
 
 /// Runs SQL as the admin over TCP with the admin password, retrying only
-/// the init-server handoff (psql exit 2: no connection) for a bounded few
-/// seconds. TCP matters for readiness: the official images' temporary init
-/// server listens only on the local socket, so only the final server
-/// answers here.
-pub(super) fn psql(target: &SharedTarget, sql: &str) -> Result<String> {
+/// the init-server handoff for a bounded few seconds. TCP matters for
+/// readiness: the official images' temporary init server listens only on
+/// the local socket, so only the final server answers here.
+pub(super) fn admin_sql(target: &SharedTarget, sql: &str) -> Result<String> {
     let secret = admin_secret(target)?;
+    let command = engine::admin_command(target.engine, &target.image);
     let started = Instant::now();
     loop {
         let (code, stdout, stderr) = exec_stdin(
             &target.server,
+            engine::password_env(target.engine),
             &secret,
-            &[
-                "psql",
-                "--no-psqlrc",
-                "-h",
-                "127.0.0.1",
-                "-v",
-                "ON_ERROR_STOP=1",
-                "-qtA",
-                "-U",
-                postgres::ADMIN_USER,
-                "-d",
-                "postgres",
-            ],
+            &command,
             sql,
         )?;
         if code == Some(0) {
             return Ok(stdout);
         }
-        let handoff = code == Some(2) && !stderr.contains("authentication failed");
-        if !handoff || started.elapsed() >= HANDOFF_TIMEOUT {
+        if !engine::is_handoff(target.engine, code, &stderr) || started.elapsed() >= HANDOFF_TIMEOUT
+        {
             anyhow::bail!(
                 "{} on {}: {}",
                 target.engine.as_str(),
@@ -368,16 +358,17 @@ pub(super) fn psql(target: &SharedTarget, sql: &str) -> Result<String> {
 
 fn exec_stdin(
     container: &str,
+    password_env: &str,
     password: &str,
     command: &[&str],
     stdin: &str,
 ) -> Result<(Option<i32>, String, String)> {
-    // The password reaches psql by name from docker's environment, never as
-    // an argument.
+    // The password reaches the client by name from docker's environment,
+    // never as an argument.
     let mut child = Command::new(crate::docker::docker_command())
-        .args(["exec", "-i", "-e", "PGPASSWORD", container])
+        .args(["exec", "-i", "-e", password_env, container])
         .args(command)
-        .env("PGPASSWORD", password)
+        .env(password_env, password)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

@@ -45,7 +45,7 @@ fn create_database_output(ctx: &super::common::SqlContext) -> Result<std::proces
         ),
         Driver::Mysql => run_mysql_exec(
             ctx,
-            "mysql",
+            crate::docker::MysqlProgram::Client,
             &["-e".to_owned(), mysql_create_sql(&ctx.db_name)],
             "Failed to execute mysql CREATE DATABASE command",
         ),

@@ -80,6 +80,32 @@ pub(crate) fn tenant_name(
     format!("{base}__{}", hex(&tail, 10))
 }
 
+/// MySQL accepts user names of at most 32 bytes, too short for readable
+/// tenant names, so tenant users are `{instance hash}_{tenant hash}`: 25
+/// bytes, and every user of an instance shares the [`mysql_user_prefix`].
+#[must_use]
+pub(crate) fn mysql_user(
+    project: &str,
+    instance: &str,
+    service: &str,
+    env: Option<&str>,
+) -> String {
+    let tail = match env {
+        Some(env) => format!("{service}\0{env}"),
+        None => service.to_owned(),
+    };
+    format!("{}{}", mysql_user_prefix(project, instance), hex(&tail, 12))
+}
+
+/// The prefix every MySQL tenant user of the instance starts with.
+#[must_use]
+pub(crate) fn mysql_user_prefix(project: &str, instance: &str) -> String {
+    format!(
+        "{}_",
+        hex(&format!("berth-mysql\0{project}\0{instance}"), 12)
+    )
+}
+
 /// Whether `name` is one of the instance's tenants or the test databases
 /// ParaTest creates for them.
 #[must_use]
@@ -93,7 +119,19 @@ pub(crate) fn belongs_to_instance(name: &str, project: &str, instance: &str) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::{belongs_to_instance, fingerprint, server_name, tenant_name};
+    use super::{
+        belongs_to_instance, fingerprint, mysql_user, mysql_user_prefix, server_name, tenant_name,
+    };
+
+    #[test]
+    fn mysql_users_fit_32_bytes_and_share_the_instance_prefix() {
+        let user = mysql_user("shop", "a-1", "db", None);
+        assert_eq!(user.len(), 25);
+        assert!(user.starts_with(&mysql_user_prefix("shop", "a-1")));
+        assert_ne!(user, mysql_user("shop", "a-1", "db", Some("staging")));
+        assert_ne!(user, mysql_user("shop", "a-1", "analytics", None));
+        assert!(!user.starts_with(&mysql_user_prefix("shop", "a-1-b")));
+    }
     use crate::config::SharedEngine;
 
     #[test]

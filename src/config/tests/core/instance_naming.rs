@@ -1,6 +1,6 @@
 use super::*;
 
-const PROJECT: &str = "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  db:\n    preset: mysql\n  app:\n    preset: laravel\n";
+const PROJECT: &str = "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  db:\n    preset: mysql\n    isolation: dedicated\n  app:\n    preset: laravel\n";
 
 fn worktree(base: &std::path::Path, name: &str) -> std::path::PathBuf {
     let root = base.join(name);
@@ -91,7 +91,7 @@ fn explicit_container_names_are_rejected() {
     std::fs::create_dir_all(&root).expect("create");
     std::fs::write(
         root.join(".berth.yaml"),
-        "schema_version: 9\nproject: api\nproject_type: project\nservices:\n  db:\n    preset: mysql\n    container_name: shared-db\n",
+        "schema_version: 9\nproject: api\nproject_type: project\nservices:\n  db:\n    preset: mysql\n    isolation: dedicated\n    container_name: shared-db\n",
     )
     .expect("write");
     let error = load_config_with(LoadConfigPathOptions::new(None, Some(&root)))
@@ -129,7 +129,7 @@ fn app_mounts_stay_host_paths_while_service_volumes_are_namespaced() {
     std::fs::create_dir_all(&root).expect("create");
     std::fs::write(
         root.join(".berth.yaml"),
-        "schema_version: 9\nproject: api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    volumes: [\".:/app\", \"docker/php.ini:/usr/local/etc/php/conf.d/zz.ini\", \"storage:/app/storage\"]\n  db:\n    preset: mysql\n    volumes: [\"dbdata:/var/lib/mysql\", \"./dump:/dump\"]\n",
+        "schema_version: 9\nproject: api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    volumes: [\".:/app\", \"docker/php.ini:/usr/local/etc/php/conf.d/zz.ini\", \"storage:/app/storage\"]\n  db:\n    preset: mysql\n    isolation: dedicated\n    volumes: [\"dbdata:/var/lib/mysql\", \"./dump:/dump\"]\n",
     )
     .expect("write");
     let config = load(&root, Some("x-1"));

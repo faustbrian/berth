@@ -224,24 +224,41 @@ pub(crate) fn is_migratable_file_name(file_name: &str) -> bool {
     LEGACY_CONFIG_FILE_NAMES.contains(&file_name) || runtime_env_override_name(file_name).is_some()
 }
 
-/// 8.x already shared PostgreSQL servers and named its logical database
+/// 8.x already shared PostgreSQL and MySQL-family servers and named its logical database
 /// from `database`; berth 9 names the tenant per instance, so the name is
 /// dropped rather than turning the service into a dedicated container.
 fn drop_v8_shared_database_name(service: &mut Map<String, Value>) -> bool {
-    let postgres = service.get("preset").and_then(Value::as_str) == Some("postgres");
-    postgres && service.remove("database").is_some()
+    let shared = matches!(
+        service.get("preset").and_then(Value::as_str),
+        Some("postgres" | "mysql" | "mariadb")
+    );
+    shared && service.remove("database").is_some()
 }
 
-/// A PostgreSQL service with authored credentials keeps its 7.0.0 dedicated
+/// A PostgreSQL, MySQL or MariaDB service with authored credentials keeps its 7.0.0 dedicated
 /// container: a shared server's tenant gets generated credentials, and the
 /// project's code or tooling may rely on the authored ones.
 fn keep_dedicated_database(service: &mut Map<String, Value>) -> bool {
-    let postgres = service.get("preset").and_then(Value::as_str) == Some("postgres")
-        || service.get("driver").and_then(Value::as_str) == Some("postgres");
-    let authored = ["database", "username", "password"]
+    let shared_by_default = ["postgres", "mysql", "mariadb"]
         .iter()
-        .any(|key| service.contains_key(*key));
-    if !postgres || !authored || service.contains_key("isolation") {
+        .any(|engine| service.get("preset").and_then(Value::as_str) == Some(*engine))
+        || ["postgres", "mysql"]
+            .iter()
+            .any(|engine| service.get("driver").and_then(Value::as_str) == Some(*engine));
+    let authored = [
+        "database",
+        "username",
+        "password",
+        "volumes",
+        "env",
+        "port",
+        "container_port",
+        "restart",
+        "hook",
+    ]
+    .iter()
+    .any(|key| service.contains_key(*key));
+    if !shared_by_default || !authored || service.contains_key("isolation") {
         return false;
     }
     service.insert(
@@ -422,8 +439,8 @@ fn convert_v7(
             }
             if keep_dedicated_database(&mut service) {
                 notes.push(format!(
-                    "service '{name}' sets its own database credentials, so it keeps a \
-                     dedicated container (`isolation: dedicated`) instead of a shared server's \
+                    "service '{name}' sets its own database credentials or container settings, \
+                     so it keeps a dedicated container (`isolation: dedicated`) instead of a shared server's \
                      generated tenant"
                 ));
             }

@@ -107,37 +107,6 @@ pub(crate) fn list_names_sql() -> String {
         .to_owned()
 }
 
-/// Splits a [`list_names_sql`] listing into the databases to drop (named
-/// by `matches` or owned by a matching role) and the roles to drop.
-///
-/// # Errors
-///
-/// Returns an error for a line the listing query cannot produce.
-pub(crate) fn parse_names(
-    listing: &str,
-    matches: &impl Fn(&str) -> bool,
-) -> anyhow::Result<(Vec<String>, Vec<String>)> {
-    let mut databases = Vec::new();
-    let mut roles = Vec::new();
-    for line in listing.lines().filter(|line| !line.trim().is_empty()) {
-        let mut fields = line.split('\t');
-        match (fields.next(), fields.next(), fields.next()) {
-            (Some("d"), Some(name), Some(owner)) => {
-                if matches(name) || matches(owner) {
-                    databases.push(name.to_owned());
-                }
-            }
-            (Some("r"), Some(name), _) => {
-                if matches(name) {
-                    roles.push(name.to_owned());
-                }
-            }
-            _ => anyhow::bail!("unexpected PostgreSQL listing line '{line}'"),
-        }
-    }
-    Ok((databases, roles))
-}
-
 /// Drops tenant databases (closing their sessions) and then roles.
 #[must_use]
 pub(crate) fn drop_sql(databases: &[String], roles: &[String]) -> String {
@@ -156,17 +125,7 @@ pub(crate) fn drop_sql(databases: &[String], roles: &[String]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{drop_sql, ensure_supported_version, parse_names, provision_tenant_sql};
-
-    #[test]
-    fn databases_a_tenant_role_owns_are_dropped_with_it() {
-        let listing = "d\tshop__a__db\tshop__a__db\nd\toutside\tshop__a__db\nd\tother\tother\nr\tshop__a__db\t\nr\tother\t\n";
-        let (databases, roles) =
-            parse_names(listing, &|name: &str| name.starts_with("shop__a")).expect("parse");
-        assert_eq!(databases, ["shop__a__db", "outside"]);
-        assert_eq!(roles, ["shop__a__db"]);
-        assert!(parse_names("x\ty", &|_: &str| true).is_err());
-    }
+    use super::{drop_sql, ensure_supported_version, provision_tenant_sql};
 
     #[test]
     fn hardening_closes_template1_without_taking_tenants_their_schema() {

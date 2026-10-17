@@ -10,6 +10,7 @@ use crate::output::{self, LogLevel, Persistence};
 
 pub(super) struct SqlContext {
     pub(super) driver: Driver,
+    pub(super) image: String,
     pub(super) container_name: String,
     pub(super) db_name: String,
     pub(super) username: String,
@@ -21,6 +22,7 @@ pub(super) fn sql_context(service: &ServiceConfig) -> Result<SqlContext> {
 
     Ok(SqlContext {
         driver,
+        image: service.image.clone(),
         container_name: service.container_name()?,
         db_name: service.database.as_deref().unwrap_or("app").to_owned(),
         username: service.username.as_deref().unwrap_or("root").to_owned(),
@@ -80,24 +82,22 @@ pub(super) fn run_postgres_exec(
 
 pub(super) fn run_mysql_exec(
     ctx: &SqlContext,
-    program: &str,
+    program: crate::docker::MysqlProgram,
     args: &[String],
     context: &str,
 ) -> Result<Output> {
+    // The password goes in the client's environment, never an argument.
     let mut command = vec![
         "exec".to_owned(),
+        "-e".to_owned(),
+        format!("MYSQL_PWD={}", ctx.password),
         ctx.container_name.clone(),
-        program.to_owned(),
+        crate::docker::mysql_program(&ctx.image, program).to_owned(),
         "-u".to_owned(),
         ctx.username.clone(),
-        mysql_password_flag(&ctx.password),
     ];
     command.extend(args.iter().cloned());
     run_docker_command_owned(&command, context)
-}
-
-pub(super) fn mysql_password_flag(password: &str) -> String {
-    format!("-p{password}")
 }
 
 pub(super) fn ensure_command_success(output: &Output, failure_prefix: &str) -> Result<()> {
@@ -257,7 +257,7 @@ mod tests {
         let output = docker::with_docker_command(&binary, || {
             run_mysql_exec(
                 &ctx,
-                "mysql",
+                docker::MysqlProgram::Client,
                 &["-e".to_owned(), "select 1".to_owned()],
                 "run",
             )
@@ -266,13 +266,9 @@ mod tests {
 
         assert_eq!(
             String::from_utf8_lossy(&output.stdout).trim(),
-            "exec app mysql -u root -psecret -e select 1"
+            "exec -e MYSQL_PWD app mysql -u root -e select 1",
+            "the password never reaches an argument"
         );
-    }
-
-    #[test]
-    fn mysql_password_flag_formats_argument() {
-        assert_eq!(mysql_password_flag("abc"), "-pabc");
     }
 
     #[test]

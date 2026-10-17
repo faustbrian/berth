@@ -458,3 +458,31 @@ fn a_migrated_v8_shared_database_loads_as_a_tenant() -> anyhow::Result<()> {
     assert!(config.service[0].runtime.shared.is_some());
     Ok(())
 }
+
+#[test]
+fn a_migrated_7_0_database_with_container_settings_stays_dedicated() -> anyhow::Result<()> {
+    let dir = temp_dir("v7-volumes");
+    let converted = convert_legacy_config(
+        "container_prefix = \"api\"\nproject_type = \"project\"\n\n[[service]]\npreset = \"mysql\"\nvolumes = [\"./dump:/dump\"]\n\n[[service]]\npreset = \"postgres\"\nname = \"pg\"\n",
+        &dir.join(".stackctl.toml"),
+    )?;
+    let raw = parse(&converted.content)?;
+    let isolation = |name: &str| {
+        raw.service
+            .iter()
+            .find(|service| service.name.as_deref() == Some(name))
+            .and_then(|service| service.isolation)
+    };
+    assert_eq!(
+        isolation("db"),
+        Some(crate::config::Isolation::Dedicated),
+        "{}",
+        converted.content
+    );
+    assert_eq!(
+        isolation("pg"),
+        None,
+        "an unconfigured database becomes shared"
+    );
+    Ok(())
+}

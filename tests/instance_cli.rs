@@ -18,7 +18,7 @@ fn project(label: &str) -> PathBuf {
     std::fs::create_dir_all(&root).expect("create project");
     std::fs::write(
         root.join(".berth.yaml"),
-        "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  db:\n    preset: mysql\n",
+        "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  db:\n    preset: mysql\n    isolation: dedicated\n",
     )
     .expect("write project file");
     root
