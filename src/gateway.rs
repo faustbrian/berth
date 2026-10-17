@@ -17,7 +17,7 @@ pub(crate) use probe::{
 };
 pub(crate) use publish::{
     NETWORK_LABEL, PublishMode, ROUTE_HOSTS_LABEL, ROUTE_PORT_LABEL, detach_network,
-    ensure_route_unclaimed, is_attached, publish_routes,
+    ensure_route_unclaimed, is_attached, publish_routes, remove_gateway_if_unused,
 };
 pub(crate) use resolve::resolves_to_loopback;
 pub(crate) use route::{

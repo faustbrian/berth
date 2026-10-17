@@ -1208,6 +1208,9 @@ fn gc_removes_a_shared_server_no_instance_uses_with_its_volume_and_secret() {
     let document = gc(&host, &host.base, "");
     assert_eq!(document["servers"][0]["server"], server.as_str());
     assert_eq!(document["servers"][0]["removed"], true, "{document}");
+    // No instance network holds the gateway any more, so it goes too; its CA
+    // stays under the berth home for the next `up`.
+    assert_eq!(document["gateway"]["removed"], true, "{document}");
     let calls = host.calls();
     assert!(
         calls
@@ -1229,6 +1232,20 @@ fn gc_removes_a_shared_server_no_instance_uses_with_its_volume_and_secret() {
 }
 
 #[test]
+fn gc_refuses_dry_run_and_removes_nothing() {
+    let host = Host::new("gc-dry");
+    let a = host.checkout("a", PROJECT);
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    assert!(host.berth(&a, &["down", "--purge"]).status.success());
+    host.clear();
+    let output = host.berth_with(&host.base, &["--dry-run", "gc", "--json"], "");
+    assert_eq!(output.status.code(), Some(125));
+    assert!(text(&output.stderr).contains("does not support --dry-run"));
+    assert_eq!(host.servers().len(), 1, "the server is still there");
+    assert!(host.calls().is_empty(), "{}", host.calls());
+}
+
+#[test]
 fn gc_keeps_servers_an_instance_uses_or_that_hold_tenants() {
     let host = Host::new("gc-keep");
     let a = host.checkout("a", PROJECT);
@@ -1237,6 +1254,7 @@ fn gc_keeps_servers_an_instance_uses_or_that_hold_tenants() {
     assert!(host.berth(&b, &["up", "--no-wait"]).status.success());
     let attached = gc(&host, &host.base, "");
     assert_eq!(attached["servers"][0]["removed"], false);
+
     assert!(
         attached["servers"][0]["reason"]
             .as_str()
@@ -1287,9 +1305,10 @@ fn gc_keeps_a_stopped_server_it_cannot_inspect_and_never_starts_it() {
     );
     let calls = host.calls();
     assert!(
-        !calls
-            .lines()
-            .any(|line| line.starts_with("start ") || line.starts_with("rm ")),
+        !calls.lines().any(
+            |line| (line.starts_with("start ") || line.starts_with("rm "))
+                && line.contains(&server)
+        ),
         "{calls}"
     );
 }

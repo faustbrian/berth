@@ -18,7 +18,15 @@ pub(super) fn resolve(preset: &str) -> Option<PresetDefaults> {
 }
 
 fn minio() -> PresetDefaults {
-    let mut defaults = PresetDefaults::base(Kind::ObjectStore, Driver::Minio, "minio/minio:latest");
+    // MinIO's last community release pinned by 8.x. MinIO no longer serves
+    // images from Docker Hub or Quay (checked 2026-10-18: access denied), so
+    // this preset needs the image already present locally; `rustfs` and
+    // `garage` are S3-compatible replacements.
+    let mut defaults = PresetDefaults::base(
+        Kind::ObjectStore,
+        Driver::Minio,
+        "minio/minio:RELEASE.2025-09-07T16-13-09Z",
+    );
     defaults.name = Some("s3");
     defaults.bucket = Some("media");
     defaults.access_key = Some("minio");
@@ -28,8 +36,11 @@ fn minio() -> PresetDefaults {
 }
 
 fn rustfs() -> PresetDefaults {
-    let mut defaults =
-        PresetDefaults::base(Kind::ObjectStore, Driver::Rustfs, "rustfs/rustfs:latest");
+    let mut defaults = PresetDefaults::base(
+        Kind::ObjectStore,
+        Driver::Rustfs,
+        "rustfs/rustfs:1.0.0-beta.2",
+    );
     defaults.name = Some("s3");
     defaults.bucket = Some("media");
     defaults.access_key = Some("minio");
@@ -53,7 +64,7 @@ fn localstack() -> PresetDefaults {
     let mut defaults = PresetDefaults::base(
         Kind::ObjectStore,
         Driver::Localstack,
-        "localstack/localstack:latest",
+        "localstack/localstack:4.12.0",
     );
     defaults.name = Some("s3");
     defaults.bucket = Some("media");

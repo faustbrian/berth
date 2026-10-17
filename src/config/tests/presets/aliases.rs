@@ -161,7 +161,7 @@ fn preset_aliases_cover_all_primary_backends() {
     assert_eq!(dragonfly.kind, Kind::Cache);
     assert_eq!(
         dragonfly.image,
-        "docker.dragonflydb.io/dragonflydb/dragonfly:latest"
+        "docker.dragonflydb.io/dragonflydb/dragonfly:v1.39.0"
     );
 
     let mem = config
@@ -193,7 +193,7 @@ fn preset_aliases_cover_all_primary_backends() {
         .find(|svc| svc.name == "localstack")
         .expect("localstack service");
     assert_eq!(localstack.kind, Kind::ObjectStore);
-    assert_eq!(localstack.image, "localstack/localstack:latest");
+    assert_eq!(localstack.image, "localstack/localstack:4.12.0");
 
     let opensearch = config
         .service
@@ -259,7 +259,10 @@ fn preset_aliases_cover_all_primary_backends() {
         .find(|svc| svc.name == "socket")
         .expect("socket service");
     assert_eq!(socket.driver, Driver::Soketi);
-    assert_eq!(socket.image, "quay.io/soketi/soketi:latest");
+    assert_eq!(
+        socket.image,
+        "quay.io/soketi/soketi:5d188786beaf683aca2115a6247dcdc15c29ac77-16-debian"
+    );
 
     let cron = config
         .service
@@ -283,7 +286,10 @@ fn preset_aliases_cover_all_primary_backends() {
         .find(|svc| svc.name == "browser")
         .expect("browser service");
     assert_eq!(browser.driver, Driver::Dusk);
-    assert_eq!(browser.image, "selenium/standalone-chromium:latest");
+    assert_eq!(
+        browser.image,
+        "selenium/standalone-chromium:4.43.0-20260404"
+    );
 
     let mailpit = config
         .service
@@ -291,5 +297,5 @@ fn preset_aliases_cover_all_primary_backends() {
         .find(|svc| svc.name == "mailpit")
         .expect("mailpit service");
     assert_eq!(mailpit.driver, Driver::Mailhog);
-    assert_eq!(mailpit.image, "axllent/mailpit:latest");
+    assert_eq!(mailpit.image, "axllent/mailpit:v1.30.0");
 }

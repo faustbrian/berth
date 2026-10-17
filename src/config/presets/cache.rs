@@ -33,7 +33,7 @@ fn dragonfly() -> PresetDefaults {
     let mut defaults = PresetDefaults::base(
         Kind::Cache,
         Driver::Dragonfly,
-        "docker.dragonflydb.io/dragonflydb/dragonfly:latest",
+        "docker.dragonflydb.io/dragonflydb/dragonfly:v1.39.0",
     );
     defaults.name = Some("dragonfly");
     defaults

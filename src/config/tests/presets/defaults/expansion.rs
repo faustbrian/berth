@@ -256,7 +256,7 @@ fn dusk_preset_sets_selenium_defaults() {
     assert_eq!(dusk.driver, Driver::Dusk);
     assert_eq!(dusk.port, 33070);
     assert_eq!(dusk.container_port, Some(4444));
-    assert_eq!(dusk.image, "selenium/standalone-chromium:latest");
+    assert_eq!(dusk.image, "selenium/standalone-chromium:4.43.0-20260404");
 }
 
 #[test]
@@ -276,7 +276,10 @@ fn selenium_preset_sets_standalone_defaults() {
     assert_eq!(selenium.driver, Driver::Dusk);
     assert_eq!(selenium.port, 33070);
     assert_eq!(selenium.container_port, Some(4444));
-    assert_eq!(selenium.image, "selenium/standalone-chromium:latest");
+    assert_eq!(
+        selenium.image,
+        "selenium/standalone-chromium:4.43.0-20260404"
+    );
 }
 
 #[test]
@@ -297,7 +300,7 @@ fn mailpit_preset_sets_mail_defaults() {
     assert_eq!(mailpit.port, 33067);
     assert_eq!(mailpit.container_port, Some(8025));
     assert_eq!(mailpit.smtp_port, Some(1025));
-    assert_eq!(mailpit.image, "axllent/mailpit:latest");
+    assert_eq!(mailpit.image, "axllent/mailpit:v1.30.0");
 }
 
 #[test]

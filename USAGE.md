@@ -1164,14 +1164,20 @@ Reap now (instances whose lease expired, whose owner process exited or
 whose checkout is gone, and leftover test-slot containers), then remove
 shared servers that no instance
 network uses and that hold no tenant: the container, its data volume and its
-admin secret. A server berth cannot inspect is kept and reported. Runs
+admin secret. The gateway container goes too once no instance network holds
+it; its CA stays under `~/.berth/gateway`, so the next `up` recreates it with
+the same trusted certificate. A server berth cannot inspect is kept and
+reported. Runs
 outside any project, so it uses Docker unless `--engine` says otherwise
-(as does `berth ls`). Exits 125 when an instance could not be reaped.
+(as does `berth ls`). Exits 125 when an instance could not be reaped or the
+gateway could not be removed (the document still lists what was done).
+`--dry-run` is refused: deciding what is unused needs real Docker reads.
 
 Flags:
 
 - `--json`: one document, `{"reaped_instances", "removed_test_containers",
-  "servers": [{"server", "engine", "removed", "reason"}]}`
+  "servers": [{"server", "engine", "removed", "reason"}], "gateway":
+  {"removed", "container" | "reason"}}`
 
 ### `berth swarm -- <COMMAND...>`
 

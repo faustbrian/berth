@@ -22,7 +22,7 @@ fn opensearch() -> PresetDefaults {
     let mut defaults = PresetDefaults::base(
         Kind::Search,
         Driver::Opensearch,
-        "opensearchproject/opensearch:latest",
+        "opensearchproject/opensearch:3.6.0",
     );
     defaults.name = Some("search");
     defaults.forced_env = Some(vec![
@@ -52,7 +52,7 @@ fn meilisearch() -> PresetDefaults {
     let mut defaults = PresetDefaults::base(
         Kind::Search,
         Driver::Meilisearch,
-        "getmeili/meilisearch:latest",
+        "getmeili/meilisearch:v1.45.1",
     );
     defaults.name = Some("search");
     defaults.api_key = Some("masterKey");

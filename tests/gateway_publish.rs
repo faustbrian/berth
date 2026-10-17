@@ -27,6 +27,8 @@ case "$1 $2" in
   "network rm") rm -f "$S/network"; exit 0 ;;
   "network connect")
     net=""; gw=""; for arg in "$@"; do net="$gw"; gw="$arg"; done
+    # Only the gateway's networks are modelled; apps join their own.
+    case "$gw" in berth_gateway_*) ;; *) exit 0 ;; esac
     mkdir -p "$S/attached"; : > "$S/attached/$net"; echo "$gw" > "$S/gateway-name"
     for arg in "$@"; do case "$arg" in *.berth.localhost) echo "$arg" >> "$S/attached/$net" ;; esac; done
     exit 0 ;;
@@ -46,13 +48,15 @@ case "$1" in
     done
     mkdir -p "$S/c"; mv "$S/run.labels" "$S/c/$name"; exit 0 ;;
   rm)
+    case "$*" in *berth_gateway_*) [ -f "$S/gateway-rm-fails" ] && { echo "removal in progress" >&2; exit 1; } ;; esac
     for arg in "$@"; do rm -f "$S/c/$arg"; done; exit 0 ;;
   inspect)
     name=""; for arg in "$@"; do name="$arg"; done
     [ -f "$S/c/$name" ] || exit 1
     case "$*" in
       *NetworkSettings.Networks*)
-        printf '{'; first=1
+        # Docker attaches a container started without --network to bridge.
+        printf '{"bridge":{"Aliases":null}'; first=0
         for f in "$S"/attached/*; do
           [ -f "$f" ] || continue
           [ $first = 1 ] || printf ','; first=0
@@ -429,4 +433,61 @@ fn a_failed_first_gateway_start_does_not_pin_its_ports() {
     let moved = fixture.berth_with_port(&["--non-interactive", "up", "--no-wait"], free_port());
     assert!(moved.status.success(), "{}", stderr(&moved));
     assert!(fixture.base.join("home/gateway/ports").exists());
+}
+
+#[test]
+fn gc_removes_the_gateway_only_once_no_instance_network_holds_it() {
+    let mut fixture = Fixture::new("gc");
+    fixture.up_ok();
+    let gateway = fixture.gateway().expect("gateway running");
+
+    let kept = fixture.berth(&["gc", "--json"], false);
+    assert!(kept.status.success(), "{}", stderr(&kept));
+    let kept: serde_json::Value = serde_json::from_slice(&kept.stdout).expect("gc document");
+    assert_eq!(kept["gateway"]["removed"], false, "{kept}");
+    assert!(
+        kept["gateway"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.starts_with("attached to")),
+        "{kept}"
+    );
+
+    let down = fixture.berth(&["--non-interactive", "down"], false);
+    assert!(down.status.success(), "{}", stderr(&down));
+    fixture.clear_log();
+    let removed = fixture.berth(&["gc", "--json"], false);
+    assert!(removed.status.success(), "{}", stderr(&removed));
+    let removed: serde_json::Value = serde_json::from_slice(&removed.stdout).expect("gc document");
+    assert_eq!(removed["gateway"]["removed"], true, "{removed}");
+    assert_eq!(removed["gateway"]["container"], gateway.as_str());
+    assert!(
+        fixture
+            .calls()
+            .iter()
+            .any(|call| call == &format!("rm -f {gateway}")),
+        "{:#?}",
+        fixture.calls()
+    );
+}
+
+#[test]
+fn a_failed_gateway_removal_still_reports_everything_gc_did() {
+    let mut fixture = Fixture::new("gc-fail");
+    fixture.up_ok();
+    let down = fixture.berth(&["--non-interactive", "down"], false);
+    assert!(down.status.success(), "{}", stderr(&down));
+    std::fs::write(fixture.base.join("state/gateway-rm-fails"), b"").expect("fail rm");
+
+    let output = fixture.berth(&["gc", "--json"], false);
+    assert_eq!(output.status.code(), Some(125), "{}", stderr(&output));
+    let document: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("the gc document is still printed");
+    assert_eq!(document["gateway"]["removed"], false, "{document}");
+    assert!(
+        document["gateway"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("removal in progress")),
+        "{document}"
+    );
+    assert!(document["servers"].is_array(), "{document}");
 }

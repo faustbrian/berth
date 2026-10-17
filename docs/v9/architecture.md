@@ -124,13 +124,15 @@ Podman rejects such subnets and berth probes past them.
 ## Shared servers
 
 PostgreSQL, MySQL, MariaDB, Redis and Valkey run as shared servers keyed by a
-compatibility fingerprint, plus stateless Gotenberg and attribution-only
-Mailpit. Each instance gets a logical tenant (database plus role, or Redis ACL
+compatibility fingerprint. Gotenberg and the mail catcher stay per instance
+(ledger L062 deferred, L057 dropped: a shared mail catcher would show every
+instance's mail to every agent). Each instance gets a logical tenant (database plus role, or Redis ACL
 user with a key prefix). Credentials are per instance and stable until purge.
 Creation and tenant provisioning run under a per-server host lock; a Docker
 `409` name conflict is treated as "created concurrently" and adopted after an
 ownership check. `berth gc` removes shared servers that no instance network
-uses and that hold no tenant.
+uses and that hold no tenant, and the gateway container once no instance
+network holds it (its CA and state stay under `~/.berth/gateway`).
 
 Redis and Valkey specifics: a tenant is an ACL user named like the SQL
 tenants, allowed only keys and channels under `{tenant}:`; berth injects

@@ -47,3 +47,25 @@ fn preset_names_are_unique_and_include_primary_aliases() {
         assert!(names.contains(&expected));
     }
 }
+
+#[test]
+fn every_preset_pins_a_versioned_image_tag() {
+    // A mutable `latest` tag would give parallel agents different images
+    // (8.x L018); `2022-latest` style tags still name the major version.
+    for name in preset_names() {
+        let image = crate::config::presets::preset_defaults(name)
+            .expect("preset")
+            .image;
+        let tag = image
+            .rsplit_once(':')
+            .map(|(_, tag)| tag)
+            .unwrap_or_else(|| panic!("{name} has no image tag: {image}"));
+        assert!(!tag.contains('/'), "{name} has no image tag: {image}");
+        for mutable in ["latest", "stable", "nightly", "edge"] {
+            assert!(
+                !tag.starts_with(mutable),
+                "{name} uses a mutable tag: {image}"
+            );
+        }
+    }
+}

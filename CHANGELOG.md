@@ -17,8 +17,14 @@ All notable changes to this project are documented in this file.
   runs. An instance a command is running in is never reaped.
 - Added `berth ls`, listing every instance across projects with its status,
   lease and checkout (`--json` for agents), and `berth gc`, which also removes
-  shared servers nothing uses. 7.0.0's service listing is `berth ls
-  --services`.
+  shared servers nothing uses and the gateway container once no instance
+  needs it. 7.0.0's service listing is `berth ls --services`.
+- Added `scripts/accept-v9-agents.sh`: N parallel worktrees (default 30) of
+  a pinned public Laravel fixture each run `up --wait --json`, an HTTPS
+  request, a focused test, ParaTest `--parallel`, a deliberately failing
+  test and `down --purge` against real Docker; the script checks isolation,
+  exit codes, reaping of a SIGKILLed agent and that nothing labeled is left.
+
 
 - Added shared PostgreSQL, MySQL, MariaDB, Redis and Valkey servers: every
   instance's database or cache service is a tenant (its own database and
@@ -130,6 +136,13 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- Presets that defaulted to a mutable `latest` tag (OpenSearch,
+  Meilisearch, MinIO, RustFS, LocalStack, Dragonfly, Soketi, Selenium,
+  MailHog, Mailpit) now pin a version tag, so parallel instances and clean
+  installs resolve the same tag. MinIO no longer publishes images to Docker
+  Hub or Quay: the `minio` preset keeps its last release tag and needs that
+  image present locally; `rustfs` and `garage` are S3-compatible
+  alternatives.
 - Swarm `inject_env` tokens `:url`, `:base_url`, `:host` and `:port` now name
   the source app container (`http://berth_location_…_app:80`), and the
   consumer's app container joins a network it shares only with the source

@@ -398,6 +398,43 @@ pub(crate) fn is_attached(network: &str) -> Result<bool> {
     Ok(attached_aliases(&gateway)?.contains_key(network))
 }
 
+/// Removes the gateway container when no instance network has it attached
+/// (`berth gc`). Its CA and state under `~/.berth/gateway` stay, so the next
+/// `up` recreates it with the same trusted certificate. Returns the removed
+/// container, or why it was kept.
+///
+/// # Errors
+///
+/// Returns an error when Docker fails.
+pub(crate) fn remove_gateway_if_unused() -> Result<std::result::Result<String, String>> {
+    let _lock = crate::home::HostLock::acquire("gateway", PUBLISH_LOCK_TIMEOUT)?;
+    let gateway = gateway_container_name(&crate::home::installation_id()?);
+    if !super::container::exists(&gateway)? {
+        return Ok(Err("no gateway exists".to_owned()));
+    }
+    // Only berth networks hold the gateway; the engine's default network
+    // (`bridge` on Docker, `podman` on Podman) is where it starts.
+    let in_use: Vec<String> = attached_aliases(&gateway)?
+        .into_keys()
+        .filter(|network| network.starts_with("berth_"))
+        .collect();
+    if !in_use.is_empty() {
+        return Ok(Err(format!("attached to {}", in_use.join(", "))));
+    }
+
+    let output = crate::docker::run_docker_output(
+        &["rm", "-f", &gateway],
+        "failed to remove the berth gateway",
+    )?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "failed to remove the berth gateway: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(Ok(gateway))
+}
+
 /// Returns the gateway's berth route aliases on every network it is
 /// attached to, from one inspect.
 fn attached_aliases(gateway: &str) -> Result<BTreeMap<String, BTreeSet<String>>> {

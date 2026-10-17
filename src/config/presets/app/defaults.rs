@@ -40,7 +40,7 @@ pub(super) fn dusk() -> PresetDefaults {
     let mut defaults = PresetDefaults::base(
         Kind::App,
         Driver::Dusk,
-        "selenium/standalone-chromium:latest",
+        "selenium/standalone-chromium:4.43.0-20260404",
     );
     defaults.name = Some("dusk");
     defaults.container_port = Some(4444);
@@ -51,7 +51,7 @@ pub(super) fn selenium() -> PresetDefaults {
     let mut defaults = PresetDefaults::base(
         Kind::App,
         Driver::Dusk,
-        "selenium/standalone-chromium:latest",
+        "selenium/standalone-chromium:4.43.0-20260404",
     );
     defaults.name = Some("selenium");
     defaults.container_port = Some(4444);
@@ -59,14 +59,14 @@ pub(super) fn selenium() -> PresetDefaults {
 }
 
 pub(super) fn mailhog() -> PresetDefaults {
-    let mut defaults = PresetDefaults::base(Kind::App, Driver::Mailhog, "mailhog/mailhog:latest");
+    let mut defaults = PresetDefaults::base(Kind::App, Driver::Mailhog, "mailhog/mailhog:v1.0.1");
     defaults.name = Some("mailhog");
     defaults.container_port = Some(8025);
     defaults
 }
 
 pub(super) fn mailpit() -> PresetDefaults {
-    let mut defaults = PresetDefaults::base(Kind::App, Driver::Mailhog, "axllent/mailpit:latest");
+    let mut defaults = PresetDefaults::base(Kind::App, Driver::Mailhog, "axllent/mailpit:v1.30.0");
     defaults.name = Some("mailpit");
     defaults.container_port = Some(8025);
     defaults.smtp_port = Some(1025);
