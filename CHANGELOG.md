@@ -6,6 +6,15 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Added the berth 9.x ledger (`docs/v9/ledger.md`), which records one Port,
+  Reimplement, Drop or Defer decision for every stackctl 8.x behavior, and
+  `scripts/check-v9-ledger.sh`, which fails when any 8.x source directory or
+  commit is left unaccounted for.
+
+## [7.0.0] - 2026-07-12
+
+### Added
+
 - Added dual-format Stackctl config support so project discovery, loading, and
   saving now autodetect `.stackctl.toml` and `.stackctl.yaml` files while still
   rejecting the `.yml` extension.

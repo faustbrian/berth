@@ -1,0 +1,414 @@
+# Berth 9.x ledger of stackctl 8.x
+
+This ledger records one decision for every 8.x behavior or concern before it is
+ported into berth 9.x. Berth 9.x continues the explicit-invocation model of
+helm v6 / stackctl 7.0.0 (commands drive Docker directly, no required daemon)
+and is designed primarily for AI agents that create disposable environments in
+parallel worktrees. 8.x (`7.0.0..8.0.0`) is the source of the rows below.
+
+`scripts/check-v9-ledger.sh` proves coverage: every 8.x `src` directory must
+be named in a row table, and every 8.x commit must appear in the commit
+coverage appendix. `scripts/check-v9-ledger.sh --final` additionally requires
+every row to have a terminal status.
+
+## Decisions and statuses
+
+- **Port**: take the 8.x code or contract largely as-is.
+- **Reimplement**: keep the contract, rebuild it for the command-driven model.
+- **Drop**: not carried into 9.x, with a concrete reason. Drops covered by the
+  pre-authorized list are marked *(pre-authorized)*; every other Drop is listed
+  in the release report.
+- **Defer**: wanted, not part of 9.0; listed in the release report.
+
+Status is `Planned`, `In progress`, `Done`, `Dropped` or `Deferred`. A row is
+`Done` only when the named 9.x evidence passes on 9.x.
+
+Pre-authorized drops: the required daemon on the command path, the
+file-discovery-driven lifecycle, SQLite as authoritative state, the
+retain/backup/prune-token deletion ceremony, project-name-only identity, and
+the removal of v6 commands and selectors.
+
+## Cross-cutting 9.x decisions
+
+These decisions resolve conflicts between the drafts that produced this
+ledger. They are binding for the rows below.
+
+1. **Docker CLI, not the Engine API.** 9.x keeps 7.0.0's `docker` CLI
+   adapter. Interactive `exec`, exact exit codes, stdin and TTY come from the
+   CLI for free; 8.x's bollard adapter (`src/control_plane/engine`, ~9.9k
+   lines) never supported a TTY and would add a tokio runtime to a short-lived
+   CLI. 8.x's typed request structs are ported as pure argv builders.
+2. **Instance identity.** Every environment is an *instance* of a project. The
+   instance ID is `{slug}-{hash6}` derived from the canonical checkout path
+   (`--instance` overrides). Containers, networks, volumes, routes and logical
+   resources are keyed by project plus instance.
+3. **Labels are the source of truth.** `dev.berth.*` labels carry ownership
+   (installation, project, instance, service, kind, retention, schema). Local
+   files under `~/.berth` hold only leases, locks, credentials and generated
+   gateway/TLS state.
+4. **Shared by default** for PostgreSQL, MySQL, MariaDB, Redis and Valkey
+   (logical database/role or ACL user per instance), plus stateless Gotenberg
+   and attribution-only Mailpit. Every other preset runs one dedicated
+   container per instance, as in 7.0.0. Any service may opt into
+   `isolation: dedicated`. Sharing of MongoDB, SQL Server, MinIO, RabbitMQ
+   and the search engines is deferred (rows L058–L061).
+5. **Gateway ports.** The gateway publishes on `127.0.0.1` only (FI-40). Its
+   ports are machine settings (`~/.berth/config.yaml`, `BERTH_GATEWAY_*`),
+   defaulting to `8443` (HTTPS) and `8080` (HTTP). Port 80/443 are commonly
+   held by other local development managers (for example Herd's nginx), and a
+   default that fails on such hosts would break every agent `up`. Berth never
+   falls back to other ports: an occupied configured port fails with the
+   owner named (FI-14).
+6. **Explicit teardown.** `down --purge` deletes an instance's logical
+   databases, ACL users, volumes and credentials in one call; there is no
+   retention ceremony. Lease TTLs and reap-on-invocation replace daemon
+   recovery.
+
+## Configuration and identity
+
+| ID | Behavior | 8.x source | Decision | Reason | 9.x evidence | Status |
+|---|---|---|---|---|---|---|
+| L001 | Strict YAML parsing: one document, no duplicate keys or unknown fields, schema version checked before expansion, field-path diagnostics | `src/control_plane/configuration`, `docs/v8/configuration.md` | Reimplement | Fail-early schema is kept, but for the 9.x `.berth.yaml` model (7.0.0 services plus instance, isolation and gateway fields) | Unit tests: unknown field, duplicate key, two documents, float version and wrong `schema_version` each fail naming the field path | Planned |
+| L002 | Hostile-YAML bounds: O_NOFOLLOW byte-bounded reads, anchors/aliases rejected, depth/node/scalar budgets (FI-18) | `src/control_plane/configuration` (`read_bounded_yaml_file.rs`, `validate_yaml_complexity.rs`) | Port | Config is read by every agent invocation; symlinks and alias bombs must fail before deserialization | Unit tests: symlinked config, 1 MiB+1 file, alias bomb, depth 33 and 10,001 nodes rejected | Planned |
+| L003 | Prohibited privilege fields (privileged, cap_add, devices, socket mounts, host network, pid mode, security_opt) | `src/control_plane/configuration` (`parse_project_config.rs`) | Port | Project YAML in a worktree must not grant container privileges | Unit test per field: security-policy error | Planned |
+| L004 | Published JSON Schema, `config schema` and offline `config validate` | `schemas/stackctl-project-v8.schema.json`, `src/control_plane/configuration` (`project_config_schema.rs`), `src/cli/handlers` (`config_schema_cmd.rs`, `config_validate_cmd.rs`) | Reimplement | Editors and agents get an effect-free preflight; content becomes the 9.x schema with a berth `$id` | Test: schema and parser agree on a fixture corpus; `config validate` runs without a Docker socket | Planned |
+| L005 | Config selector precedence: positional path > `--config` > `--project-root` > cwd (FI-27) | `src/cli/dispatch`, `docs/v8/configuration.md` | Port | FI-27: early dispatch ignored `--project-root` | CLI test: `berth --project-root <fixture> config validate` reads the fixture | Planned |
+| L006 | Config file safety: refuse symlinked or non-regular config, exact filename, bounded read, canonical root | `src/cli/handlers` (`v8_project.rs`) | Port | Cheap hardening shared by every command | Test: symlinked `.berth.yaml` is refused | Planned |
+| L007 | DNS-label validation of project and service names, never repaired silently | `src/control_plane` (`dns_label.rs`, `project_identity.rs`, `service_identity.rs`, `identity_error.rs`) | Port | Committed names must be valid as written; only the path-derived instance slug is normalized, explicitly | Unit tests: `Bill`, `a_b` and 64-byte labels rejected with the input echoed | Planned |
+| L008 | Project-name-only identity (`project` or directory basename) | `src/control_plane` (`project_identity.rs`), `src/control_plane/workload` (`application_container_plan.rs`) | Drop | *(pre-authorized)* 30 worktrees of one repository collide on every name; 9.x adds the instance dimension | Integration: two worktrees get distinct containers, network, route and database and run `up` concurrently | Dropped |
+| L009 | Route domain with a ≤63-byte first label, never truncated | `src/control_plane` (`route_identity.rs`, `route_claim.rs`) | Reimplement | Route becomes `{instance}-{project}[-{service}].berth.localhost`; bounded instance IDs plus validated name lengths keep it in budget, and overflow fails loudly | Unit test: longest allowed names produce exactly 63 bytes; one more byte errors | Planned |
+| L010 | Registry-wide route and identity collision validation | `src/control_plane` (`validate_route_claims.rs`, `validated_route_registry.rs`, `registry_conflict.rs`) | Reimplement | Without a registry, `up` checks its routes against live labeled routes; only the claimant fails (FI-53) | Integration: a second instance claiming a live domain fails naming both paths; the first stays up | Planned |
+| L011 | Environment-variable key validation (dotted keys allowed for search engines) | `src/control_plane` (`environment_variable_key.rs`) | Port | Portable keys; Elasticsearch/OpenSearch need dotted keys (8812646) | Unit tests: `1A`, `A-B`, empty rejected; `discovery.type` accepted | Planned |
+| L012 | Directory OS lock with symlink refusal | `src/control_plane` (`lock_directory.rs`) | Port | Without a daemon, parallel `up` needs host flocks for shared servers, gateway publication and lock-file writes | Concurrency test: N parallel `up` create one shared server with no 409 failure | Planned |
+| L013 | Desired-state resolution: dependency order, cycle path diagnostics, implicit sole-app inheritance (FI-29) | `src/control_plane/desired_state` | Reimplement | 7.0.0 already orders dependencies; add FI-29 sole-app inheritance and full cycle paths to it | Unit tests: sole app inherited by workers; two apps without `depends_on` fail; cycle prints the path | Planned |
+| L014 | Pure execution plan mapping services to deployment strategies | `src/control_plane/execution_plan` | Port | Deterministic, Docker-free planning usable by command-driven `up` | Unit test: service map order does not change the plan | Planned |
+| L015 | Digest-pinned artifact lock with exact source freshness, workers inherit the app entry | `src/control_plane/configuration` (`artifact_lock.rs`, `parse_artifact_lock.rs`, `apply_artifact_lock.rs`, `generate_artifact_lock.rs`, `artifact_source.rs`) | Reimplement | 7.0.0 already has `lock images/verify/diff`; adopt the strict YAML lock (`.berth.lock.yaml`) and freshness rules | Unit tests: stale source, mutable resolved value, unknown service and second document fail | Planned |
+| L016 | Lock publication: create-new without overwrite, compare-and-swap refresh, interrupted staging recovery | `src/control_plane/configuration` (`publish_artifact_lock.rs`), `src/cli/handlers/v8_lock_cmd` | Port | 30 agents may race to create the lock | Concurrency test: two parallel lock writers yield one valid file; stale CAS fails | Planned |
+| L017 | Daemon-generated lock on discovery (FI-21, FI-58) | `src/control_plane/configuration` (`artifact_lock_required.rs`) | Reimplement | `up` resolves a missing lock inline before creating containers; malformed locks still fail without mutation | Integration: fresh fixture without lock gets one written by `up`; malformed lock fails | Planned |
+| L018 | Revisioned built-in preset catalog with versioned tags, no `latest`, canonical aliases | `src/control_plane/service_strategy` (`resolve_preset_artifact.rs`, `preset_artifact.rs`, `preset_artifact_error.rs`, `known_service_presets.rs`) | Port | `latest` aliases made clean installs drift (2649d8d) | Unit tests: every preset resolves to a versioned tag; unknown version errors; aliases agree | Planned |
+| L019 | Closed deployment-strategy resolver per preset | `src/control_plane/service_strategy` (`resolve_service_deployment_strategy.rs`, `service_deployment_strategy.rs`) | Reimplement | Encodes decision 4: five shared engines plus Gotenberg/Mailpit, everything else dedicated, overridable per service | Unit test: exhaustive preset-to-strategy table; unknown preset fails | Planned |
+
+## Engine and workload
+
+| ID | Behavior | 8.x source | Decision | Reason | 9.x evidence | Status |
+|---|---|---|---|---|---|---|
+| L020 | Bollard Engine API adapter and capability traits | `src/control_plane/engine` (`bollard_engine_adapter.rs`, `reconciliation_engine.rs`, `container_lifecycle.rs`) | Drop | Decision 1: the docker CLI gives TTY, stdin, signals and exact exit codes; the adapter never supported a TTY | Unit snapshot: app container argv carries the full security flag set | Dropped |
+| L021 | Typed container request structs (create options, tmpfs mounts, capabilities, metadata) | `src/control_plane/engine` (`container_create_options.rs`, `tmpfs_mount.rs`, `linux_capability.rs`, `managed_resource_metadata.rs`) | Port | Reused as pure argv builders with snapshot tests | Unit snapshot tests of rendered docker argv | Planned |
+| L022 | Least privilege: no privileged, `no-new-privileges`, drop ALL caps; app and gateway add only NET_BIND_SERVICE (FI-13, FI-19, FI-41, FI-42) | `src/control_plane/engine`, `src/control_plane/workload` (`application_container_request.rs`, `project_process_request.rs`) | Port | FrankenPHP and Caddy binaries are capability-marked: exit 126/255 without NET_BIND_SERVICE | Integration: `docker inspect` shows the exact cap sets and the app serves | Planned |
+| L023 | Run app and workers as the invoking UID:GID (FI-13) | `src/control_plane/workload` (`application_container_request.rs`) | Port | Root containers create root-owned files in the agent's worktree | Integration: a file written by `artisan` in the workspace is owned by the host UID | Planned |
+| L024 | Writable `mode=1777,noexec,nosuid` tmpfs for runtime state (FI-44) | `src/control_plane/engine` (`tmpfs_mount.rs`) | Port | Non-root FrankenPHP/Caddy could not write root-owned `/data` and `/config` | Integration: no permission errors in app logs; inspect shows the tmpfs options | Planned |
+| L025 | Engine ownership labels and fail-closed mutation (re-inspect before stop/rm) | `src/control_plane/engine` (`managed_resource_metadata.rs`, `observed_resource_ownership.rs`, `classify_observed_resource.rs`), `src/control_plane/workload` (`matches_durable_resource_metadata.rs`) | Reimplement | Decision 3: labels replace SQLite; `dev.berth.*` keys add project and instance | Integration: `down` of instance A leaves instance B and a foreign unlabeled container untouched | Planned |
+| L026 | Image materialized before any volume or container create (FI-37, FI-39) | `src/control_plane/workload` (`ensure_project_service_image.rs`), `src/control_plane/engine` (`image_manager.rs`, `image_resolver.rs`) | Port | Production created containers from absent images while tests pre-pulled | Recording test: first engine operation is ensure-image of the exact reference | Planned |
+| L027 | Bounded transient pull retry (FI-34) | `src/control_plane/engine` (`retry_transient_engine_operation.rs`) | Reimplement | 7.0.0 has a retry budget; align it to bounded attempts that keep the final exact error | Unit test: two failures then success; three failures surface the last error | Planned |
+| L028 | Immutable image identity validation (digest or local content ID) | `src/control_plane/engine` (`immutable_image_reference.rs`, `immutable_image_identity.rs`, `image_id.rs`), `src/control_plane/workload` (`validate_image_digest.rs`) | Port | Pulls only by manifest digest (7e420c6, 008e5a3) | Unit test: tag-only pull rejected; `sha256:<64hex>` accepted for run | Planned |
+| L029 | Content-addressed derived runtime image for `php_extensions` and tool images (FI-08) | `src/control_plane/workload` (`runtime_image_build_plan.rs`, `runtime_image_build_options.rs`), `src/control_plane/engine` (`image_build_request.rs`, `image_build_network.rs`, `image_builder.rs`) | Reimplement | 7.0.0 builds extension images; adopt the content-addressed tag so 30 worktrees reuse one image | Integration: two instances with the same base and extensions build once | Planned |
+| L030 | Laravel framework-boot health probe `php artisan about --only=environment` with 15s timeout and 60s start period (FI-06, FI-60) | `src/control_plane/workload` (`application_health_check.rs`), `src/control_plane/engine` (`container_health_check.rs`, `health_observer.rs`, `container_health.rs`) | Port | TCP and `/up` passed while `bootstrap/app.php` was fatal; a 3s timeout caused false negatives | Integration: a fatal bootstrap makes `up --wait` fail with the probe output; a cold start passes under parallel load | Planned |
+| L031 | Readiness is not liveness: never replace a running container for failed readiness (FI-60, d74d0ee) | `src/control_plane/workload` (`reconcile_project_application.rs`) | Port | Replacing on readiness failure produced restart loops | Test: a running but unhealthy app is not recreated by a second `up` | Planned |
+| L032 | Readiness gate before dependent work: migrate, open, test (FI-43, FI-46) | `src/control_plane/workload` (`reconcile_project_application.rs`) | Reimplement | `up --wait`, `run` and `artisan test` wait (bounded) for health before dependent steps | Integration: migrate after a slow boot succeeds; a fatal app fails nonzero with the probe output | Planned |
+| L033 | Laravel config-cache bypass with `APP_CONFIG_CACHE` (FI-09) | `src/control_plane/workload` (`apply_application_runtime_environment.rs`) | Port | A host `bootstrap/cache/config.php` overrode injected credentials | Integration: a worktree with a stale cached config connects with injected credentials | Planned |
+| L034 | Managed environment injection with strict `environment_mapping` and redacted Debug | `src/control_plane/workload` (`runtime_environment.rs`, `merge_project_declared_environment.rs`) | Reimplement | 7.0.0 injects env and rewrites `.env`; 9.x injects only and never rewrites `.env` | Unit: colliding key without mapping fails; Debug hides secrets. Integration: two instances get distinct `DB_DATABASE` | Planned |
+| L035 | Attached commands keep output on failure and report the exec status, not EPIPE (FI-03, FI-48) | `src/control_plane/engine` (`run_attached_command.rs`, `run_streaming_command.rs`, `streaming_command_options.rs`) | Reimplement | 9.x inherits stdio through `docker exec` and exits with the container's exact code | E2E: `berth exec -- sh -c 'exit 7'` exits 7 with stderr intact; piped stdin works | Planned |
+| L036 | Project commands and PHP tool allow-list executed from `/workspace` | `src/control_plane/workload` (`project_command.rs`, `run_project_command.rs`, `php_tool.rs`, `node_package_manager.rs`, `resolve_application_command.rs`) | Reimplement | Keep the allow-list and workdir; execute via direct `docker exec` with TTY when interactive | E2E: `berth composer --version` runs in the app container; `artisan tinker` is interactive with a TTY | Planned |
+| L037 | Workers and Horizon reuse the app image with no capabilities | `src/control_plane/workload` (`project_process_request.rs`, `reconcile_project_process.rs`, `plan_project_process_operation.rs`) | Port | Workers need no capabilities and must match the app runtime | Integration: worker inspect shows empty CapAdd and the app's image ID | Planned |
+| L038 | Scheduler executed by the daemon every minute | `src/control_plane/workload` (`plan_scheduled_project_command.rs`, `scheduled_project_command_plan.rs`) | Reimplement | No daemon in 9.x: the 7.0.0 scheduler preset runs `schedule:work` as a process container | Integration: a scheduled command's output appears within 70s of `up` | Planned |
+| L039 | Dedicated project services and volumes, idempotent provisioning, retained-service reconcile | `src/control_plane/workload` (`reconcile_project_service.rs`, `reconcile_project_volume.rs`, `reconcile_retained_project_service.rs`) | Reimplement | Keep image-first labeled idempotent provisioning; drop the retained-volume ceremony | Integration: rerunning `up` is a no-op; volumes carry instance labels | Planned |
+| L040 | Orphan stop-and-retain, adopt and reactivate | `src/control_plane/workload` (`stop_orphaned_project_workloads.rs`), `src/control_plane/application` (`adopt_project.rs`, `reactivate_project_if_retained.rs`) | Drop | *(pre-authorized)* `down` removes the instance; `down --purge` removes its data | Integration: after `down --purge` no labeled resource of the instance remains | Dropped |
+| L041 | Ephemeral Selenium browser sidecar with 2 GiB shm | `src/control_plane/workload` (`plan_ephemeral_browser.rs`, `run_ephemeral_browser_command.rs`) | Defer | 7.0.0's Dusk preset and `artisan --browser` remain; the 8.x sidecar redesign is not needed for 9.0 | Release report entry | Deferred |
+| L042 | Derived build-image and disposable-container GC | `src/control_plane/workload` (`garbage_collect_build_images.rs`, `garbage_collect_disposable_containers.rs`), `src/control_plane/engine` (`delete_owned_installation_resources.rs`) | Reimplement | Becomes `berth gc`: label-proven, unreferenced only, never a daemon timer | Integration: gc removes an unreferenced build and keeps one used by a running instance | Planned |
+| L043 | Engine event stream, metrics, log sessions, published-port discovery | `src/control_plane/engine` (`container_event_stream.rs`, `container_resource_metrics.rs`, `container_log_stream.rs`, `published_port_discovery.rs`) | Reimplement | `logs` and `ps` read Docker directly with label filters; event cursors existed only for the daemon | E2E: `berth logs --follow` streams; `berth ps --format json` lists only this instance | Planned |
+| L044 | SQLite-backed control-plane application layer and durable journals | `src/control_plane/application` | Drop | *(pre-authorized)* SQLite authority and discovery lifecycle are dropped; per-instance credentials move to 0600 files | Unit: an instance's DB password is stable across two `up` runs; the file is 0600 | Dropped |
+| L045 | Top-level control-plane wiring and identity tests | `src/control_plane` (`mod.rs`, `tests.rs`) | Reimplement | Rewire for the command-driven model; port the identity and route tests | Ported identity tests pass under `cargo test` | Planned |
+
+## Networking
+
+| ID | Behavior | 8.x source | Decision | Reason | 9.x evidence | Status |
+|---|---|---|---|---|---|---|
+| L046 | Per-scope bridge network with an explicit `/24` from `10.128.0.0/9` (FI-59) | `src/control_plane/network` (`project_network_subnet.rs`, `project_network_name.rs`, `project_network_request.rs`, `reconcile_networks.rs`) | Reimplement | Default pools ran out at 27 networks; 9.x keys the subnet on the instance and probes the next slot on overlap under a host lock | Integration: 40 instances get distinct `/24`s; a forced collision falls through | Planned |
+| L047 | Cross-instance isolation with consumer-only attachment of shared services (FI-13, SEC-01) | `src/control_plane/network`, `src/control_plane/engine` (`container_network_isolation.rs`, `network_manager.rs`) | Port | Instance A's app must not reach instance B's containers; shared servers join consumer networks only | Integration: A cannot reach B's app by name; both reach the shared DB | Planned |
+| L048 | Stale network cleanup after detaching the gateway | `src/control_plane/network` (`cleanup_stale_project_networks.rs`, `stale_project_networks.rs`, `global_network_request.rs`) | Reimplement | `down` removes routes, detaches the gateway and shared servers, then removes the network | Integration: after `down` the instance network is gone and the gateway is healthy | Planned |
+
+## Shared infrastructure
+
+| ID | Behavior | 8.x source | Decision | Reason | 9.x evidence | Status |
+|---|---|---|---|---|---|---|
+| L049 | Compatibility fingerprint keys shared instances (engine, major, digest, settings, platform) | `src/control_plane/shared_infrastructure` (`compatibility_fingerprint.rs`, `compatibility_profile.rs`, `isolation_capability.rs`, `persistence_mode.rs`, `plan_shared_instances.rs`) | Port | Pure function; a different key is a new server, never a fallback | Unit: same inputs give the same key; changed major or digest gives a new key | Planned |
+| L050 | Bounded shared names `berth-shared-{40 hex}` and `-data` volume (FI-12) | `src/control_plane/shared_infrastructure` (`shared_identity_hex.rs`, `shared_container_name.rs`) | Port | Full identifiers broke DNS-label limits | Unit: names and volumes ≤63 bytes | Planned |
+| L051 | Ownership-checked converge of one shared container from labels | `src/control_plane/shared_infrastructure` (`reconcile_shared_service.rs`, `reconcile_shared_volume.rs`) | Reimplement | Label-only decisions survive; durable-record checks are removed | Live: second `up` is unchanged; a foreign installation label is a conflict | Planned |
+| L052 | Concurrent creation and tenant provisioning from N worktrees | `src/control_plane/shared_infrastructure` (`reconcile_shared_service.rs`) | Reimplement | The daemon serialized work; 9.x takes a host flock per shared key and treats a 409 as rediscover-and-adopt | Live: 30 parallel `up` produce one server per key and every tenant logs in | Planned |
+| L053 | Image first, then authenticated readiness with bounded retry, then tenant provisioning with a 5s init-server handoff retry (FI-33, FI-35, FI-38) | `src/control_plane/shared_infrastructure` (`ensure_prepared_shared_image.rs`, `run_shared_service_readiness_probe.rs`, `reconcile_prepared_shared_instance.rs`) | Port | Official images restart a temporary init server after first accepting connections | Sequenced-exec test: one handoff exit then success; other exits fail at once | Planned |
+| L054 | PostgreSQL tenant: database plus owner role, PUBLIC revoked, `CREATEDB` for parallel test databases | `src/control_plane/shared_infrastructure/postgres` | Reimplement | 8.x SQL is kept; `CREATEDB` is added so ParaTest can create `{db}_test_N`; purge drops the role's databases | Live: A cannot connect to B's database; `artisan test --parallel` passes in two instances | Planned |
+| L055 | MySQL/MariaDB tenant: schema plus user with ALL on the schema and on the escaped `{db}\_test\_%` pattern | `src/control_plane/shared_infrastructure/mysql` | Reimplement | 8.x grants one schema; the escaped pattern grant enables ParaTest without reaching other tenants; user names stay ≤32 bytes | Live: cross-schema SELECT denied; ParaTest passes; purge drops `{db}_test_%` | Planned |
+| L056 | Redis/Valkey tenant: ACL user with key/channel prefix, default user off, global commands denied | `src/control_plane/shared_infrastructure/redis` | Reimplement | Per-instance `ACL SETUSER`/`DELUSER` plus `ACL SAVE` replaces the whole-file snapshot; FLUSHDB stays denied, so `cache:clear` against shared Redis is documented as unsupported (use `isolation: dedicated`) | Live: A cannot GET or SCAN B's prefix; adding C does not restart the server | Planned |
+| L057 | Mailpit shared with SMTP username tagging | `src/control_plane/shared_infrastructure/mailpit` | Reimplement | The auth file recreated Mailpit for every tenant; 9.x uses accept-any SMTP auth with `MP_TAGS_USERNAME` for attribution only | Live: two instances' mail is tagged per username; a third instance leaves the container ID unchanged | Planned |
+| L058 | MongoDB shared tenant with database-scoped user (FI-32) | `src/control_plane/shared_infrastructure/mongodb` | Defer | 9.0 runs MongoDB dedicated per instance (decision 4); keep the FI-32 lesson: root password via env, not `_FILE` | Release report entry; dedicated MongoDB covered by v6 tests | Deferred |
+| L059 | SQL Server shared tenant with login, user and db_owner | `src/control_plane/shared_infrastructure/sql_server` | Defer | 9.0 runs SQL Server dedicated per instance; the image is amd64-only | Release report entry | Deferred |
+| L060 | RabbitMQ shared tenant with vhost and user | `src/control_plane/shared_infrastructure/rabbitmq` | Defer | 9.0 runs RabbitMQ dedicated per instance; per-env `rabbitmqctl` provisioning would replace definition imports | Release report entry | Deferred |
+| L061 | MinIO shared tenant with bucket and bucket policy | `src/control_plane/shared_infrastructure/object_store` | Defer | 9.0 runs object stores dedicated per instance; keep the `server /data` command lesson (bec0f4b) | Release report entry | Deferred |
+| L062 | Gotenberg shared and stateless | `src/control_plane/shared_infrastructure/gotenberg` | Port | No tenant state; keyed by image and settings | Live: two instances convert HTML to PDF through one server | Planned |
+| L063 | Per-instance tenant provisioning; tenant failures reported as drift, not engine loss | `src/control_plane/shared_infrastructure` (`classify_logical_resource_error.rs`, `logical_resource_drift.rs`, `shared_instance_reconcile_result.rs`) | Reimplement | `up` provisions only its own instance's tenants | Unit: provisioning exit 1 names the instance; live: a broken tenant of B does not affect A | Planned |
+| L064 | Stable credentials from 256-bit OS entropy in atomic 0600 secret files | `src/control_plane/shared_infrastructure` (`generate_credential_secret.rs`, `credential_entropy.rs`, `os_credential_entropy.rs`, `credential_secret.rs`, `store_credential_secret.rs`) | Reimplement | SQLite is dropped; admin secrets per shared server and tenant secrets per instance live in `~/.berth` files | Unit: same instance keeps its secret; files are 0600 and refuse symlinks | Planned |
+| L065 | Secrets never in argv: PGPASSWORD, MYSQL_PWD, REDISCLI_AUTH in the exec environment, SQL on stdin | `src/control_plane/shared_infrastructure` (all `provision_*`, `wait_for_*` files) | Port | Keeps secrets out of `docker inspect`, process lists and logs | Unit: provisioning argv never contains the secret | Planned |
+| L066 | Generated managed environment for apps, generated keys win over declared ones | `src/control_plane/shared_infrastructure` (`plan_*_project_resources.rs`), `src/control_plane/project_infrastructure` (`prepared_project_service.rs`) | Port | Values point at internal container DNS names | Unit: generated keys win; revision is deterministic | Planned |
+| L067 | Stop shared services unreferenced by any instance | `src/control_plane/shared_infrastructure` (`stop_unreferenced_shared_services.rs`, `unreferenced_shared_service_options.rs`) | Reimplement | `berth gc` removes a shared server only when no instance network uses it and it holds no tenant | Live: after the last purge, `berth gc` removes the server | Planned |
+| L068 | Orphan access revocation (NOLOGIN, user deletion, retained data) | `src/control_plane/shared_infrastructure` (`revoke_orphaned_shared_access.rs`, `orphaned_shared_access_options.rs`) | Drop | *(pre-authorized)* replaced by direct deletion in `down --purge` with the same ownership checks | Live: purge removes the PG database and role, MySQL schema and user, Redis ACL user and keys; a sibling instance is untouched | Dropped |
+| L069 | Logical cross-major migration of shared databases | `src/control_plane/shared_infrastructure/postgres` (`prepare_postgres_migration_target.rs`, `reconcile_postgres_migration_target.rs`) | Defer | Disposable instances get a new server and empty tenant when the major changes | Test that a major change creates a new server; release report entry | Deferred |
+| L070 | Live tests run the production path with no manual shortcuts (FI-31, FI-37, FI-39) | `src/control_plane/shared_infrastructure` (`live_engine_tests.rs`), `src/control_plane/project_infrastructure` (`tests.rs`) | Port | Manual image pulls and lock bypasses hid production defects twice | Live tests start from a removed image and a real lock file | Planned |
+
+## Dedicated project services
+
+| ID | Behavior | 8.x source | Decision | Reason | 9.x evidence | Status |
+|---|---|---|---|---|---|---|
+| L071 | Dedicated per-instance services with generated credentials and no host ports | `src/control_plane/project_infrastructure` (`plan_*_project_resources.rs`, `prepare_project_services.rs`, `project_service_preparation_strategy.rs`) | Reimplement | 7.0.0 already runs these presets; they move onto the instance network with instance-labeled volumes | Live: each dedicated preset reaches readiness on the instance network | Planned |
+| L072 | Readiness and provisioning sidecar jobs from digest-pinned clients; nonzero wait status is a failure | `src/control_plane/project_infrastructure` (`project_service_provisioning_job.rs`, `project_service_http_readiness_job.rs`, `project_service_provisioning_images.rs`), `src/control_plane/shared_infrastructure` (`run_provisioning_job.rs`) | Defer | 9.0 uses 7.0.0's health checks plus authenticated probes for shared engines; the sidecar system is not needed yet (keep the 36c2997 lesson) | Release report entry | Deferred |
+| L073 | Generated private config files mounted as directories with atomic writes | `src/control_plane/project_infrastructure` (`materialize_project_service_configurations.rs`, `project_service_container_configuration.rs`) | Port | Mount the directory so atomic renames are visible; serialize concurrent writers (7e5b9bb) | Unit: symlink refused, interrupted temp file cleaned, modes set | Planned |
+
+## Gateway and TLS
+
+| ID | Behavior | 8.x source | Decision | Reason | 9.x evidence | Status |
+|---|---|---|---|---|---|---|
+| L074 | Singleton pinned Caddy gateway container, image entrypoint kept, `caddy run --config` (FI-41) | `src/control_plane/gateway` (`global_gateway_request.rs`), `src/control_plane/engine` (`gateway_container_request.rs`) | Port | Overriding the entrypoint gave exit 127; replaces 7.0.0's host Caddy | Request test: exact digest, command and caps; smoke: gateway stays running | Planned |
+| L075 | Least-privilege gateway with writable tmpfs (FI-19, FI-44) | `src/control_plane/engine` (`gateway_container_request.rs`, `tmpfs_mount.rs`) | Port | Capability-marked Caddy needs NET_BIND_SERVICE only | Inspect shows CapDrop ALL, CapAdd NET_BIND_SERVICE; no permission errors | Planned |
+| L076 | Publish on `127.0.0.1` only (FI-40) with configurable ports | `src/control_plane/engine` (`port_binding.rs`), `src/control_plane/gateway` (`verify_gateway_ports_available.rs`) | Reimplement | IPv4-only kept; ports become machine settings defaulting to 8443/8080 (decision 5) | Unit: HostIp is exactly 127.0.0.1; live: `curl https://…:8443` works without `-4` | Planned |
+| L077 | Port preflight naming the owner, never choosing another port (FI-14) | `src/control_plane/gateway` (`preflight_gateway_ports.rs`, `engine_gateway_port_probe.rs`, `system_gateway_port_probe.rs`) | Port | Conflicts with other dev managers were confusing | Live: a foreign listener on the configured port fails `up` naming it | Planned |
+| L078 | Ensure the gateway on demand under a host lock | `src/control_plane/gateway` (`reconcile_gateway.rs`, `gateway_reconcile_action.rs`) | Reimplement | `up` ensures the gateway under `~/.berth/gateway/.publish.lock`; 30 concurrent creates must not race | Concurrency: 30 parallel `up` leave exactly one gateway | Planned |
+| L079 | Gateway readiness proven by a real TLS request, not a socket or file check (FI-25) | `src/control_plane/gateway` (`wait_for_gateway_ready.rs`, `gateway_readiness_options.rs`, `reconcile_gateway_plane.rs`) | Reimplement | `caddy validate` checks only the file | Live: `up` returns only after an HTTPS request to the instance route succeeds | Planned |
+| L080 | Complete config rendered from a sorted route snapshot with a revision; duplicate domains rejected | `src/control_plane/gateway` (`gateway_snapshot.rs`, `gateway_route.rs`, `render_caddy_document.rs`, `caddy_gateway_document.rs`) | Port | Full-document apply makes daemonless convergence idempotent | Unit: route order does not change bytes; duplicates error | Planned |
+| L081 | Terminal 404 for unknown hosts on HTTP and HTTPS (FI-56) | `src/control_plane/gateway` (`render_caddy_document.rs`) | Port | Unmatched hosts returned an empty 200 | Live: unknown host returns 404 with a berth body | Planned |
+| L082 | Config applied through the container-private admin API with `caddy reload --config -` over exec | `src/control_plane/gateway` (`caddy_engine_admin_client.rs`, `caddy_gateway_provider.rs`, `gateway_document_loader.rs`) | Port | No host admin port | Live: no admin port published; a bad document keeps old routes serving | Planned |
+| L083 | Routes derived from labels and the full document persisted in a mounted directory (FI-57) | `src/control_plane/gateway` (`store_caddy_bootstrap.rs`, `stored_gateway_bootstrap_paths.rs`, `prepare_gateway_runtime_assets.rs`, `reconcile_gateway_configuration.rs`) | Reimplement | With `persist:false` and no daemon, a restarted gateway must reload complete routes from the mounted file | Live: `docker restart` of the gateway keeps every instance URL answering | Planned |
+| L084 | Gateway joins each instance network; down detaches it before removing the network | `src/control_plane/gateway` (`reconcile_gateway_networks.rs`) | Reimplement | Per-instance isolation while the gateway reaches every app | Live: gateway reaches both instances; instance networks are removable after down | Planned |
+| L085 | `.localhost` loopback self-test, never editing `/etc/hosts` | `src/control_plane/gateway` (`verify_stackctl_localhost_resolution.rs`, `system_localhost_resolver.rs`, `localhost_resolver.rs`) | Port | Replaces 7.0.0's hosts-file domains; resolver injected in tests (FI-25) | Unit with fake resolver; `doctor` runs the real probe | Planned |
+| L086 | Single-label wildcard route contract under the suffix | `src/control_plane/gateway` (`gateway_route.rs`) | Reimplement | `*.berth.localhost` covers one label, so the route label must have no dots and fit 63 bytes | Property test: every route matches `^[a-z0-9-]{1,63}\.berth\.localhost$` | Planned |
+| L087 | Stable per-user CA and renewable wildcard leaf (FI-11) | `src/control_plane/tls` (`generate_local_certificates.rs`, `generate_leaf_certificate.rs`, `renew_local_leaf_certificate.rs`, `local_certificate_bundle.rs`, `local_ca_identity.rs`) | Port | Replacing the CA caused repeated trust prompts | Unit: renewal keeps the CA fingerprint and changes the leaf | Planned |
+| L088 | Immutable certificate generations with store and rotation locks | `src/control_plane/tls` (`filesystem_certificate_store.rs`, `certificate_store_lock.rs`, `certificate_rotation_lock.rs`, `open_certificate_lock_file.rs`) | Port | 30 concurrent `up` may all try to renew | Concurrency: N processes produce one generation; stale temp bundles removed | Planned |
+| L089 | Leaf renewal recreates the gateway and republishes routes in one locked step | `src/control_plane/gateway` (`gateway_runtime_assets.rs`) | Reimplement | Renewal happens inside whichever `up` sees it due | Clock-injected test: expired leaf yields a replaced gateway serving the new leaf | Planned |
+| L090 | macOS login-keychain trust by exact fingerprint | `src/control_plane/tls` (`mac_os_certificate_trust_store.rs`, `host_command.rs`, `process_host_command_executor.rs`) | Port | FI-11 keychain targeting; platform adapters compiled only for their OS (FI-24) | Recording executor test on the `security` argv | Planned |
+| L091 | Debian trust via `update-ca-certificates` with rollback | `src/control_plane/tls` (`debian_certificate_trust_store.rs`) | Port | Transactional privileged step; NSS browser stores remain out of scope | Recording executor rollback tests | Planned |
+| L092 | Transactional trust install/remove that never removes pre-existing trust | `src/control_plane/tls` (`ensure_ca_trusted.rs`, `install_current_ca_trust.rs`, `remove_ca_trust.rs`, `inspect_current_ca_trust.rs`, `trust_change.rs`) | Port | Correct rollback semantics already tested in 8.x | Ported transaction tests | Planned |
+| L093 | CA rotation activated through daemon IPC | `src/control_plane/tls` (`rotate_current_ca_trust.rs`, `local_ca_rotation_result.rs`), `src/cli/handlers/daemon_cmd` (`activate_gateway_certificate.rs`), `src/control_plane/gateway` (`store_active_gateway_certificate_generation.rs`) | Reimplement | `berth trust rotate` recreates the gateway itself under the lock | Live: after rotate, HTTPS works with the new CA | Planned |
+| L094 | Prune inactive leaf generations after the gateway serves the new one | `src/control_plane/tls` (`prune_inactive_leaf_certificate_generations.rs`, `remove_inactive_certificate_generation.rs`) | Port | Small and safe after verification | Unit: only the active bundle remains | Planned |
+| L095 | Gateway protocol acceptance (HTTP/2, WebSocket, streaming, reload) | `scripts/accept-v8-gateway.sh`, `acceptance/gateway/main.go`, `src/control_plane/gateway` (`tests.rs`) | Defer | Valuable but heavy; 9.0 acceptance covers HTTPS routing through `accept-v9-agents.sh` | Release report entry | Deferred |
+
+## Setup, service manager and diagnostics
+
+| ID | Behavior | 8.x source | Decision | Reason | 9.x evidence | Status |
+|---|---|---|---|---|---|---|
+| L096 | `setup`: resolver preflight, CA and trust, rollback of trust added by this run | `src/cli/handlers` (`setup_cmd.rs`), `src/cli/args/commands` (`setup.rs`) | Reimplement | No watched roots or login service; setup prepares CA, trust and the gateway image | Ordered recording-operations tests without the service step | Planned |
+| L097 | `doctor` reports every issue in one read-only pass (FI-64) | `src/cli/handlers` (`doctor_cmd.rs`), `src/cli/args/commands` (`meta.rs`) | Reimplement | Checks become Docker, gateway, ports, `.localhost`, CA trust, leaf expiry and label/route consistency, merged with 7.0.0's doctor | Unit: several injected failures reported with a nonzero exit; `--format json` | Planned |
+| L098 | `url` and `open` with bounded readiness wait and terminal-state failure (FI-51) | `src/cli/handlers` (`v8_url_cmd.rs`, `v8_open_cmd.rs`), `src/cli/support` (`open_in_browser.rs`), `src/cli/args/commands/lifecycle` | Reimplement | Routes come from labels; `url --json` is `[{name,url}]` | Tests: unready app waits then succeeds; unknown service fails immediately | Planned |
+| L099 | Login-service lifecycle for launchd and systemd (FI-15, FI-23, FI-65) | `src/daemon/service`, `src/cli/handlers/daemon_cmd` (`service.rs`), `src/cli/args/commands/daemon` (`service.rs`) | Reimplement | 7.0.0's optional `daemon service` for human watch mode stays; adopt FI-23 explicit restart and a private log sink | Recording-command tests for install, restart and uninstall | Planned |
+| L100 | Service readiness via IPC ping | `src/daemon/service` (`verify_daemon_service_readiness.rs`) | Drop | *(pre-authorized)* no daemon on the command path; the optional watch daemon has no IPC | n/a | Dropped |
+| L101 | Watched-root canonicalization for setup and service | `src/daemon/service` (`canonical_watch_dirs.rs`) | Drop | *(pre-authorized)* discovery lifecycle dropped; 7.0.0 watch keeps its own root handling | n/a | Dropped |
+| L102 | 8.x daemon module as the integration surface | `src/daemon` | Drop | *(pre-authorized)* 7.0.0's optional `src/daemon` remains instead | n/a | Dropped |
+| L103 | `daemon trust` command family | `src/cli/args/commands/daemon` (`trust.rs`), `src/cli/handlers/daemon_cmd` (`trust.rs`) | Reimplement | Becomes top-level `berth trust install/status/remove/rotate` without IPC | CLI parse tests plus the trust transaction tests | Planned |
+| L104 | Host-executable boundary audit (only Docker, trust, service manager and browser openers) | `scripts/audit-v8-host-dependencies.sh`, `docs/v8/operations.md` | Reimplement | 9.x allow-list names the docker CLI runner, browser opener, git and trust adapters | Audit script passes on 9.x and fails on a planted violation | Planned |
+| L105 | Platform scope: macOS and Linux, Docker Engine/Desktop; Podman preview | `docs/v8/platform-support.md` | Reimplement | 7.0.0 supports a Podman engine flag; 9.x keeps it but documents gateway/shared features as Docker-verified only | `docs/v9` platform section | Planned |
+
+## Daemon, state, retention and migration
+
+| ID | Behavior | 8.x source | Decision | Reason | 9.x evidence | Status |
+|---|---|---|---|---|---|---|
+| L106 | Required daemon runtime, IPC dispatch and operation queues | `src/control_plane/daemon` (`unix_daemon_runtime.rs`, `dispatch_daemon_request.rs`, queues) | Drop | *(pre-authorized)* with 30 agents a singleton is a serialization point (FI-04, FI-58, FI-63 came from IPC starvation) | Integration: `up` works with no daemon process | Dropped |
+| L107 | IPC framing, event journal and heartbeat | `src/control_plane/daemon/ipc` | Drop | Nothing in 9.x speaks IPC; the optional watch daemon drives the CLI flows directly | n/a | Dropped |
+| L108 | Filesystem discovery, watched roots, adoption and rename handling (FI-07, FI-28, FI-53, FI-58) | `src/control_plane/daemon` (`discover_project_sources.rs`, `filesystem_event_watcher.rs`, `reconcile_watched_roots.rs`, `discovery_scheduler.rs`) | Drop | *(pre-authorized)* the CLI takes the explicit worktree; keep FI-53: one invalid sibling config never blocks another instance | Integration: an invalid config in a sibling worktree does not affect `up` | Dropped |
+| L109 | Per-instance lease file with owner PID and kernel lock (FI-22) | `src/control_plane/daemon` (`singleton_lease.rs`, `singleton_lease_error.rs`) | Reimplement | Becomes the per-instance and per-test-slot lease with TTL, owner PID and path for reap-on-invocation | Unit: contention reports the owner PID; expired lease with dead owner is reaped | Planned |
+| L110 | Engine event subscription and reconnect | `src/control_plane/daemon` (`engine_event_subscription.rs`, `engine_connection_supervisor.rs`, `engine_reconciliation_schedule.rs`) | Drop | Only a daemon needs push events; each CLI invocation lists by label | n/a | Dropped |
+| L111 | Log sessions; `logs --all` skips containerless services; failed exec output preserved (FI-47, FI-48) | `src/control_plane/daemon` (`project_log_buffer.rs`, `project_log_session_registry.rs`, `execute_project_logs.rs`) | Reimplement | Stream directly from Docker with the FI-47 selection rule | Test: `logs --all` with a scheduler-only service succeeds; explicit selection stays strict | Planned |
+| L112 | Ten-minute transient retry for commands and logs (FI-54) | `src/control_plane/daemon` (`execute_queued_project_command.rs`, `retained_project_status.rs`) | Drop | The retry loop papered over daemon startup and hung agents for ten minutes; 9.x waits only on bounded container health and fails fast otherwise | Test: unknown service fails immediately | Dropped |
+| L113 | SQLite state store and schema migration with snapshots (FI-55) | `src/control_plane/state` | Drop | *(pre-authorized)* labels carry a schema version; an unknown future version fails closed | Unit: unknown future label schema fails closed | Dropped |
+| L114 | Credential persistence and lifecycle records | `src/control_plane/state` (`credential_persistence.rs`, `credential_record.rs`, `credential_lifecycle.rs`) | Reimplement | Per-instance credentials in 0600 files, deleted by `down --purge` | Unit: purge removes the credential file | Planned |
+| L115 | Orphan, retain and token-confirmed prune; installation delete-data plan | `src/control_plane/retention` (`evaluate_deletion.rs`, `logical_prune_plan.rs`, `prune_authorization.rs`, `installation_deletion_plan.rs`) | Drop | *(pre-authorized)* `down --purge` deletes directly with exact-ownership checks | Live: purge deletes only objects labeled for that instance | Dropped |
+| L116 | Exact-ownership deletion guard and seven-day disposable GC | `src/control_plane/retention` (`installation_volume_deletion.rs`) | Reimplement | Becomes lease reaping and `berth gc`, matched by labels only | Live: reap removes an expired instance and leaves live and foreign resources | Planned |
+| L117 | Stream a SQL dump into one logical database with no host client; exec status preferred over EPIPE (FI-03) | `src/control_plane/migration/mysql` (`restore_mysql_dump.rs`) | Reimplement | 7.0.0 has `restore`; 9.x streams into the instance's tenant database via `docker exec -i` for MySQL and PostgreSQL | Live: restore of a fixture dump yields the expected row count | Planned |
+| L118 | ZIP `archive_entry` restore without host `unzip` | `src/control_plane/daemon` (`prepared_database_dump.rs`) | Port | Real projects ship `*.sql.zip` (FI-01 sandbox dumps) | Unit: exact entry extracted; missing or empty entry rejected | Planned |
+| L119 | Pre-reset safety snapshot and automatic rollback (FI-02) | `src/control_plane/daemon` (`prepared_database_rollback.rs`, `execute_queued_project_restore.rs`) | Port | A rejected dump after reset left an empty schema | Live: a rejected dump after reset restores the previous data | Planned |
+| L120 | Scoped `reset` drops and re-provisions only the instance tenant | `src/control_plane/migration/mysql` (`restore_mysql_dump.rs`) | Port | Disposable instances need clean reseeding without touching siblings | Live: reset in A leaves B's tenant untouched | Planned |
+| L121 | Explicit backup/restore for PostgreSQL, MongoDB and SQL Server logical databases | `src/control_plane/migration/postgres`, `src/control_plane/migration/mongodb`, `src/control_plane/migration/sql_server` | Defer | 7.0.0 `dump`/`restore` cover SQL services; other engines' backups are not an agent need for 9.0 | Release report entry | Deferred |
+| L122 | Immutable checksummed backup artifact store | `src/control_plane/retention` (`store_backup_artifact.rs`, `backup_artifact_manifest.rs`, `verify_stored_backup_artifact.rs`) | Defer | Only needed with deferred backup commands | Release report entry | Deferred |
+| L123 | Post-restore target verification queries | `src/control_plane/migration` (`verify_postgres_target.rs` and peers) | Defer | Tied to the deferred migration flows | Release report entry | Deferred |
+| L124 | PostgreSQL major upgrade via logical dump and restore, plus phase journal and staged identity (FI-61, FI-62) | `src/control_plane/migration` (`run_migration.rs`, `migration_operations.rs`), `src/control_plane/state` (`migration_record.rs`) | Defer | Disposable instances get a new server on a major change | Release report entry | Deferred |
+| L125 | Redis/Valkey prefix backup and restore | `src/control_plane/migration/redis` | Defer | Tenant-safe technique kept on record; no agent need for 9.0 | Release report entry | Deferred |
+| L126 | MinIO bucket mirror backup | `src/control_plane/migration/object_store` | Defer | No agent need for 9.0; stream through the owned volume (65deee6) | Release report entry | Deferred |
+| L127 | RabbitMQ vhost message-store backup | `src/control_plane/migration/rabbitmq` | Drop | Requires a broker-wide maintenance window; disposable instances never preserve queued messages | n/a | Dropped |
+| L128 | Dedicated volume snapshot and restore with safety point | `src/control_plane/migration/volume` | Defer | Useful for humans; not part of the agent contract for 9.0 | Release report entry | Deferred |
+| L129 | Manual project workflows `run <name>`: database restore (ZIP entry, reset) then `artisan migrate --database`, stop on first failure (FI-01) | `src/control_plane/daemon` (`unix_daemon_automatic_workflows.rs`, `queued_project_restore.rs`), `src/cli/handlers` (`v8_workflow_cmd.rs`) | Reimplement | Seeding sandbox databases is a real agent need; runs inline, gated on app health (FI-46) | Live: workflow restores two databases then migrates the primary connection | Planned |
+| L130 | Automatic workflows with once-per-revision guard and retry backoff (FI-20, FI-50) | `src/control_plane/daemon` (`unix_daemon_automatic_workflows.rs`, `retry_failed_installation_deletion_prune.rs`) | Drop | Only a daemon runs automatic workflows; an agent re-invokes `run` | n/a | Dropped |
+| L131 | Health registry and benchmark snapshots | `src/control_plane/daemon` (`resource_health_registry.rs`, `collect_benchmark_snapshot.rs`) | Reimplement | Health computed on demand from Docker; unknown stays unknown | Test: missing health reports `unknown` | Planned |
+| L132 | Bounded persistent log files: 0700/0600, symlinks refused, 10 MiB segments, seven days (FI-15) | `src/output/state` (`file_sink.rs`) | Port | 30 agents writing diagnostics need caps; 7.0.0's sink is unbounded | Ported file-sink tests | Planned |
+
+## CLI and output
+
+| ID | Behavior | 8.x source | Decision | Reason | 9.x evidence | Status |
+|---|---|---|---|---|---|---|
+| L133 | Daemon-first dispatch requiring a strict project for every command | `src`, `src/cli`, `src/main.rs`, `src/cli.rs`, `src/cli/handlers.rs` | Drop | *(pre-authorized)* 9.x keeps 7.0.0's direct dispatch | Integration: `up`/`down` run with no socket | Dropped |
+| L134 | `CliDispatchContext` bundling global flags | `src/cli/dispatch` (`context.rs`) | Port | Typed context matches the options-struct rule | Unit test of flag exposure | Planned |
+| L135 | Global flags cut to six, command surface cut to the daemon verbs, and the 7.0.0 modules deleted | `src/cli/args`, `src/cli/args/commands`, `src/config`, `src/serve`, `src/docker`, `src/database`, `src/env`, `src/display`, `src/swarm`, `src/share`, `src/main_tests` | Drop | *(pre-authorized)* 9.x restores `--env`, `--engine`, selectors, `up/down/start/stop/swarm` and the rest | Clap parse tests for every 7.0.0 verb | Dropped |
+| L136 | `--dry-run` refused explicitly where it cannot be honored | `src/cli/handlers` (`v8_env_cmd.rs`, `v8_logs_cmd.rs`, `v8_project_command.rs`, `v8_workflow_cmd.rs`) | Port | Fail early instead of ignoring a flag | Per-command test: unsupported `--dry-run` errors with no Docker call | Planned |
+| L137 | `ps`/`status --format table\|json` with strict format validation | `src/cli/args/commands/operations` (`diagnostics.rs`), `src/cli/handlers` (`v8_status_cmd.rs`, `v8_project_status.rs`) | Reimplement | Columns and validation kept; data from labels | Golden tests of table and JSON; `--format yaml` errors | Planned |
+| L138 | `logs` selection flags | `src/cli/args/commands/operations` (`logs_swarm.rs`), `src/cli/handlers` (`v8_logs_cmd.rs`) | Reimplement | Merged with 7.0.0's since/until/timestamps plus FI-47 | Logs selection tests | Planned |
+| L139 | `env generate --output` safe writer (create-new, 0600, symlinked parent refused) | `src/cli/args` (`env_commands.rs`), `src/cli/handlers` (`v8_env_cmd.rs`) | Port | Secret files must never be clobbered or world-readable | Tests: existing file errors; mode 0600 | Planned |
+| L140 | Tool shorthands: default service `app`, `--browser` stripped, composer defaults to `list`, allow-listed PHP tools | `src/cli/args/commands/app`, `src/cli/handlers` (`v8_project_command.rs`) | Reimplement | Argument rules kept; execution returns to direct `docker exec` | Ported argument tests | Planned |
+| L141 | Exit 1 on any failed project command | `src/cli/handlers` (`v8_project_command.rs`) | Drop | Agents need the container's exact code; 9.x `main` returns `ExitCode` | E2E: `exec -- sh -c 'exit 7'` exits 7 | Dropped |
+| L142 | `exec` refuses interactive commands for lack of daemon stdin/PTY | `src/cli/handlers` (`v8_project_command.rs`) | Drop | Daemon limitation; 7.0.0's `docker exec` supports TTY | E2E: interactive `exec` works with a TTY | Dropped |
+| L143 | Structured diagnostic codes with a retryable flag | `src/cli/handlers` (`retry_daemon_request.rs`) | Reimplement | Stable error codes in `--format json` errors help agents; the retry loop is dropped (L112) | Unit: JSON error output carries a stable `code` | Planned |
+| L144 | Resource-usage JSON snapshot of owned containers | `src/cli/args/commands/daemon` (`benchmark.rs`), `src/cli/handlers/daemon_cmd` (`benchmark.rs`) | Reimplement | `scripts/accept-v9-agents.sh` measures peak memory with label-filtered `docker stats`; no daemon command | Benchmark record in `docs/v9/benchmarks.md` | Planned |
+| L145 | Daemon command family (watch, retained, reconcile, adopt, backups, prune, migration) | `src/cli/args/commands/daemon`, `src/cli/handlers/daemon_cmd` | Drop | *(pre-authorized)* 7.0.0's optional `daemon` commands remain | n/a | Dropped |
+| L146 | Tracing layer rendering `message: error`, warnings persisted, dependency noise filtered | `src/output/layer` (`fields.rs`, `default_persistence.rs`), `src/output` (`init.rs`, `types.rs`) | Port | Dependency errors were invisible in 7.0.0 | Ported layer tests | Planned |
+| L147 | Normalize and colorize helpers (behavior identical to 7.0.0) | `src/output/normalize`, `src/output/colorize`, `src/output` (`emit.rs`, `entry.rs`, `stream.rs`) | Port | Unchanged except test-only gating | Existing output tests | Planned |
+| L148 | Log events on stdout | `src/output` (`emit.rs`) | Reimplement | stdout carries only machine data (`--format json`, `url`); diagnostics move to stderr | Test: `ps --format json` stdout parses while info events go to stderr | Planned |
+| L149 | JavaScript resolver reduced to npm/pnpm/yarn detection | `src/javascript` | Drop | 7.0.0's richer resolver (bun, deno, version managers) is kept; take 8.x's clearer missing-manager error | Existing javascript tests | Dropped |
+
+## Repository engineering
+
+| ID | Behavior | 8.x source | Decision | Reason | 9.x evidence | Status |
+|---|---|---|---|---|---|---|
+| L150 | CI: SHA-pinned actions, policy job, fmt, clippy with no `-A`, supply chain, four-platform build/test, live Docker tests | `.github/workflows`, `.github/workflows/ci.yml`, `.github/actionlint.yaml` | Reimplement | 7.0.0 CI uses mutable tags and a clippy step that passes trivially | 9.x `ci.yml` passes the workflow-action audit | Planned |
+| L151 | Release workflow: four targets, locked build, tag equals Cargo version, SBOM, attestations, flat checksum check (FI-36, FI-40, FI-45) | `.github/workflows/release.yml`, `scripts/audit-v8-release-workflow.sh` | Reimplement | Renamed to berth with a `9.*` tag trigger; the Git tag is the only publication authorized for 9.0.0 | Release-workflow audit passes | Planned |
+| L152 | Controlled benchmark workflow and scripts (FI-66) | `.github/workflows/benchmark.yml`, `scripts/benchmark-v8.sh`, `scripts/benchmark-v8-discovery.sh`, `docs/v8/benchmarks.md` | Defer | 8.x scenarios measure discovery and shared savings; 9.0 measures parallel instances via the acceptance script | Release report entry | Deferred |
+| L153 | Supply-chain gate with cargo-audit and cargo-deny | `deny.toml`, `Cargo.toml`, `Cargo.lock`, `scripts/audit-v8-supply-chain.sh`, `docs/v8/dependencies.md` | Port | 7.0.0 has neither | `just audit-supply-chain` passes on the 9.x lockfile | Planned |
+| L154 | Lint-policy audit blocking crate-wide suppressions and `-Awarnings` (FI-16) | `scripts/audit-v8-lint-policy.sh`, `Cargo.toml`, `justfile` | Port | 7.0.0's `main.rs` allows every clippy group and its justfile runs with `-Awarnings` | Audit passes after removing blanket allows | Planned |
+| L155 | Workflow-action audit and policy self-tests under a minimal PATH (FI-26) | `scripts/audit-v8-workflow-actions.sh`, `scripts/test-v8-policy-audits.sh` | Port | Gates must be proven able to fail | Self-tests cover valid, mutable and empty fixtures | Planned |
+| L156 | Install recipe uses `cargo install --path . --locked` (FI-65) | `scripts/audit-v8-install-workflow.sh`, `justfile` | Port | Locked installs match CI; no daemon restart step | Install audit passes | Planned |
+| L157 | Clean-room Laravel acceptance with isolated HOME, pinned inputs, cleanup trap (FI-17) | `scripts/accept-v8-laravel.sh` | Reimplement | Becomes `scripts/accept-v9-agents.sh`: N parallel worktrees, up, HTTPS, test, ParaTest, purge, zero leftovers | The acceptance script passes on the final head | Planned |
+| L158 | Committed Mach-O `repro` binary | `repro` | Drop | Stray host-specific build artifact; unreviewable | `repro` removed and ignored | Planned |
+| L159 | CHANGELOG with 8.x entries | `CHANGELOG.md` | Reimplement | Keep 7.0.0 history; 9.0.0 entries reference ported lessons | CHANGELOG has a dated 9.0.0 section | Planned |
+| L160 | Conventions, agent and log guidelines | `CONVENTIONS.md`, `AGENTS.md`, `LOG_GUIDELINES.md` | Port | Identical in 7.0.0 and 8.x | n/a | Done |
+| L161 | Verification ownership and failure-inventory discipline | `docs/v8/external-verification.md`, `docs/v8/failure-inventory.md` | Reimplement | Keep who-can-prove-what and the symptom/root-cause/missing-layer format in `docs/v9` | `docs/v9/verification.md` present | Planned |
+| L162 | 8.x audit, completion, milestone and architecture records | `docs/v8/completion-audit.md`, `docs/v8/audit-report.md`, `docs/v8/milestones.md`, `docs/v8/architecture.md`, `docs/v8/README.md`, `docs/v8/evidence/gateway-protocol-macos-arm64.md` | Drop | Records of the 8.x daemon release; superseded by `docs/v9` | n/a | Dropped |
+| L163 | Daemon-centric installation and usage docs (FI-52) | `INSTALLATION.md`, `USAGE.md`, `README.md`, `docs/v8/operations.md`, `docs/v8/configuration.md`, `docs/v8/services.md`, `docs/v8/security.md` | Reimplement | 9.x docs show explicit up/url/down for agents; the security model is carried into `docs/v9` | Docs updated | Planned |
+| L164 | Threat-model controls SEC-01..SEC-06 | `docs/v8/security.md` | Port | SEC-01 isolation, SEC-05 capabilities, SEC-06 atomic publication apply directly; add the `~/.berth/gateway` lock directory as new surface | `docs/v9/security.md` | Planned |
+| L165 | Images directory and repository metadata | `images`, `.gitignore` | Drop | 8.x README imagery for the daemon product | n/a | Dropped |
+| L166 | In-place migration of accepted 7.x configs and RabbitMQ topology into 8.x state (reverted in 8.x) | `src/control_plane/migration/v7` | Reimplement | 9.x replaces it with the explicit `berth config migrate` converter to `.berth.yaml`; old files are never read implicitly | CLI test: `config migrate` converts `.helm.toml`, `.stackctl.toml` and `.stackctl.yaml` fixtures; other commands fail naming it | Planned |
+
+## Failure inventory mapping
+
+Every 8.x failure-inventory entry is carried by at least one row:
+FI-01 L129, FI-02 L119, FI-03 L035/L117, FI-04 L106, FI-05 L099, FI-06 L030,
+FI-07 L108, FI-08 L029, FI-09 L033, FI-10 L087, FI-11 L087/L090, FI-12 L050,
+FI-13 L022/L023/L047, FI-14 L077, FI-15 L099/L132, FI-16 L154, FI-17 L157,
+FI-18 L002, FI-19 L022/L075, FI-20 L130, FI-21 L017, FI-22 L109, FI-23 L099,
+FI-24 L090, FI-25 L079/L085, FI-26 L155, FI-27 L005, FI-28 L108, FI-29 L013,
+FI-30 L063, FI-31 L070, FI-32 L058, FI-33 L053, FI-34 L027, FI-35 L053,
+FI-36 L151, FI-37 L026/L070, FI-38 L053, FI-39 L026/L070, FI-40 (gateway) L076,
+FI-40 (release checksums) L151, FI-41 L074, FI-42 L022, FI-43 L032, FI-44
+L024/L075, FI-45 L151, FI-46 L032/L129, FI-47 L111, FI-48 L035/L111, FI-49
+L099, FI-50 L130, FI-51 L098, FI-52 L163, FI-53 L010/L108, FI-54 L112, FI-55
+L113, FI-56 L081, FI-57 L083, FI-58 L017/L108, FI-59 L046, FI-60 L030/L031,
+FI-61 L124, FI-62 L124, FI-63 L106, FI-64 L097, FI-65 L099/L156, FI-66 L152.
+
+## Commit coverage
+
+Each 8.x commit is assigned to the row whose source paths best match the files
+it changed (the most specific path wins; documentation-only commits map to the
+documentation rows). The assignment records where each commit's lesson or
+behavior is accounted for; it does not imply the commit is ported verbatim.
+
+- L002: 59c739d
+- L003: a8c408d 9aa4c28
+- L004: 920e706 003d0a8 43ebe2b 77a15bd
+- L006: 543f501
+- L007: 7c6629b
+- L008: 6ce676e 4c05018 ba32d1b a896137 156af1b 74a4ce9 ad1e360 dfb018d b9a2236 8dd1256 0aee59c
+- L010: 46e7c82 eb55e0f
+- L013: 3fb6a7a a29d3a4
+- L015: eceff52 ec166a0
+- L016: 0600b26
+- L018: 03b9b88 2649d8d ce90592
+- L019: e8025ca 779862a dbe33d4 1eb559b
+- L020: dcf75af 157e884 cebe6fd 74be231 258fad5 fb1dcbc cdf0a84 e66a0bb 96f2aa6 a429683 9628dbd 36c2997 208bd5f 452422d 082b644 a851179 d39f14d 1e50cfc 9572580 196909e 3259f49 8cacb0e 7e420c6 b217f52 baf51d0 ca47247 0c3e068 1730e2a 62ddbd1 dd1da0e 1de3bba 871404b 6779dd8 eb018e5 5949446 1dc6690 2a751e7 9898b91 8cd8df8 103ba98 9f91e4d d4fc839 3200385
+- L021: f09ddfa 84685c3 8812646 f4446e3 d664f6d 86ca657 3619329
+- L022: c742d99 e5c5464 4c190d3 9912f73 0b4f9e2 f70a5c5 a49f550 d7b8d31 45b9541
+- L025: 7715025
+- L026: 64bad7b
+- L028: 008e5a3 7bae487
+- L029: 56d4b39 bce0cc9 941d790 88a66dc 6c3a1c2 136c9c9 1897788
+- L030: 8b657d6
+- L031: d74d0ee b4033c7 e0734d2 73cd650
+- L035: 66fe42d cf80056 7ad1acf 3455774 02cb199 e914e21
+- L036: b76f096 64c783c 8f6c230 67956ec c4ced51
+- L039: 2c8608d a02ba2c 4215102
+- L040: b50fc7b 04f5e8c 150f2f8 c2cccbe 111be8c d2c324d 682192f
+- L042: a0a29b5 b0c9133
+- L045: ec111ef 5b52207 7e5b9bb 9666568 e867ee1 3485d2b 975ea69 4144aff
+- L046: fb56012 ba328de
+- L049: 1b19af6 fca765c 57c6e81 3891694
+- L050: d796603
+- L051: 0dae846 918ce27
+- L053: 002ec81 3b9b4c0 8699d23 1b7b974 d6b8b69 d883965 cf10e5b c352241 73f4983
+- L054: eef155d d4a4c9a 15c0ec8 f6e28b6 e0a6899 c59d918 cd2c965 b030c8f 8376ff2 d0123a6 c17732b d2d7b39 8aac8a4 86e7619
+- L055: 87da8f4 b260e36 e28fec5 19d6872 3a4ae77 336f018 dd56922
+- L056: 21d38dc 26d1ab9 9e79744 3cbe6c9 c43cf78 a839030 b127507 d655dd0 fddc403 81e4075 410a4af 8c9fa07
+- L057: 3d5208e
+- L058: f26e8cf d481075 405b587 e30b9cc e9aeee7 afc2cb8 d668651 c7beac4
+- L059: ce22d19 9edb5c2 6cb2e4a
+- L060: f96989a 0be34c3 b3829a6 633c04e eacb479 096d0a0 322a9ef 30281be
+- L061: 525cfb9 bec0f4b 3926b5c
+- L062: 7e935d3 82dc590
+- L063: af8aaf2
+- L064: f82a002 e2f2aad a7025cb 7a6ce94 9642375 be84b4f 5efd0a0
+- L066: 5a65a74 5465fa0 52e88e4 ea5c9fe
+- L067: 30530be 967ee74
+- L068: 851caa6 fbfad84 78d4c01 3d2473f d72131c 01f33f1 beb43f3 03dd7a3 1dd8b5d 561a585
+- L069: 9658515 480de2b
+- L071: 381bb32 5421f44 e3afae6 3bbd2c7 c78b902 f424723 f1f5cc3 316ce09 7ab96fa 8b2aeba f8c7151 b0a4a80 7ea2c8c d3490df 21fbf1e
+- L072: 13b8102 879836b c581efd 66aaea7
+- L073: 0f82002
+- L074: 878eb29 068c279 354163f ab66a49
+- L077: 0df2aae 130f25a ace613d
+- L079: e6370f9 85ac41a
+- L080: f49da37 9367b11 c33923f c070df9 2dc825c
+- L082: fc6ffe9
+- L083: f0ce73e a2abd42 6005e25 8695f6e ce9ded9 f2da25b
+- L085: 242eeec 839c927
+- L087: 5f1c5b7 7ebf846 e3c8ccf 2a4d81e 7b98ca1 18c8a51
+- L088: 1f5f05a c022c50 3faccf1 59f9341 5af8ee8 d053d12
+- L090: 1e93f43 5134dc7 7e0e28f
+- L091: 86e43ed bf5f878
+- L092: d0660ac 85e79fd f6ae193 d8dd74d 524e363 4d39bb0
+- L093: a3973d6 ec93dbd 6c9af63 c9700f2
+- L094: 684a19f
+- L095: 51fbab7 d993676 2c2ddc0 3bc66c4
+- L096: d159ebf
+- L097: 98dd05c
+- L098: 18424c8 38eba4f 968044d
+- L099: 475f704 cf54596 9b2281b 3336dd2 e0777a0 75aa0bb 14bac62 d53911c a6b48ff 5bc67dc f349b11 b2815d7 f6e46ec ec8dfc9 4de024d 7c20871 0f8db4b 9088fce
+- L100: dc9e7df
+- L101: 8d8364a
+- L103: 518d7ea b5f2387
+- L104: b9d23a2 ae2bbe6 e2cf182
+- L106: c67e6eb d36ea73 c23075a 3ab8794 2ff06e8 efea92b 04522d7 334cfc9 c95d260 15a81ea 270fdcf 269158b 2ebde38 58951e5 395af91 edb73a3 6ed51e2 1f339c2 62b511f df14885 aecceb9 80c7f67 1ab2419 cbc6a27 f07ee26 878fcdb 7ba09a4 bbe7066 3dbf7e5 c309f4e 615eb37 23a9009 e1ac129 40d73fc e858984 0edfbd9 7a2233d ad6cfb7 17648b1 c3b1dfd 3f79aed 392d1a6 620dd3c a5c43e0 aac41eb 957b95a b62a850 7faf582 b8ceb19 5ca4d47 0ad7bd5 486cdf7 603a0cb d1afce1 bb5c554 06080c1 c05085a f8a3ab2 731e555 6f56cde 9d224aa e38097d 10b012c 7a67293 f4e18b4 fd6796a 79f1b01 b3ed193 209d698 4c1efbb 602dc0e 95a14fe aaaf08b 5cf82ed 57f53a6 375d1cc 855efe4 50e800c 21dd163 cfa6443 4bbf4d7 03e6b7b 4c46782 d0c63a7 57cfe4f ddcd112 25b95a1 de46e66 713178b a109824 733cf46 479e309 97ba0b8 e2709b6 7a03783 97f06b2 28efeb0 e676100 589e643 5690ecf 140aa76 5acb606 a26fa69 75b1ffe 037a13a faa5a5a 8c3e4c4 a5255c0 b81f75b 9c7ab5f 9842dcb 26d61cd dfacc45 7406bcb f1a4dc5 5515e59
+- L107: a494eff 05654e3
+- L108: a0684b6 f64f4d0 36bb0ed f0dd697 c299f0d ee82a6c 5ef4ccf 20bf812 c3f1a48 f49a1cc
+- L109: 7ca09e2 050f827 de2e680
+- L110: 35d2e8a 87dc08a 461c3c3 94dbadd
+- L111: c51b9bb b2c0c70
+- L112: d628536 820e27e
+- L113: 8017c0a 7cfaad4 24d0f48 d1c40dc db80e07 6782ea3 4157f01 45625c9 da802a4 787a26b 09970b0 5119252 f7bad7a 6420442 e11eabe be09d4e 109706e a08e8f6 c1c64dc
+- L114: e9d850f 2d2ce19
+- L115: 05863ee a4f2b80 9babfd9 88dd902 4eee7bb ef7fc95 e03e7c6 ae40aca fb6fe51 dd8ab84 dae2919 f1f8163 d9a5a3a
+- L117: bbe6dc5 fb086ab 3c2a127
+- L119: 274ff9b a0a623e 9299db7 b129a39 ea9b159 fcb8097 5ad678f
+- L121: 56126f7 5a150bc 0fc5fb5 de8a048 4cfc655 ea4aa44 2428693 45c07aa 95a7768 4fe93b0 d7b7fce 24f9581 0ce916c 2844c5f ef247c8 84187f4 4da7997 7daf616
+- L122: 5174b21 a8eac60 a1396ba 41ecb14 4238d68
+- L123: 6a579a4
+- L124: d31ec1c c938bfa 7fc3de9 20bb9d2 ef2fea6 b4f540e 4066dfb 5c17042
+- L125: 741e1a7 1f10e3c 60cbed2
+- L126: 65deee6 4a09e9e ce64945 0b7f10e 749b464
+- L127: ed4b6a2 52f4f88 855d7f9
+- L128: 19a220f ac45bc4
+- L129: ba1c4a7 eca0fe6
+- L132: 2ebfdf2 f47f3eb
+- L133: c266668 2178d1f b39cd99 081aabb 2879988 11b8238 5d58319 013f953 0a03df0 06b56f0 f84132e fc139dc
+- L135: 15c0c4e 324e075 6c3a7af
+- L136: 9872aa2 099a5fc
+- L150: 17bbeac
+- L151: 09d8dc6 82047ce f124808
+- L152: 1ad1450 a30deef 520a1af fcfcd20
+- L153: 44adb17 11c947e 5709982 7c17e28 1287972
+- L154: 7f92ecf
+- L155: b0de408 185f5ab
+- L156: 0b5e09d
+- L161: 5d820f3 0ca1db6 89abf80 3162aa6
+- L162: 56dbe46 858c1d8 0cb7a2f 208201d d6f8af2 05939f2 664601e 7b908d5 59f4b19 8274da1 d3ca3ec 5c89da9 dbdf9b4 f36dfbd d67ca2b 460038f 4e33e21 da1d19d af72d8e
+- L163: e2b9058
+- L166: a9f164c baa832b 9f66623 33e93f4 aee0b14 275d097 1beeed1 076d6e9 4f19fea 937f28d 911d011 48e87fb ff800a2 e7d92e9 3452eee 0d005c7 e9e2ae3 f048b47 788cfa0
