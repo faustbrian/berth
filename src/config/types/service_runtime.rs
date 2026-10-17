@@ -33,6 +33,8 @@ pub struct ServiceRuntime {
     /// (`volumes`, `env`, `port`, `container_port`, `restart`, `hook`),
     /// which a shared server's tenant does not have.
     pub authored_container_fields: Vec<&'static str>,
+    /// The runtime environment (`--env`) applied to the service, if any.
+    pub env: Option<String>,
     /// The shared server and tenant backing the service, if it is shared.
     pub shared: Option<SharedTarget>,
 }

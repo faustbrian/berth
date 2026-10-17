@@ -44,11 +44,11 @@ root = "location"
 "#,
     )?;
 
-    let injected = resolve_project_dependency_injected_env(&api_root)?;
+    let injected = resolve_project_dependency_injected_env(&api_root, None)?;
     let url = injected.get("LOCATION_API_BASE_URL").expect("injected url");
     assert!(
-        url.starts_with("https://location-") && url.ends_with("-location.berth.localhost:8443"),
-        "{url}"
+        url.starts_with("http://berth_location_location-") && url.contains("_app:"),
+        "an in-network endpoint, not a route the container cannot call: {url}"
     );
 
     std::fs::remove_dir_all(workspace)?;
@@ -95,10 +95,10 @@ domain = "acme-location.berth.localhost"
 "#,
     )?;
 
-    let injected = resolve_project_dependency_injected_env(&api_root)?;
+    let injected = resolve_project_dependency_injected_env(&api_root, None)?;
     let url = injected.get("LOCATION_API_BASE_URL").expect("injected url");
     assert!(
-        url.starts_with("https://location-") && url.ends_with("-location.berth.localhost:8443"),
+        url.starts_with("http://berth_location_location-") && url.ends_with("_app:80"),
         "{url}"
     );
 
@@ -107,71 +107,27 @@ domain = "acme-location.berth.localhost"
 }
 
 #[test]
-fn resolve_injected_env_value_maps_loopback_host_for_host_token() -> Result<()> {
+fn injected_tokens_name_the_source_container_on_its_network() -> Result<()> {
     let mut service = crate::config::preset_preview("laravel")?;
-    service.host = "127.0.0.1".to_owned();
-
-    let resolved = resolve_injected_env_value(":host", &service, None)?;
-    assert!(
-        matches!(
-            resolved.as_str(),
-            "host.docker.internal" | "host.containers.internal"
-        ),
-        "unexpected host alias: {resolved}"
+    service.resolved_container_name = Some("berth_location_a-1_app".to_owned());
+    let port = service.resolved_container_port();
+    assert_eq!(
+        resolve_injected_env_value(":host", &service)?,
+        "berth_location_a-1_app"
     );
-    Ok(())
-}
-
-#[test]
-fn resolve_injected_env_value_maps_loopback_host_for_host_token_with_podman() -> Result<()> {
-    crate::docker::with_container_engine(crate::config::ContainerEngine::Podman, || {
-        let mut service = crate::config::preset_preview("laravel").expect("laravel preset");
-        service.host = "127.0.0.1".to_owned();
-
-        let resolved = resolve_injected_env_value(":host", &service, None).expect("resolve host");
-        assert_eq!(resolved, "host.containers.internal");
-    });
-    Ok(())
-}
-
-#[test]
-fn resolve_injected_env_value_prefers_runtime_port_for_port_token() -> Result<()> {
-    let mut service = crate::config::preset_preview("mysql")?;
-    service.port = 33060;
-
-    let resolved = resolve_injected_env_value(":port", &service, Some(49123))?;
-    assert_eq!(resolved, "49123");
-    Ok(())
-}
-
-#[test]
-fn resolve_injected_env_value_prefers_runtime_port_for_url_tokens() -> Result<()> {
-    let mut service = crate::config::preset_preview("mysql")?;
-    service.host = "127.0.0.1".to_owned();
-    service.port = 33060;
-
-    let resolved = resolve_injected_env_value(":url", &service, Some(49123))?;
-    assert!(
-        matches!(
-            resolved.as_str(),
-            "http://host.docker.internal:49123" | "http://host.containers.internal:49123"
-        ),
-        "unexpected URL: {resolved}"
+    assert_eq!(
+        resolve_injected_env_value(":port", &service)?,
+        port.to_string()
     );
-    Ok(())
-}
-
-#[test]
-fn resolve_injected_env_value_prefers_runtime_port_for_url_tokens_with_podman() -> Result<()> {
-    crate::docker::with_container_engine(crate::config::ContainerEngine::Podman, || {
-        let mut service = crate::config::preset_preview("mysql").expect("mysql preset");
-        service.host = "127.0.0.1".to_owned();
-        service.port = 33060;
-
-        let resolved =
-            resolve_injected_env_value(":url", &service, Some(49123)).expect("resolve url");
-        assert_eq!(resolved, "http://host.containers.internal:49123");
-    });
+    assert_eq!(resolve_injected_env_value(":scheme", &service)?, "http");
+    for token in [":url", ":base_url"] {
+        assert_eq!(
+            resolve_injected_env_value(token, &service)?,
+            format!("http://berth_location_a-1_app:{port}")
+        );
+    }
+    assert_eq!(resolve_injected_env_value("literal", &service)?, "literal");
+    assert!(resolve_injected_env_value(":nope", &service).is_err());
     Ok(())
 }
 
@@ -185,7 +141,7 @@ fn project_dependency_injected_env_is_empty_outside_swarm_workspace() -> Result<
         "project_type = \"project\"\ncontainer_prefix = \"solo\"\n",
     )?;
 
-    let injected = resolve_project_dependency_injected_env(&root)?;
+    let injected = resolve_project_dependency_injected_env(&root, None)?;
     assert!(injected.is_empty());
 
     std::fs::remove_dir_all(root)?;

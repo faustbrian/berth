@@ -116,7 +116,7 @@ pub(crate) fn list_instances() -> Result<Vec<InstanceRecord>> {
             "--filter",
             "label=dev.berth.instance",
             "--format",
-            "{{.Label \"dev.berth.project\"}}\t{{.Label \"dev.berth.instance\"}}",
+            "{{.Label \"dev.berth.project\"}}\t{{.Label \"dev.berth.instance\"}}\t{{.Name}}",
         ],
         "failed to list instance networks",
     )?;
@@ -127,9 +127,17 @@ pub(crate) fn list_instances() -> Result<Vec<InstanceRecord>> {
         );
     }
     for line in String::from_utf8_lossy(&networks.stdout).lines() {
-        let Some((project, instance)) = line.split_once('\t') else {
+        let mut fields = line.split('\t');
+        let (Some(project), Some(instance), Some(name)) =
+            (fields.next(), fields.next(), fields.next())
+        else {
             continue;
         };
+        // A swarm endpoint network outlives the source's `down` while a
+        // consumer is attached; it is not the instance running.
+        if name.ends_with("_ep") {
+            continue;
+        }
         if project.is_empty() || instance.is_empty() {
             continue;
         }

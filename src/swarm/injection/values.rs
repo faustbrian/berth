@@ -1,20 +1,29 @@
 //! swarm injection values module.
 //!
-//! Contains swarm injection values logic used by Berth command workflows.
+//! Resolves `inject_env` tokens to endpoints a consumer's container can
+//! call. Route URLs (`https://….berth.localhost`) work from a browser but not
+//! from inside a container: libcurl (PHP's curl, Guzzle, Laravel `Http::`)
+//! resolves every `*.localhost` name to loopback itself (curl 7.85+), so
+//! `:url`, `:host` and `:port` name the source app container on its instance
+//! network, which the consumer joins (ledger L205).
 
 use anyhow::Result;
 
 /// Resolves injected env value using configured inputs and runtime state.
+///
+/// # Errors
+///
+/// Returns an error for an unknown token, or `:domain` on a source without
+/// a route.
 pub(crate) fn resolve_injected_env_value(
     value_spec: &str,
     source_service: &crate::config::ServiceConfig,
-    runtime_host_port: Option<u16>,
 ) -> Result<String> {
     if !value_spec.starts_with(':') {
         return Ok(value_spec.to_owned());
     }
-
-    let effective_port = runtime_host_port.unwrap_or(source_service.port);
+    let container = || source_service.container_name();
+    let port = source_service.resolved_container_port();
 
     match value_spec {
         ":domain" => {
@@ -31,33 +40,12 @@ pub(crate) fn resolve_injected_env_value(
             };
             Ok(domain.to_owned())
         }
-        ":host" => Ok(runtime_host_for_app(source_service)),
-        ":port" => Ok(effective_port.to_string()),
-        ":scheme" => Ok(source_service.scheme().to_owned()),
-        ":base_url" | ":url" => {
-            if let Some(url) = crate::gateway::route_urls(source_service)
-                .into_iter()
-                .next()
-            {
-                return Ok(url);
-            }
-            Ok(format!(
-                "{}://{}:{}",
-                source_service.scheme(),
-                runtime_host_for_app(source_service),
-                effective_port
-            ))
-        }
+        ":host" => container(),
+        ":port" => Ok(port.to_string()),
+        // Inside the network the app serves plain HTTP; TLS ends at the
+        // gateway.
+        ":scheme" => Ok("http".to_owned()),
+        ":base_url" | ":url" => Ok(format!("http://{}:{port}", container()?)),
         _ => anyhow::bail!("unsupported injected env token '{value_spec}'"),
     }
-}
-
-/// Resolves the host value an app container can actually reach at runtime.
-///
-/// Why: `localhost` inside a container points to itself, not the host machine.
-fn runtime_host_for_app(service: &crate::config::ServiceConfig) -> String {
-    if service.uses_host_gateway_alias() {
-        return crate::docker::host_gateway_alias().to_owned();
-    }
-    service.host.clone()
 }

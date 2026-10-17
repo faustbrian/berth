@@ -130,6 +130,14 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- Swarm `inject_env` tokens `:url`, `:base_url`, `:host` and `:port` now name
+  the source app container (`http://berth_location_…_app:80`), and the
+  consumer's app container joins a network it shares only with the source
+  app: route URLs cannot be called from inside a container, because libcurl
+  resolves `*.localhost` to loopback itself. `:domain` still gives the route
+  host for browsers. A target must list every source it injects from in
+  `depends_on`, and the sources must be up, `--no-deps` included; test runs
+  need no sources.
 - `artisan test` slots are held with `flock` under `~/.berth/locks` instead
   of PID files in the temporary directory, so a killed run frees its slot at
   once; each run's shared databases and caches are a tenant of their own.

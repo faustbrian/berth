@@ -17,6 +17,19 @@ pub fn apply_runtime_env(config: &mut Config, env_name: &str) -> Result<()> {
     runtime_env::apply_runtime_env(config, env_name)
 }
 
+/// The container and network names `service` has in runtime environment
+/// `env_name`, without the side effects of [`apply_runtime_env`].
+///
+/// # Errors
+///
+/// Returns an error if the env label is invalid.
+pub fn service_in_runtime_env(
+    service: &super::super::ServiceConfig,
+    env_name: &str,
+) -> Result<super::super::ServiceConfig> {
+    runtime_env::service_in_runtime_env(service, env_name)
+}
+
 /// Whether `env_name` names the instance's default runtime environment.
 ///
 /// # Errors

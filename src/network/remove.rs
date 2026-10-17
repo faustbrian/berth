@@ -20,10 +20,18 @@ pub(crate) fn remove_unused_networks<'a, I>(services: I) -> Result<()>
 where
     I: IntoIterator<Item = &'a ServiceConfig>,
 {
-    let networks: BTreeSet<&str> = services
+    // Each instance network and the swarm endpoint network beside it (L205),
+    // which goes once its source app and consumers are gone.
+    let names: Vec<String> = services
         .into_iter()
-        .filter_map(|service| service.runtime.network.as_deref())
+        .filter_map(|service| {
+            let network = service.runtime.network.clone()?;
+            Some([crate::swarm::endpoint_network(service), Some(network)])
+        })
+        .flatten()
+        .flatten()
         .collect();
+    let networks: BTreeSet<&str> = names.iter().map(String::as_str).collect();
     if networks.is_empty() {
         return Ok(());
     }

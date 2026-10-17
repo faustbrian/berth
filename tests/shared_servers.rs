@@ -83,7 +83,7 @@ case "$1" in
   rm|stop|start|kill|pause|unpause) [ "$1" = rm ] && for arg in "$@"; do rm -f "$S/c/$arg"; done; exit 0 ;;
   ps)
     case "$*" in
-      *network=*"label=dev.berth.role=shared-server"*|*"label=dev.berth.role=shared-server"*network=*)
+      *network=*"label=dev.berth.managed=true"*)
         net=$(printf '%s\n' "$@" | sed -n 's/^network=//p')
         for f in "$S"/att/*/"$net"; do [ -f "$f" ] && basename "$(dirname "$f")"; done ;;
       *"label=dev.berth.role=shared-server"*)

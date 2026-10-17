@@ -5,7 +5,10 @@ mod runner;
 mod target_exec;
 mod targets;
 
-pub(crate) use injection::resolve_project_dependency_injected_env;
+pub(crate) use injection::{
+    endpoint_network, is_test_lease_env, resolve_project_dependency_endpoints,
+    resolve_project_dependency_injected_env,
+};
 pub(crate) use runner::{
     RunProjectSwarmDependenciesOptions, RunSwarmOptions, run_project_swarm_dependencies, run_swarm,
 };

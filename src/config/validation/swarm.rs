@@ -62,6 +62,18 @@ pub(super) fn validate_swarm_targets(config: &Config) -> Result<()> {
             if !names.contains(from) {
                 anyhow::bail!("swarm target '{normalized}' injects from unknown target '{from}'");
             }
+            // Injected endpoints name the source's container on its network,
+            // which the consumer joins, so the source must be up first.
+            if !target
+                .depends_on
+                .iter()
+                .any(|dependency| dependency.trim() == from)
+            {
+                anyhow::bail!(
+                    "swarm target '{normalized}' injects env from '{from}' but does not depend on \
+                     it; add '{from}' to its depends_on"
+                );
+            }
 
             let value = inject.value.trim();
             if value.is_empty() {

@@ -42,7 +42,12 @@ pub(crate) fn resolve_app_runtime_context_with_workspace_root<'a>(
     service: Option<&str>,
     workspace_root: PathBuf,
 ) -> Result<AppRuntimeContext<'a>> {
-    let project_dependency_env = swarm::resolve_project_dependency_injected_env(&workspace_root)?;
+    let runtime_env = config
+        .service
+        .iter()
+        .find_map(|service| service.runtime.env.as_deref());
+    let project_dependency_env =
+        swarm::resolve_project_dependency_injected_env(&workspace_root, runtime_env)?;
     Ok(AppRuntimeContext {
         target: config::resolve_app_service(config, service)?,
         workspace_root,
@@ -234,14 +239,14 @@ domain = "location.berth.localhost"
         )
         .expect("runtime context");
 
-        // The source's unique instance route, never a domain several
-        // instances could share.
+        // The source instance's own app container on its network, never a
+        // route the consumer's container cannot call.
         let url = context
             .app_env
             .get("LOCATION_API_BASE_URL")
             .expect("injected url");
         assert!(
-            url.starts_with("https://location-") && url.ends_with("-location.berth.localhost:8443"),
+            url.starts_with("http://berth_location_location-") && url.ends_with("_app:80"),
             "{url}"
         );
 

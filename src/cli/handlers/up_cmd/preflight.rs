@@ -50,11 +50,11 @@ pub(super) fn prepare_up_context(
             force_down_deps: false,
         })?;
 
-    let project_dependency_env = if options.include_project_deps {
-        swarm::resolve_project_dependency_injected_env(&workspace_root)?
-    } else {
-        HashMap::new()
-    };
+    // `--no-deps` only skips starting the dependencies; the app still gets
+    // their endpoints (as `berth env` and every other command do), and the
+    // network join fails precisely when a source is not up.
+    let project_dependency_env =
+        swarm::resolve_project_dependency_injected_env(&workspace_root, options.runtime_env)?;
     let env_path = cli::support::env_output_path(
         options.env_output,
         options.config_path,
@@ -88,8 +88,7 @@ mod tests {
     }
 
     #[test]
-    fn prepare_up_context_skips_swarm_injected_env_when_project_deps_are_disabled()
-    -> anyhow::Result<()> {
+    fn prepare_up_context_resolves_injected_env_even_without_dependencies() -> anyhow::Result<()> {
         let root = std::env::temp_dir().join(format!(
             "berth-up-preflight-no-deps-{}",
             SystemTime::now()
@@ -130,8 +129,13 @@ value = ":base_url"
         );
 
         fs::remove_dir_all(&root)?;
-        let prepared = result.expect("preflight should skip swarm injected env");
-        assert!(prepared.project_dependency_env.is_empty());
+        // `--no-deps` skips starting dependencies, not resolving their
+        // endpoints: the unknown source is reported.
+        let error = result.err().expect("the unknown source is an error");
+        assert!(
+            format!("{error:#}").contains("unknown target 'location'"),
+            "{error:#}"
+        );
         Ok(())
     }
 }

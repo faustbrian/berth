@@ -11,6 +11,7 @@ use super::values::resolve_injected_env_value;
 /// Resolves injected env from swarm context using configured inputs and runtime state.
 pub(super) fn resolve_injected_env_from_swarm_context(
     context: &ProjectSwarmContext,
+    runtime_env: Option<&str>,
 ) -> Result<std::collections::HashMap<String, String>> {
     if context.target.inject_env.is_empty() {
         return Ok(std::collections::HashMap::new());
@@ -72,27 +73,81 @@ pub(super) fn resolve_injected_env_from_swarm_context(
                         inject.env, target_name
                     )
                 })?;
-        let runtime_host_port = source_service
-            .container_name()
-            .ok()
-            .and_then(|container_name| {
-                crate::docker::inspect_host_port_binding(
-                    &container_name,
-                    source_service.resolved_container_port(),
+        let source_service = super::source_in_runtime_env(source_service, runtime_env)?;
+        let resolved_value = resolve_injected_env_value(inject.value.trim(), &source_service)
+            .with_context(|| {
+                format!(
+                    "failed resolving inject value '{}' for env '{}' from target '{}'",
+                    inject.value, inject.env, target_name
                 )
-                .map(|(_, host_port)| host_port)
-            });
-        let resolved_value =
-            resolve_injected_env_value(inject.value.trim(), source_service, runtime_host_port)
-                .with_context(|| {
-                    format!(
-                        "failed resolving inject value '{}' for env '{}' from target '{}'",
-                        inject.value, inject.env, target_name
-                    )
-                })?;
+            })?;
 
         result.insert(inject.env.trim().to_owned(), resolved_value);
     }
 
     Ok(result)
+}
+
+/// The app services the target injects env from, each with the endpoint
+/// network a consumer joins to reach it (see [`endpoint_network`]).
+///
+/// # Errors
+///
+/// Returns an error when a source target or its app service cannot be
+/// resolved.
+pub(super) fn resolve_dependency_endpoints_from_swarm_context(
+    context: &ProjectSwarmContext,
+    runtime_env: Option<&str>,
+) -> Result<Vec<(crate::config::ServiceConfig, String)>> {
+    let mut endpoints: Vec<(crate::config::ServiceConfig, String)> = Vec::new();
+    for inject in &context.target.inject_env {
+        let target_name = inject.from.trim();
+        let Some(source_target) = context
+            .workspace_config
+            .swarm
+            .iter()
+            .find(|target| target.name == target_name)
+        else {
+            anyhow::bail!(
+                "workspace target '{}' injects env from unknown target '{}'",
+                context.target.name,
+                inject.from
+            );
+        };
+        let dependency_root = resolve_swarm_root(&context.workspace_root, &source_target.root);
+        let dependency_config_path = crate::config::config_path_in_dir(&dependency_root)?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "missing Berth config (.berth.yaml) for swarm target '{}' at {}",
+                    target_name,
+                    dependency_root.display()
+                )
+            })?;
+        let dependency_config = super::load_config_from_path(&dependency_config_path)?;
+        let source_service =
+            crate::config::resolve_app_service(&dependency_config, inject.service.as_deref())?;
+        let source_service = super::source_in_runtime_env(source_service, runtime_env)?;
+        let Some(network) = endpoint_network(&source_service) else {
+            continue;
+        };
+        if !endpoints.iter().any(|(_, known)| *known == network) {
+            endpoints.push((source_service.clone(), network));
+        }
+    }
+    Ok(endpoints)
+}
+
+/// The network a source app shares with its consumers: `{instance
+/// network}_ep`. Consumers never join the source's instance network, where
+/// every service answers to its service name (`db`, `redis`): a consumer
+/// would then resolve its own `db` to the source's database by Docker's
+/// network-name order. On the endpoint network only container names (unique
+/// per instance) resolve.
+#[must_use]
+pub(crate) fn endpoint_network(source: &crate::config::ServiceConfig) -> Option<String> {
+    source
+        .runtime
+        .network
+        .as_ref()
+        .map(|network| format!("{network}_ep"))
 }

@@ -15,6 +15,7 @@ use start::start_new_container;
 
 mod args;
 pub(crate) use args::container_env_pairs;
+mod dependency_networks;
 mod docker_cmd;
 mod dry_run;
 mod existing;
@@ -49,10 +50,13 @@ pub(super) fn ensure_container_running(
         return Ok(());
     }
 
+    // Sources first: a consumer whose source is not up never starts.
+    let endpoints = dependency_networks::prepare_dependency_endpoints(target, project_root)?;
     if recreate || crate::network::publication_drifted(target) {
         force_remove_container(&container_name);
     } else if handle_existing_container(&container_name)? {
-        return Ok(());
+        dependency_networks::rejoin_own_endpoint(target, &container_name)?;
+        return dependency_networks::join_dependency_endpoints(&container_name, &endpoints);
     }
 
     let run_args = build_run_args(
@@ -63,7 +67,9 @@ pub(super) fn ensure_container_running(
         should_inject_frankenphp_server_name(target, injected_env),
     )?;
 
-    start_new_container(target, &run_args)
+    start_new_container(target, &run_args)?;
+    dependency_networks::rejoin_own_endpoint(target, &container_name)?;
+    dependency_networks::join_dependency_endpoints(&container_name, &endpoints)
 }
 
 /// Stops and removes the serve container for a target.

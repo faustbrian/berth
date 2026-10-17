@@ -30,7 +30,8 @@ pub use api::{
     default_env_file_name, find_service, init_config, is_default_runtime_env_name,
     load_config_with, load_container_engine_with, load_lockfile_with, lockfile_diff,
     preferred_sql_client_flavor, preset_names, preset_preview, project_root, project_root_with,
-    resolve_app_service, resolve_service, save_lockfile_with, verify_lockfile_with,
+    resolve_app_service, resolve_service, save_lockfile_with, service_in_runtime_env,
+    verify_lockfile_with,
 };
 pub(crate) use api::{load_raw_config_with, migrate_config_with};
 pub(crate) use raw::{RawConfig, RawServiceConfig, RawSwarmTarget};

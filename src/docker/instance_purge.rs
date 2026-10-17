@@ -58,8 +58,11 @@ pub(crate) fn purge_instance_objects(project: &str, instance: &str) -> Result<()
         if let Err(error) = crate::gateway::detach_network(&network) {
             failures.push(format!("{error:#}"));
         }
-        // Shared servers stay attached to every runtime environment's network
-        // that used them (another `--env`, a crashed lease).
+        // The instance's own containers are gone; what is still attached is
+        // berth's: shared servers (on every runtime environment's network
+        // that used them) and other projects' app containers that joined as
+        // swarm consumers (L205). Containers berth did not create are left
+        // alone, and then the network stays.
         let attached = [
             "ps".to_owned(),
             "-a".to_owned(),
@@ -68,7 +71,9 @@ pub(crate) fn purge_instance_objects(project: &str, instance: &str) -> Result<()
             "--filter".to_owned(),
             format!("network={network}"),
             "--filter".to_owned(),
-            "label=dev.berth.role=shared-server".to_owned(),
+            "label=dev.berth.managed=true".to_owned(),
+            "--filter".to_owned(),
+            format!("label=dev.berth.installation={installation}"),
         ];
         for server in lines(&attached)? {
             record(

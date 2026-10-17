@@ -26,6 +26,8 @@ pub use presets::{preset_names, preset_preview};
 pub use project::{
     ProjectRootPathOptions, config_path_in_dir, init_config, project_root, project_root_with,
 };
-pub use runtime_env::{apply_runtime_env, default_env_file_name, is_default_runtime_env_name};
+pub use runtime_env::{
+    apply_runtime_env, default_env_file_name, is_default_runtime_env_name, service_in_runtime_env,
+};
 pub use services::{find_service, resolve_app_service, resolve_service};
 pub use sql_client_flavor::preferred_sql_client_flavor;

@@ -21,6 +21,7 @@ pub(super) fn apply_runtime_env(config: &mut Config, env_name: &str) -> Result<(
     let port_offset = runtime_env_port_offset(&normalized);
 
     for service in &mut config.service {
+        service.runtime.env = Some(normalized.clone());
         // A shared-backed service gets the namespace's own tenant on the
         // same server; it has no container, port or volume of its own.
         if service.runtime.shared.is_some() {
@@ -128,4 +129,25 @@ pub(super) fn is_default_runtime_env_name(env_name: &str) -> Result<bool> {
     Ok(is_default_runtime_env(&normalize_runtime_env_name(
         env_name,
     )?))
+}
+
+/// The names `service` has in runtime environment `env_name`: its container
+/// and network carry the environment's suffix, as [`apply_runtime_env`]
+/// gives them, without assigning shared tenants or touching any state.
+pub(super) fn service_in_runtime_env(
+    service: &super::ServiceConfig,
+    env_name: &str,
+) -> Result<super::ServiceConfig> {
+    let normalized = normalize_runtime_env_name(env_name)?;
+    let mut named = service.clone();
+    if is_default_runtime_env(&normalized) {
+        return Ok(named);
+    }
+    let suffix = format!("-{normalized}");
+    named.resolved_container_name = Some(format!("{}{suffix}", service.container_name()?));
+    if let Some(network) = &mut named.runtime.network {
+        network.push_str(&suffix);
+    }
+    named.runtime.env = Some(normalized);
+    Ok(named)
 }
