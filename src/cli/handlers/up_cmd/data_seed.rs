@@ -1,6 +1,6 @@
 //! cli handlers up cmd data seed module.
 //!
-//! Contains cli handlers up cmd data seed logic used by Stackctl command workflows.
+//! Contains cli handlers up cmd data seed logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::{Path, PathBuf};

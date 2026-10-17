@@ -1,6 +1,6 @@
 //! cli args commands app php tool module.
 //!
-//! Contains shared php tool wrapper args used by Stackctl command workflows.
+//! Contains shared php tool wrapper args used by Berth command workflows.
 
 use clap::Args;
 

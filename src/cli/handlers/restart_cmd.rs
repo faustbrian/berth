@@ -1,6 +1,6 @@
 //! cli handlers restart cmd module.
 //!
-//! Contains cli handlers restart cmd logic used by Stackctl command workflows.
+//! Contains cli handlers restart cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 

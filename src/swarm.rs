@@ -1,4 +1,4 @@
-//! Swarm orchestration helpers for multi-project Stackctl workflows.
+//! Swarm orchestration helpers for multi-project Berth workflows.
 
 mod injection;
 mod runner;

@@ -1,6 +1,6 @@
 //! database sql admin reset module.
 //!
-//! Contains database sql admin reset logic used by Stackctl command workflows.
+//! Contains database sql admin reset logic used by Berth command workflows.
 
 use anyhow::Result;
 

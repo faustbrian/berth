@@ -1,6 +1,6 @@
 //! cli support probe http status module.
 //!
-//! Contains cli support probe http status logic used by Stackctl command workflows.
+//! Contains cli support probe http status logic used by Berth command workflows.
 
 use std::process::Command;
 
@@ -86,7 +86,7 @@ mod tests {
 
     fn with_fake_curl(script_body: &str, test_url: &str) -> Option<u16> {
         let tmp = env::temp_dir().join(format!(
-            "stackctl-curl-{}",
+            "berth-curl-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("time")
@@ -113,7 +113,7 @@ mod tests {
 
     fn with_fake_curl_output(script_body: &str, test_url: &str) -> Option<std::process::Output> {
         let tmp = env::temp_dir().join(format!(
-            "stackctl-curl-output-{}",
+            "berth-curl-output-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("time")
@@ -141,20 +141,20 @@ mod tests {
     #[test]
     fn probe_http_status_returns_status_code_on_success() {
         assert_eq!(
-            with_fake_curl("printf '%s' '200'", "https://app.stackctl"),
+            with_fake_curl("printf '%s' '200'", "https://app.berth"),
             Some(200)
         );
     }
 
     #[test]
     fn probe_http_status_returns_none_when_command_fails() {
-        assert_eq!(with_fake_curl("exit 1", "https://app.stackctl"), None);
+        assert_eq!(with_fake_curl("exit 1", "https://app.berth"), None);
     }
 
     #[test]
     fn probe_http_status_returns_none_for_invalid_body() {
         assert_eq!(
-            with_fake_curl("printf '%s' 'not-a-code'", "https://app.stackctl"),
+            with_fake_curl("printf '%s' 'not-a-code'", "https://app.berth"),
             None
         );
     }
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn probe_http_status_reads_status_from_last_output_line() {
         assert_eq!(
-            with_fake_curl("printf '{\"status\":\"up\"}\n200'", "https://app.stackctl"),
+            with_fake_curl("printf '{\"status\":\"up\"}\n200'", "https://app.berth"),
             Some(200)
         );
     }
@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn run_curl_command_with_body_keeps_body_and_status() {
         let response =
-            with_fake_curl_output("printf '{\"status\":\"up\"}\n200'", "https://app.stackctl")
+            with_fake_curl_output("printf '{\"status\":\"up\"}\n200'", "https://app.berth")
                 .expect("curl output");
         assert!(response.status.success());
 

@@ -1,11 +1,11 @@
 //! config types enums module.
 //!
-//! Contains config types enums logic used by Stackctl command workflows.
+//! Contains config types enums logic used by Berth command workflows.
 
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
-/// Stackctl project archetype.
+/// Berth project archetype.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 #[non_exhaustive]

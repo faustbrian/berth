@@ -1,6 +1,6 @@
 //! cli args commands app module.
 //!
-//! Contains cli args commands app logic used by Stackctl command workflows.
+//! Contains cli args commands app logic used by Berth command workflows.
 
 mod actions;
 mod php_tool;

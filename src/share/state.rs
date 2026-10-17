@@ -240,7 +240,7 @@ fn state_paths() -> Result<ShareStatePaths> {
 }
 
 fn state_paths_with_home(home: &str) -> ShareStatePaths {
-    let share_dir = PathBuf::from(home).join(".config/stackctl/share");
+    let share_dir = PathBuf::from(home).join(".config/berth/share");
     ShareStatePaths {
         state_path: share_dir.join("sessions.toml"),
         logs_dir: share_dir.join("logs"),
@@ -663,7 +663,7 @@ mod tests {
 
     fn share_home_path(prefix: &str) -> PathBuf {
         let home = env::temp_dir().join(format!(
-            "stackctl-share-state-{}-{}",
+            "berth-share-state-{}-{}",
             prefix,
             std::process::id()
         ));
@@ -696,7 +696,7 @@ mod tests {
             api_key: None,
             region: None,
             scheme: None,
-            domain: Some("acme-api.stackctl".to_owned()),
+            domain: Some("acme-api.berth".to_owned()),
             domains: None,
             resolved_domain: None,
             container_port: Some(80),
@@ -736,7 +736,7 @@ mod tests {
             local_url: "http://127.0.0.1:33065".to_owned(),
             public_url: None,
             pid,
-            log_path: "/tmp/stackctl-share.log".to_owned(),
+            log_path: "/tmp/berth-share.log".to_owned(),
             command: vec!["echo".to_owned()],
             started_at_unix: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -746,15 +746,15 @@ mod tests {
 
     #[test]
     fn state_paths_respects_home() {
-        let home = env::temp_dir().join("stackctl-share-state-test-home");
+        let home = env::temp_dir().join("berth-share-state-test-home");
         drop(fs::remove_dir_all(&home));
         fs::create_dir_all(&home).expect("create test home");
-        let expected = home.join(".config/stackctl/share/sessions.toml");
+        let expected = home.join(".config/berth/share/sessions.toml");
 
         let home_str = home.to_string_lossy();
         let paths = state_paths_with_home(&home_str);
         assert_eq!(paths.state_path, expected);
-        assert_eq!(paths.logs_dir, home.join(".config/stackctl/share/logs"));
+        assert_eq!(paths.logs_dir, home.join(".config/berth/share/logs"));
     }
 
     #[test]
@@ -780,7 +780,7 @@ mod tests {
     #[test]
     fn read_and_write_state_round_trip() {
         let temp_dir = env::temp_dir().join(format!(
-            "stackctl-share-state-roundtrip-{}",
+            "berth-share-state-roundtrip-{}",
             std::process::id()
         ));
         drop(fs::remove_dir_all(&temp_dir));
@@ -849,7 +849,7 @@ mod tests {
     #[test]
     fn upsert_and_remove_session_update_state() {
         let temp_dir = env::temp_dir().join(format!(
-            "stackctl-share-state-upsert-remove-{}",
+            "berth-share-state-upsert-remove-{}",
             std::process::id()
         ));
         drop(fs::remove_dir_all(&temp_dir));
@@ -891,7 +891,7 @@ mod tests {
     #[test]
     fn reads_public_url_from_tailscale_like_log_output() {
         let temp_dir =
-            env::temp_dir().join(format!("stackctl-share-state-log-{}", std::process::id()));
+            env::temp_dir().join(format!("berth-share-state-log-{}", std::process::id()));
         drop(fs::remove_dir_all(&temp_dir));
         fs::create_dir_all(&temp_dir).expect("create temp dir");
         let log_path = temp_dir.join("tailscale.log");
@@ -922,7 +922,7 @@ mod tests {
     #[test]
     fn wait_for_public_url_reads_when_log_file_populates() {
         let temp_dir =
-            env::temp_dir().join(format!("stackctl-share-state-wait-{}", std::process::id()));
+            env::temp_dir().join(format!("berth-share-state-wait-{}", std::process::id()));
         drop(fs::remove_dir_all(&temp_dir));
         fs::create_dir_all(&temp_dir).expect("create temp dir");
         let log_path = temp_dir.join("wait.log");
@@ -1092,10 +1092,8 @@ mod tests {
 
     #[test]
     fn append_command_output_appends_stdout_and_stderr() {
-        let temp_dir = env::temp_dir().join(format!(
-            "stackctl-share-append-output-{}",
-            std::process::id()
-        ));
+        let temp_dir =
+            env::temp_dir().join(format!("berth-share-append-output-{}", std::process::id()));
         drop(fs::remove_dir_all(&temp_dir));
         fs::create_dir_all(&temp_dir).expect("create temp dir");
         let log = temp_dir.join("command.log");
@@ -1117,7 +1115,7 @@ mod tests {
         set_test_provider_binary(ShareProvider::Expose, &binary);
 
         let temp_dir =
-            env::temp_dir().join(format!("stackctl-share-state-spawn-{}", std::process::id()));
+            env::temp_dir().join(format!("berth-share-state-spawn-{}", std::process::id()));
         drop(fs::remove_dir_all(&temp_dir));
         fs::create_dir_all(&temp_dir).expect("create temp dir");
         let log_path = temp_dir.join("detached.log");

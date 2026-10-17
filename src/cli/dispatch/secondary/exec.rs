@@ -38,7 +38,7 @@ mod tests {
 
     #[test]
     fn secondary_exec_delegates_wrapper_commands() {
-        let cli = Cli::parse_from(["stackctl", "exec"]);
+        let cli = Cli::parse_from(["berth", "exec"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
         let result = super::dispatch(&cli, &mut config, &context);
@@ -47,7 +47,7 @@ mod tests {
 
     #[test]
     fn secondary_exec_rejects_unrelated_commands() {
-        let cli = Cli::parse_from(["stackctl", "about"]);
+        let cli = Cli::parse_from(["berth", "about"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
         let result = super::dispatch(&cli, &mut config, &context);

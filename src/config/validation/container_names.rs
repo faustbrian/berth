@@ -1,6 +1,6 @@
 //! config validation container names module.
 //!
-//! Contains config validation container names logic used by Stackctl command workflows.
+//! Contains config validation container names logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::collections::HashSet;
@@ -126,7 +126,7 @@ mod tests {
         let mut config = Config {
             schema_version: 1,
             project_type: crate::config::ProjectType::Project,
-            container_prefix: Some("stackctl".to_owned()),
+            container_prefix: Some("berth".to_owned()),
             domain_strategy: None,
             service: vec![
                 app_service("api", "127.0.0.1", Some("custom-api")),
@@ -142,7 +142,7 @@ mod tests {
         );
         assert_eq!(
             config.service[1].resolved_container_name.as_deref(),
-            Some("stackctl-web")
+            Some("berth-web")
         );
     }
 
@@ -151,7 +151,7 @@ mod tests {
         let mut config = Config {
             schema_version: 1,
             project_type: crate::config::ProjectType::Project,
-            container_prefix: Some("stackctl".to_owned()),
+            container_prefix: Some("berth".to_owned()),
             domain_strategy: None,
             service: vec![
                 app_service("api", "127.0.0.1", Some("api")),

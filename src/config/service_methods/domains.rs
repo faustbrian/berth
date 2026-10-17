@@ -1,6 +1,6 @@
 //! config service methods domains module.
 //!
-//! Contains config service methods domains logic used by Stackctl command workflows.
+//! Contains config service methods domains logic used by Berth command workflows.
 
 use std::collections::HashSet;
 

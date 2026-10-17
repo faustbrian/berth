@@ -1,6 +1,6 @@
 //! config types module.
 //!
-//! Contains config types logic used by Stackctl command workflows.
+//! Contains config types logic used by Berth command workflows.
 
 mod config_root;
 mod enums;

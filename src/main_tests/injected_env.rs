@@ -3,18 +3,18 @@ use super::*;
 #[test]
 fn project_dependency_injected_env_resolves_base_url_from_domain() -> Result<()> {
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let workspace = std::env::temp_dir().join(format!("stackctl-project-deps-env-{nonce}"));
+    let workspace = std::env::temp_dir().join(format!("berth-project-deps-env-{nonce}"));
     let api_root = workspace.join("api");
     let location_root = workspace.join("location");
     std::fs::create_dir_all(&api_root)?;
     std::fs::create_dir_all(&location_root)?;
 
     std::fs::write(
-        api_root.join(".stackctl.toml"),
+        api_root.join(".berth.toml"),
         "project_type = \"project\"\ncontainer_prefix = \"api\"\n",
     )?;
     std::fs::write(
-        location_root.join(".stackctl.toml"),
+        location_root.join(".berth.toml"),
         r#"
 project_type = "project"
 container_prefix = "location"
@@ -25,7 +25,7 @@ domain = "acme-location.grid"
 "#,
     )?;
     std::fs::write(
-        workspace.join(".stackctl.toml"),
+        workspace.join(".berth.toml"),
         r#"
 project_type = "project"
 [[swarm]]
@@ -57,12 +57,12 @@ root = "location"
 #[test]
 fn project_dependency_injected_env_resolves_when_workspace_config_is_project_root() -> Result<()> {
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let api_root = std::env::temp_dir().join(format!("stackctl-project-root-workspace-{nonce}"));
+    let api_root = std::env::temp_dir().join(format!("berth-project-root-workspace-{nonce}"));
     let location_root = api_root.join("location");
     std::fs::create_dir_all(&location_root)?;
 
     std::fs::write(
-        api_root.join(".stackctl.toml"),
+        api_root.join(".berth.toml"),
         r#"
 project_type = "project"
 container_prefix = "api"
@@ -83,7 +83,7 @@ root = "location"
 "#,
     )?;
     std::fs::write(
-        location_root.join(".stackctl.toml"),
+        location_root.join(".berth.toml"),
         r#"
 project_type = "project"
 container_prefix = "location"
@@ -176,10 +176,10 @@ fn resolve_injected_env_value_prefers_runtime_port_for_url_tokens_with_podman() 
 #[test]
 fn project_dependency_injected_env_is_empty_outside_swarm_workspace() -> Result<()> {
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let root = std::env::temp_dir().join(format!("stackctl-project-no-workspace-{nonce}"));
+    let root = std::env::temp_dir().join(format!("berth-project-no-workspace-{nonce}"));
     std::fs::create_dir_all(&root)?;
     std::fs::write(
-        root.join(".stackctl.toml"),
+        root.join(".berth.toml"),
         "project_type = \"project\"\ncontainer_prefix = \"solo\"\n",
     )?;
 
@@ -193,10 +193,10 @@ fn project_dependency_injected_env_is_empty_outside_swarm_workspace() -> Result<
 #[test]
 fn project_dependency_runner_is_noop_outside_swarm_workspace() -> Result<()> {
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let root = std::env::temp_dir().join(format!("stackctl-project-deps-runner-noop-{nonce}"));
+    let root = std::env::temp_dir().join(format!("berth-project-deps-runner-noop-{nonce}"));
     std::fs::create_dir_all(&root)?;
     std::fs::write(
-        root.join(".stackctl.toml"),
+        root.join(".berth.toml"),
         "project_type = \"project\"\ncontainer_prefix = \"solo\"\n",
     )?;
 

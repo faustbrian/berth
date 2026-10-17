@@ -42,12 +42,12 @@ pub(super) fn render_caddyfile(
 }
 
 // TODO: resolve from config
-/// Resolves Caddy ports from `STACKCTL_CADDY_{HTTP,HTTPS}_PORT`.
+/// Resolves Caddy ports from `BERTH_CADDY_{HTTP,HTTPS}_PORT`.
 ///
 /// Defaults to `80/443` when env vars are unset.
 pub(super) fn resolve_caddy_ports() -> Result<CaddyPorts> {
-    let http = resolve_port_env("STACKCTL_CADDY_HTTP_PORT", 80)?;
-    let https = resolve_port_env("STACKCTL_CADDY_HTTPS_PORT", 443)?;
+    let http = resolve_port_env("BERTH_CADDY_HTTP_PORT", 80)?;
+    let https = resolve_port_env("BERTH_CADDY_HTTPS_PORT", 443)?;
 
     Ok(CaddyPorts { http, https })
 }
@@ -115,19 +115,19 @@ mod tests {
 
     #[test]
     fn resolve_caddy_ports_defaults_when_env_is_unset() {
-        let ports = resolve_port_env("STACKCTL_CADDY_MISSING_HTTP_PORT", 80).expect("missing http");
+        let ports = resolve_port_env("BERTH_CADDY_MISSING_HTTP_PORT", 80).expect("missing http");
         assert_eq!(ports, 80);
     }
 
     #[test]
     fn resolve_caddy_ports_parses_custom_values() {
-        let parser = parse_port_env("STACKCTL_TEST_HTTPS_PORT");
+        let parser = parse_port_env("BERTH_TEST_HTTPS_PORT");
         assert_eq!(parser("8443".to_owned()).expect("custom"), 8443);
     }
 
     #[test]
     fn resolve_caddy_ports_rejects_zero_port_values() {
-        let parser = parse_port_env("STACKCTL_TEST_HTTP_PORT");
+        let parser = parse_port_env("BERTH_TEST_HTTP_PORT");
         assert!(parser("0".to_owned()).is_err());
     }
 }

@@ -17,7 +17,7 @@ pub(super) fn app_service() -> ServiceConfig {
         api_key: None,
         region: None,
         scheme: None,
-        domain: Some("acme-api.stackctl".to_owned()),
+        domain: Some("acme-api.berth".to_owned()),
         domains: None,
         resolved_domain: None,
         container_port: Some(80),

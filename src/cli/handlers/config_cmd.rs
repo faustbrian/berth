@@ -1,6 +1,6 @@
 //! cli handlers config cmd module.
 //!
-//! Contains cli handlers config cmd logic used by Stackctl command workflows.
+//! Contains cli handlers config cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;
@@ -86,7 +86,7 @@ mod tests {
         Config {
             schema_version: 1,
             project_type: crate::config::ProjectType::Project,
-            container_prefix: Some("stackctl".to_owned()),
+            container_prefix: Some("berth".to_owned()),
             domain_strategy: None,
             service: vec![service("app", Kind::App, Driver::Frankenphp)],
             swarm: Vec::new(),
@@ -95,7 +95,7 @@ mod tests {
 
     fn temp_root() -> std::path::PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-config-cmd-tests-{}",
+            "berth-config-cmd-tests-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -106,7 +106,7 @@ mod tests {
     }
 
     fn write_config(root: &std::path::Path, content: &str) -> std::path::PathBuf {
-        let path = root.join(".stackctl.toml");
+        let path = root.join(".berth.toml");
         fs::write(&path, content).expect("write config");
         path
     }
@@ -133,7 +133,7 @@ mod tests {
             r#"
 schema_version = 1
 project_type = "project"
-container_prefix = "stackctl"
+container_prefix = "berth"
 
 [[service]]
 name = "app"

@@ -7,7 +7,7 @@ pub struct JavaScriptToolchain {
     /// Preferred JavaScript runtime for app workflows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime: Option<JavaScriptRuntime>,
-    /// Preferred package manager for `stackctl node` and Node task workflows.
+    /// Preferred package manager for `berth node` and Node task workflows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub package_manager: Option<PackageManager>,
     /// Preferred Node version manager for app runtime commands.

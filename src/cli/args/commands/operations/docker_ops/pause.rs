@@ -1,6 +1,6 @@
 //! cli args commands operations docker ops pause module.
 //!
-//! Contains pause command args used by Stackctl command workflows.
+//! Contains pause command args used by Berth command workflows.
 
 use clap::Args;
 

@@ -1,6 +1,6 @@
 //! cli args commands daemon module.
 //!
-//! Contains cli args for `stackctl daemon` workflows.
+//! Contains cli args for `berth daemon` workflows.
 
 mod service;
 
@@ -29,15 +29,15 @@ pub(crate) struct DaemonArgs {
 
 #[derive(Subcommand)]
 pub(crate) enum DaemonCommands {
-    /// Start a per-project Stackctl daemon
+    /// Start a per-project Berth daemon
     Start(DaemonStartArgs),
-    /// Watch directories for Stackctl projects and ensure daemons are running
+    /// Watch directories for Berth projects and ensure daemons are running
     Watch(DaemonWatchArgs),
     /// Install or inspect a login-time daemon watch service
     Service(DaemonServiceArgs),
     /// Show daemon status for a project
     Status(DaemonStatusArgs),
-    /// Stop a per-project Stackctl daemon
+    /// Stop a per-project Berth daemon
     Stop(DaemonStopArgs),
     /// Show daemon log output for a project
     Logs(DaemonLogsArgs),
@@ -47,21 +47,21 @@ pub(crate) enum DaemonCommands {
 
 #[derive(Args)]
 pub(crate) struct DaemonStartArgs {
-    /// Project directory or nested path inside a Stackctl project
+    /// Project directory or nested path inside a Berth project
     #[arg(long, value_name = "DIR")]
     pub(crate) path: PathBuf,
 }
 
 #[derive(Args)]
 pub(crate) struct DaemonStatusArgs {
-    /// Project directory or nested path inside a Stackctl project
+    /// Project directory or nested path inside a Berth project
     #[arg(long, value_name = "DIR")]
     pub(crate) path: PathBuf,
 }
 
 #[derive(Args)]
 pub(crate) struct DaemonWatchArgs {
-    /// Directory to scan for Stackctl projects
+    /// Directory to scan for Berth projects
     #[arg(long, value_name = "DIR", required = true)]
     pub(crate) dir: Vec<PathBuf>,
     #[command(flatten)]
@@ -76,21 +76,21 @@ pub(crate) struct DaemonWatchArgs {
 
 #[derive(Args)]
 pub(crate) struct DaemonStopArgs {
-    /// Project directory or nested path inside a Stackctl project
+    /// Project directory or nested path inside a Berth project
     #[arg(long, value_name = "DIR")]
     pub(crate) path: PathBuf,
 }
 
 #[derive(Args)]
 pub(crate) struct DaemonLogsArgs {
-    /// Project directory or nested path inside a Stackctl project
+    /// Project directory or nested path inside a Berth project
     #[arg(long, value_name = "DIR")]
     pub(crate) path: PathBuf,
 }
 
 #[derive(Args)]
 pub(crate) struct DaemonRunArgs {
-    /// Project directory or nested path inside a Stackctl project
+    /// Project directory or nested path inside a Berth project
     #[arg(long, value_name = "DIR")]
     pub(crate) path: PathBuf,
 }

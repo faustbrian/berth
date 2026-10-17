@@ -1,6 +1,6 @@
 //! cli handlers docker ops port module.
 //!
-//! Contains port handler used by Stackctl command workflows.
+//! Contains port handler used by Berth command workflows.
 
 use anyhow::Result;
 

@@ -1,6 +1,6 @@
 //! cli support build open summary json module.
 //!
-//! Contains cli support build open summary json logic used by Stackctl command workflows.
+//! Contains cli support build open summary json logic used by Berth command workflows.
 
 use anyhow::Result;
 
@@ -49,7 +49,7 @@ mod tests {
             api_key: None,
             region: None,
             scheme: None,
-            domain: Some("app.stackctl".to_owned()),
+            domain: Some("app.berth".to_owned()),
             domains: None,
             resolved_domain: None,
             container_port: None,
@@ -81,7 +81,7 @@ mod tests {
         F: FnOnce() -> T,
     {
         let bin_dir = env::temp_dir().join(format!(
-            "stackctl-summary-json-{}",
+            "berth-summary-json-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("time")

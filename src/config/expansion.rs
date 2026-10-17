@@ -1,6 +1,6 @@
 //! config expansion module.
 //!
-//! Contains config expansion logic used by Stackctl command workflows.
+//! Contains config expansion logic used by Berth command workflows.
 
 use anyhow::Result;
 
@@ -12,9 +12,7 @@ mod service;
 pub(super) fn expand_raw_config(raw: RawConfig) -> Result<Config> {
     let schema_version = raw.schema_version.unwrap_or(1);
     if schema_version != 1 {
-        anyhow::bail!(
-            "unsupported schema_version '{schema_version}'; run `stackctl config migrate`"
-        );
+        anyhow::bail!("unsupported schema_version '{schema_version}'; run `berth config migrate`");
     }
     let project_type = raw.project_type.unwrap_or(ProjectType::Project);
 
@@ -90,7 +88,7 @@ mod tests {
             api_key: None,
             region: None,
             scheme: None,
-            domain: Some("acme.stackctl".to_owned()),
+            domain: Some("acme.berth".to_owned()),
             domains: None,
             container_port: Some(80),
             smtp_port: None,

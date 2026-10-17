@@ -1,6 +1,6 @@
 //! cli handlers artisan cmd test command module.
 //!
-//! Contains cli handlers artisan cmd test command logic used by Stackctl command workflows.
+//! Contains cli handlers artisan cmd test command logic used by Berth command workflows.
 
 use std::path::Path;
 
@@ -31,13 +31,13 @@ pub(super) fn build_artisan_test_command(
     exports.push("export APP_ENV='testing'".to_owned());
 
     let playwright_bootstrap = if bootstrap_playwright {
-        " && if [ ! -f package.json ]; then echo 'Playwright browser tests require package.json in the workspace root.' >&2; exit 1; fi && export PLAYWRIGHT_BROWSERS_PATH='/app/.stackctl/cache/playwright' && mkdir -p \"$PLAYWRIGHT_BROWSERS_PATH\" && if [ ! -x ./node_modules/.bin/playwright ]; then npm install; fi && npx playwright install chromium"
+        " && if [ ! -f package.json ]; then echo 'Playwright browser tests require package.json in the workspace root.' >&2; exit 1; fi && export PLAYWRIGHT_BROWSERS_PATH='/app/.berth/cache/playwright' && mkdir -p \"$PLAYWRIGHT_BROWSERS_PATH\" && if [ ! -x ./node_modules/.bin/playwright ]; then npm install; fi && npx playwright install chromium"
     } else {
         ""
     };
 
     let script = format!(
-        "mkdir -p /tmp/stackctl-php/conf.d \\\n&& printf 'memory_limit=4096M\\n' > /tmp/stackctl-php/conf.d/zz-stackctl-memory.ini \\\n&& export PHP_INI_SCAN_DIR='/tmp/stackctl-php/conf.d:/usr/local/etc/php/conf.d' \\\n&& {}{playwright_bootstrap} \\\n&& {escaped}",
+        "mkdir -p /tmp/berth-php/conf.d \\\n&& printf 'memory_limit=4096M\\n' > /tmp/berth-php/conf.d/zz-berth-memory.ini \\\n&& export PHP_INI_SCAN_DIR='/tmp/berth-php/conf.d:/usr/local/etc/php/conf.d' \\\n&& {}{playwright_bootstrap} \\\n&& {escaped}",
         exports.join(" && ")
     );
     vec!["sh".to_owned(), "-lc".to_owned(), script]
@@ -89,7 +89,7 @@ mod tests {
 
     fn temp_root(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-artisan-test-command-{name}-{}",
+            "berth-artisan-test-command-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")

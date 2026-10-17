@@ -11,6 +11,20 @@ All notable changes to this project are documented in this file.
   `scripts/check-v9-ledger.sh`, which fails when any 8.x source directory or
   commit is left unaccounted for.
 
+### Changed
+
+- Renamed the project from Stackctl to Berth: the crate and binary are now
+  `berth`, configuration files use the `.berth.*` prefix, environment
+  variables use `BERTH_*`, Docker labels use the `dev.berth.*` namespace, and
+  generated service-manager units, domains and state paths use `berth`.
+
+### Fixed
+
+- Isolated the swarm bootstrap test's fixture repository from the developer's
+  global Git configuration so global commit hooks no longer fail the test.
+- Made test-only container engine overrides thread-local so tests no longer
+  observe another test's Podman engine selection intermittently.
+
 ## [7.0.0] - 2026-07-12
 
 ### Added

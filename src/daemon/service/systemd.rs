@@ -26,7 +26,7 @@ fn render_unit(context: &ServiceContext) -> String {
         .join(" ");
 
     format!(
-        "[Unit]\nDescription=Stackctl daemon watch service\nAfter=default.target\n\n\
+        "[Unit]\nDescription=Berth daemon watch service\nAfter=default.target\n\n\
 [Service]\nType=simple\nExecStart={exec_start}\nRestart=always\n\
 RestartSec=5\nStandardOutput=append:{stdout_path}\n\
 StandardError=append:{stderr_path}\n\n[Install]\nWantedBy=default.target\n",

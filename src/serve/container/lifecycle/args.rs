@@ -20,7 +20,7 @@ use env_vars::{append_env_args, append_host_gateway_mapping};
 ///
 /// Injected env values are added before service-defined env values so explicit
 /// service env can override inferred defaults, except protected URL vars where
-/// Stackctl inferred HTTPS should not be downgraded.
+/// Berth inferred HTTPS should not be downgraded.
 pub(super) fn build_run_args(
     target: &ServiceConfig,
     runtime_image: &str,
@@ -67,7 +67,7 @@ mod tests {
             api_key: None,
             region: None,
             scheme: None,
-            domain: Some("acme-api.stackctl".to_owned()),
+            domain: Some("acme-api.berth".to_owned()),
             domains: None,
             resolved_domain: None,
             container_port: Some(80),
@@ -102,18 +102,15 @@ mod tests {
             ("ASSET_URL".to_owned(), "http://localhost".to_owned()),
         ]));
         let injected = HashMap::from([
-            ("APP_URL".to_owned(), "https://acme-api.stackctl".to_owned()),
-            (
-                "ASSET_URL".to_owned(),
-                "https://acme-api.stackctl".to_owned(),
-            ),
+            ("APP_URL".to_owned(), "https://acme-api.berth".to_owned()),
+            ("ASSET_URL".to_owned(), "https://acme-api.berth".to_owned()),
         ]);
 
         let args = build_run_args(&service, "runtime-image", Path::new("."), &injected, false)
             .expect("run args");
         let app_https_count = args
             .iter()
-            .filter(|v| *v == "APP_URL=https://acme-api.stackctl")
+            .filter(|v| *v == "APP_URL=https://acme-api.berth")
             .count();
         let app_http_count = args
             .iter()
@@ -121,7 +118,7 @@ mod tests {
             .count();
         let asset_https_count = args
             .iter()
-            .filter(|v| *v == "ASSET_URL=https://acme-api.stackctl")
+            .filter(|v| *v == "ASSET_URL=https://acme-api.berth")
             .count();
         let asset_http_count = args
             .iter()
@@ -141,8 +138,7 @@ mod tests {
             "APP_URL".to_owned(),
             "https://custom.example".to_owned(),
         )]));
-        let injected =
-            HashMap::from([("APP_URL".to_owned(), "https://acme-api.stackctl".to_owned())]);
+        let injected = HashMap::from([("APP_URL".to_owned(), "https://acme-api.berth".to_owned())]);
 
         let args = build_run_args(&service, "runtime-image", Path::new("."), &injected, false)
             .expect("run args");

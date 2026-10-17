@@ -1,6 +1,6 @@
 //! cli handlers docker ops top module.
 //!
-//! Contains top handler used by Stackctl command workflows.
+//! Contains top handler used by Berth command workflows.
 
 use anyhow::Result;
 

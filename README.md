@@ -1,26 +1,26 @@
-# stackctl
+# berth
 
-`stackctl` standardizes local Laravel environments for faster setup and reliable
+`berth` standardizes local Laravel environments for faster setup and reliable
 daily development.
 
 ## Quick Start
 
-1. Install Stackctl:
+1. Install Berth:
 
 ```bash
-cargo install --git git@github.com:faustbrian/stackctl.git --bin stackctl --branch main --locked
+cargo install --git git@github.com:faustbrian/stackctl.git --bin berth --branch main --locked
 ```
 
 2. Initialize config:
 
 ```bash
-stackctl init
+berth init
 ```
 
 3. Start services:
 
 ```bash
-stackctl start
+berth start
 ```
 
 ## Documentation
@@ -33,4 +33,4 @@ For a detailed usage walkthrough, jump to [`USAGE.md`](USAGE.md).
 
 ## License
 
-`stackctl` is licensed under MIT. See [`LICENSE.md`](LICENSE.md).
+`berth` is licensed under MIT. See [`LICENSE.md`](LICENSE.md).

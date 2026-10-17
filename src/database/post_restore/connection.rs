@@ -181,7 +181,7 @@ mod tests {
         F: FnOnce(&Path) -> T,
     {
         let root = env::temp_dir().join(format!(
-            "stackctl-post-restore-connection-{}",
+            "berth-post-restore-connection-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("time")

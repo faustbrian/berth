@@ -1,6 +1,6 @@
 //! display status module.
 //!
-//! Contains display status logic used by Stackctl command workflows.
+//! Contains display status logic used by Berth command workflows.
 
 use colored::Colorize;
 

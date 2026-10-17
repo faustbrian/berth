@@ -1,6 +1,6 @@
 //! cli args arg enums module.
 //!
-//! Contains cli args arg enums logic used by Stackctl command workflows.
+//! Contains cli args arg enums logic used by Berth command workflows.
 
 use clap::ValueEnum;
 

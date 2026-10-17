@@ -86,7 +86,7 @@ mod tests {
                 name: "two".to_owned(),
                 phase: HookPhase::PostDown,
                 run: HookRun::Script {
-                    path: ".stackctl/hooks/two.sh".to_owned(),
+                    path: ".berth/hooks/two.sh".to_owned(),
                 },
                 on_error: HookOnError::Fail,
                 timeout_sec: None,
@@ -197,10 +197,10 @@ mod tests {
     #[test]
     fn resolve_script_path_joins_workspace_root_for_relative_paths() {
         let root = Path::new("/tmp/workspace");
-        let resolved = run_script::resolve_script_path(".stackctl/hooks/seed.sh", root);
+        let resolved = run_script::resolve_script_path(".berth/hooks/seed.sh", root);
         assert_eq!(
             resolved,
-            std::path::PathBuf::from("/tmp/workspace/.stackctl/hooks/seed.sh")
+            std::path::PathBuf::from("/tmp/workspace/.berth/hooks/seed.sh")
         );
     }
 }

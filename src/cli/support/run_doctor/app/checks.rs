@@ -1,6 +1,6 @@
 //! cli support run doctor app checks module.
 //!
-//! Contains cli support run doctor app checks logic used by Stackctl command workflows.
+//! Contains cli support run doctor app checks logic used by Berth command workflows.
 
 mod domain;
 mod octane;

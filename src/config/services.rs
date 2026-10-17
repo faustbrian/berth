@@ -1,6 +1,6 @@
 //! config services module.
 //!
-//! Contains config services logic used by Stackctl command workflows.
+//! Contains config services logic used by Berth command workflows.
 
 use super::Config;
 

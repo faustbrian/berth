@@ -1,6 +1,6 @@
 //! docker exec args module.
 //!
-//! Contains docker exec args logic used by Stackctl command workflows.
+//! Contains docker exec args logic used by Berth command workflows.
 
 use anyhow::Result;
 
@@ -55,7 +55,7 @@ pub(super) fn interactive_client_args(service: &ServiceConfig) -> Vec<String> {
             service
                 .password
                 .clone()
-                .unwrap_or_else(|| "StackctlSqlServerPassw0rd!".to_owned()),
+                .unwrap_or_else(|| "BerthSqlServerPassw0rd!".to_owned()),
         ],
         Driver::Mongodb
         | Driver::Memcached
@@ -112,7 +112,7 @@ pub(super) fn piped_client_args(service: &ServiceConfig) -> Result<Vec<String>> 
             service
                 .password
                 .clone()
-                .unwrap_or_else(|| "StackctlSqlServerPassw0rd!".to_owned()),
+                .unwrap_or_else(|| "BerthSqlServerPassw0rd!".to_owned()),
             "-d".to_owned(),
             service
                 .database

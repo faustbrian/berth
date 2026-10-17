@@ -1,6 +1,6 @@
 //! config expansion ports module.
 //!
-//! Contains config expansion ports logic used by Stackctl command workflows.
+//! Contains config expansion ports logic used by Berth command workflows.
 
 use anyhow::{Result, anyhow};
 use std::collections::HashSet;

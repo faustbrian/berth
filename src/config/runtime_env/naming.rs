@@ -1,6 +1,6 @@
 //! config runtime env naming module.
 //!
-//! Contains config runtime env naming logic used by Stackctl command workflows.
+//! Contains config runtime env naming logic used by Berth command workflows.
 
 use anyhow::Result;
 

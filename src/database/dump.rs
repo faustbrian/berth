@@ -1,6 +1,6 @@
 //! database dump module.
 //!
-//! Contains database dump logic used by Stackctl command workflows.
+//! Contains database dump logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 use std::path::Path;

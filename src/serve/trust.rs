@@ -33,7 +33,7 @@ pub(super) fn trust_inner_container_ca(target: &ServiceConfig, detached: bool) -
         anyhow::anyhow!(
             "could not locate container CA certificate. run:\n\
              curl -kI https://{}:{}\n\
-             then retry `stackctl serve --service {} --trust-container-ca`",
+             then retry `berth serve --service {} --trust-container-ca`",
             target.host,
             target.port,
             target.name

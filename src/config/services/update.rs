@@ -1,6 +1,6 @@
 //! config services update module.
 //!
-//! Contains config services update logic used by Stackctl command workflows.
+//! Contains config services update logic used by Berth command workflows.
 
 use anyhow::Result;
 

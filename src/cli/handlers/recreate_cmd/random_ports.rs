@@ -1,6 +1,6 @@
 //! cli handlers recreate cmd random ports module.
 //!
-//! Contains cli handlers recreate cmd random ports logic used by Stackctl command workflows.
+//! Contains cli handlers recreate cmd random ports logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;

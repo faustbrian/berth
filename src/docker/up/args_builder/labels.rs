@@ -1,6 +1,6 @@
 //! docker up args builder labels module.
 //!
-//! Contains docker run label arguments used by Stackctl command workflows.
+//! Contains docker run label arguments used by Berth command workflows.
 
 use crate::config::ServiceConfig;
 use crate::docker::{
@@ -27,7 +27,7 @@ mod tests {
     use crate::config::{Driver, Kind, ServiceConfig};
 
     #[test]
-    fn appends_stackctl_labels_for_container_ownership() {
+    fn appends_berth_labels_for_container_ownership() {
         let service = ServiceConfig {
             name: "db".to_owned(),
             kind: Kind::Database,
@@ -74,9 +74,9 @@ mod tests {
         append_labels(&mut args, &service, "acme-db");
 
         let rendered = args.join(" ");
-        assert!(rendered.contains("--label com.stackctl.managed=true"));
-        assert!(rendered.contains("--label com.stackctl.service=db"));
-        assert!(rendered.contains("--label com.stackctl.kind=database"));
-        assert!(rendered.contains("--label com.stackctl.container=acme-db"));
+        assert!(rendered.contains("--label dev.berth.managed=true"));
+        assert!(rendered.contains("--label dev.berth.service=db"));
+        assert!(rendered.contains("--label dev.berth.kind=database"));
+        assert!(rendered.contains("--label dev.berth.container=acme-db"));
     }
 }

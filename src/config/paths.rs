@@ -1,6 +1,6 @@
 //! config paths module.
 //!
-//! Contains config paths logic used by Stackctl command workflows.
+//! Contains config paths logic used by Berth command workflows.
 
 use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
@@ -46,11 +46,11 @@ pub(super) fn project_root_with(
 
 pub(super) fn init_config() -> Result<PathBuf> {
     let current_dir = std::env::current_dir().context("failed to get current directory")?;
-    let config_path = current_dir.join(".stackctl.toml");
+    let config_path = current_dir.join(".berth.toml");
 
     if config_path_in_dir(&current_dir)?.is_some() {
         anyhow::bail!(
-            "Stackctl config already exists in {} (.stackctl.toml or .stackctl.yaml)",
+            "Berth config already exists in {} (.berth.toml or .berth.yaml)",
             current_dir.display()
         );
     }
@@ -98,7 +98,7 @@ pub(super) fn resolve_lockfile_path(
     config_path: Option<&Path>,
     project_root: Option<&Path>,
 ) -> Result<PathBuf> {
-    Ok(project_root_with(config_path, project_root)?.join(".stackctl.lock.toml"))
+    Ok(project_root_with(config_path, project_root)?.join(".berth.lock.toml"))
 }
 
 #[cfg(test)]
@@ -118,7 +118,7 @@ mod tests {
     fn temp_root() -> PathBuf {
         let sequence = TEMP_ROOT_COUNTER.fetch_add(1, Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "stackctl-config-paths-{}-{sequence}",
+            "berth-config-paths-{}-{sequence}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -135,7 +135,7 @@ mod tests {
         let nested = root.join("nested");
         fs::create_dir_all(&nested).expect("create nested");
         fs::write(
-            root.join(".stackctl.toml"),
+            root.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed config");
@@ -151,7 +151,7 @@ mod tests {
         let nested = root.join("nested");
         fs::create_dir_all(&nested).expect("create nested");
         fs::write(
-            root.join(".stackctl.toml"),
+            root.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed config");
@@ -167,7 +167,7 @@ mod tests {
         let nested = root.join("nested");
         fs::create_dir_all(&nested).expect("create nested");
         fs::write(
-            root.join(".stackctl.toml"),
+            root.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed config");
@@ -188,7 +188,7 @@ mod tests {
         let _guard = super::CWD_LOCK.lock().expect("cwd lock");
         let root = temp_root();
         let cwd = std::env::current_dir().expect("current dir");
-        let original = root.join(".stackctl.toml");
+        let original = root.join(".berth.toml");
 
         let found = {
             std::env::set_current_dir(&root).expect("set cwd");
@@ -208,7 +208,7 @@ mod tests {
     fn init_config_rejects_existing_file() {
         let _guard = super::CWD_LOCK.lock().expect("cwd lock");
         let root = temp_root();
-        let existing = root.join(".stackctl.yaml");
+        let existing = root.join(".berth.yaml");
         fs::write(&existing, "schema_version: 1\nproject_type: project\n").expect("seed existing");
 
         let cwd = std::env::current_dir().expect("current dir");
@@ -237,8 +237,8 @@ mod tests {
     #[test]
     fn resolve_config_path_prefers_env_specific_file_when_present() {
         let root = temp_root();
-        let env_config = root.join(".stackctl.testing.toml");
-        let default_config = root.join(".stackctl.toml");
+        let env_config = root.join(".berth.testing.toml");
+        let default_config = root.join(".berth.toml");
         fs::write(
             &env_config,
             "schema_version = 1\nproject_type = \"project\"\n",
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn resolve_config_path_falls_back_to_default_when_env_file_missing() {
         let root = temp_root();
-        let default_config = root.join(".stackctl.toml");
+        let default_config = root.join(".berth.toml");
         fs::write(
             &default_config,
             "schema_version = 1\nproject_type = \"project\"\n",
@@ -277,7 +277,7 @@ mod tests {
     #[test]
     fn resolve_config_path_supports_yaml_default_config() {
         let root = temp_root();
-        let default_config = root.join(".stackctl.yaml");
+        let default_config = root.join(".berth.yaml");
         fs::write(
             &default_config,
             "schema_version: 1\nproject_type: project\nservice: []\nswarm: []\n",
@@ -291,8 +291,8 @@ mod tests {
     #[test]
     fn resolve_config_path_supports_yaml_runtime_override() {
         let root = temp_root();
-        let env_config = root.join(".stackctl.testing.yaml");
-        let default_config = root.join(".stackctl.toml");
+        let env_config = root.join(".berth.testing.yaml");
+        let default_config = root.join(".berth.toml");
         fs::write(
             &env_config,
             "schema_version: 1\nproject_type: project\nservice: []\nswarm: []\n",
@@ -315,12 +315,12 @@ mod tests {
     fn resolve_config_path_rejects_ambiguous_default_formats() {
         let root = temp_root();
         fs::write(
-            root.join(".stackctl.toml"),
+            root.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed toml config");
         fs::write(
-            root.join(".stackctl.yaml"),
+            root.join(".berth.yaml"),
             "schema_version: 1\nproject_type: project\n",
         )
         .expect("seed yaml config");
@@ -329,7 +329,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("both .stackctl.toml and .stackctl.yaml")
+                .contains("both .berth.toml and .berth.yaml")
         );
     }
 
@@ -337,11 +337,11 @@ mod tests {
     fn resolve_lockfile_path_uses_project_root_context() {
         let root = temp_root();
         fs::write(
-            root.join(".stackctl.toml"),
+            root.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed config");
-        let expected = root.join(".stackctl.lock.toml");
+        let expected = root.join(".berth.lock.toml");
 
         let resolved = resolve_lockfile_path(None, Some(&root)).expect("resolve lock path");
         assert_eq!(resolved, expected);
@@ -351,7 +351,7 @@ mod tests {
     fn project_root_with_errors_when_no_config_is_found() {
         let root = temp_root();
         let error = project_root_with(None, Some(&root)).unwrap_err();
-        assert!(error.to_string().contains("no Stackctl config found"));
+        assert!(error.to_string().contains("no Berth config found"));
     }
 
     fn resolve_config_path_with_options(

@@ -1,6 +1,6 @@
 //! config expansion service fields module.
 //!
-//! Contains config expansion service fields logic used by Stackctl command workflows.
+//! Contains config expansion service fields logic used by Berth command workflows.
 
 use anyhow::Result;
 

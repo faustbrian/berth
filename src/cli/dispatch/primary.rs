@@ -100,21 +100,21 @@ mod tests {
 
     #[test]
     fn primary_dispatch_handles_meta_commands() {
-        assert!(dispatch_primary_result(&["stackctl", "config"]).is_some());
-        assert!(dispatch_primary_result(&["stackctl", "preset", "list"]).is_some());
-        assert!(dispatch_primary_result(&["stackctl", "profile", "list"]).is_some());
-        assert!(dispatch_primary_result(&["stackctl", "doctor"]).is_some());
-        assert!(dispatch_primary_result(&["stackctl", "lock", "images"]).is_some());
+        assert!(dispatch_primary_result(&["berth", "config"]).is_some());
+        assert!(dispatch_primary_result(&["berth", "preset", "list"]).is_some());
+        assert!(dispatch_primary_result(&["berth", "profile", "list"]).is_some());
+        assert!(dispatch_primary_result(&["berth", "doctor"]).is_some());
+        assert!(dispatch_primary_result(&["berth", "lock", "images"]).is_some());
     }
 
     #[test]
     fn primary_dispatch_falls_back_to_operations() {
-        assert!(dispatch_primary_result(&["stackctl", "up"]).is_some());
+        assert!(dispatch_primary_result(&["berth", "up"]).is_some());
     }
 
     #[test]
     fn primary_dispatch_does_not_handle_unknown() {
-        assert!(dispatch_primary_result(&["stackctl", "about"]).is_none());
+        assert!(dispatch_primary_result(&["berth", "about"]).is_none());
     }
 
     #[test]

@@ -1,6 +1,6 @@
 //! database sql admin dump module.
 //!
-//! Contains database sql admin dump logic used by Stackctl command workflows.
+//! Contains database sql admin dump logic used by Berth command workflows.
 
 use anyhow::Result;
 

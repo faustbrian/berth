@@ -1,6 +1,6 @@
 //! cli handlers about cmd module.
 //!
-//! Contains cli handlers about cmd logic used by Stackctl command workflows.
+//! Contains cli handlers about cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 use serde_json::json;
@@ -23,7 +23,7 @@ pub(crate) fn handle_about(
         .unwrap_or_else(|| {
             config::config_path_in_dir(&project_root)?.ok_or_else(|| {
                 anyhow::anyhow!(
-                    "missing Stackctl config (.stackctl.toml or .stackctl.yaml) at {}",
+                    "missing Berth config (.berth.toml or .berth.yaml) at {}",
                     project_root.display()
                 )
             })

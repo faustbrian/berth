@@ -31,7 +31,7 @@ fn inferred_app_env_sets_app_and_asset_urls_for_localhost_tls() {
 #[test]
 fn inferred_app_env_sets_app_and_asset_urls_for_domain() {
     let mut app = svc("app", Kind::App, Driver::Frankenphp, 8080);
-    app.domain = Some("acme-api.stackctl".to_owned());
+    app.domain = Some("acme-api.berth".to_owned());
 
     let config = Config {
         schema_version: 1,
@@ -46,11 +46,11 @@ fn inferred_app_env_sets_app_and_asset_urls_for_domain() {
 
     assert_eq!(
         vars.get("APP_URL"),
-        Some(&"https://acme-api.stackctl".to_owned())
+        Some(&"https://acme-api.berth".to_owned())
     );
     assert_eq!(
         vars.get("ASSET_URL"),
-        Some(&"https://acme-api.stackctl".to_owned())
+        Some(&"https://acme-api.berth".to_owned())
     );
     assert_eq!(
         vars.get("LIVEWIRE_TEMPORARY_FILE_UPLOAD_DISK"),
@@ -61,10 +61,7 @@ fn inferred_app_env_sets_app_and_asset_urls_for_domain() {
 #[test]
 fn inferred_app_env_uses_primary_domain_from_domains_list() {
     let mut app = svc("app", Kind::App, Driver::Frankenphp, 8080);
-    app.domains = Some(vec![
-        "primary.stackctl".to_owned(),
-        "alt.stackctl".to_owned(),
-    ]);
+    app.domains = Some(vec!["primary.berth".to_owned(), "alt.berth".to_owned()]);
 
     let config = Config {
         schema_version: 1,
@@ -79,11 +76,11 @@ fn inferred_app_env_uses_primary_domain_from_domains_list() {
 
     assert_eq!(
         vars.get("APP_URL"),
-        Some(&"https://primary.stackctl".to_owned())
+        Some(&"https://primary.berth".to_owned())
     );
     assert_eq!(
         vars.get("ASSET_URL"),
-        Some(&"https://primary.stackctl".to_owned())
+        Some(&"https://primary.berth".to_owned())
     );
 }
 

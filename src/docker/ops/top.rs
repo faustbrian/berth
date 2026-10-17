@@ -1,6 +1,6 @@
 //! docker ops top module.
 //!
-//! Contains docker top operation used by Stackctl command workflows.
+//! Contains docker top operation used by Berth command workflows.
 
 use anyhow::Result;
 

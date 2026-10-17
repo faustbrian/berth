@@ -21,7 +21,7 @@ pub(crate) trait RuntimeEngineAdapter {
     fn host_gateway_alias(&self) -> &'static str;
     /// Returns optional `--add-host` mapping for host-loopback access.
     fn host_gateway_mapping(&self) -> Option<&'static str>;
-    /// Returns diagnostic checks for `stackctl doctor`.
+    /// Returns diagnostic checks for `berth doctor`.
     fn diagnostics(&self) -> &'static [RuntimeDiagnosticCheck];
     /// Returns user-facing event source label.
     fn event_source_label(&self) -> &'static str;

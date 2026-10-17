@@ -1,6 +1,6 @@
 //! docker up dry run module.
 //!
-//! Contains docker up dry run logic used by Stackctl command workflows.
+//! Contains docker up dry run logic used by Berth command workflows.
 
 use anyhow::Result;
 

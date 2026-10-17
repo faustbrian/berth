@@ -1,6 +1,6 @@
 //! docker up module.
 //!
-//! Contains docker up logic used by Stackctl command workflows.
+//! Contains docker up logic used by Berth command workflows.
 
 use anyhow::Result;
 

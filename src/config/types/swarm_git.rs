@@ -1,6 +1,6 @@
 //! config types swarm git module.
 //!
-//! Contains config types swarm git logic used by Stackctl command workflows.
+//! Contains config types swarm git logic used by Berth command workflows.
 
 use serde::{Deserialize, Serialize};
 

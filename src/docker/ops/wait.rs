@@ -1,6 +1,6 @@
 //! docker ops wait module.
 //!
-//! Contains docker wait operation used by Stackctl command workflows.
+//! Contains docker wait operation used by Berth command workflows.
 
 use anyhow::Result;
 

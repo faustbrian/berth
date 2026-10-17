@@ -21,7 +21,7 @@ fn preset_config_expands_defaults_and_assigns_ports() {
 
             [[service]]
             preset = "laravel"
-            domain = "acme-api.stackctl"
+            domain = "acme-api.berth"
         "#;
 
     let raw: RawConfig = toml::from_str(toml).expect("raw config parse");
@@ -51,7 +51,7 @@ fn preset_config_expands_defaults_and_assigns_ports() {
         .expect("app service");
     assert_eq!(app.name, "app");
     assert_eq!(app.port, 33065);
-    assert_eq!(app.domain.as_deref(), Some("acme-api.stackctl"));
+    assert_eq!(app.domain.as_deref(), Some("acme-api.berth"));
     assert_eq!(
         app.env.as_ref().and_then(|env| env.get("APP_ENV")),
         Some(&"local".to_owned())
@@ -458,7 +458,7 @@ fn new_infra_presets_expand_expected_defaults() {
     assert_eq!(sqlserver.username.as_deref(), Some("sa"));
     assert_eq!(
         sqlserver.password.as_deref(),
-        Some("StackctlSqlServerPassw0rd!")
+        Some("BerthSqlServerPassw0rd!")
     );
 
     let localstack = config

@@ -1,6 +1,6 @@
 //! database dump io module.
 //!
-//! Contains database dump io logic used by Stackctl command workflows.
+//! Contains database dump io logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 use flate2::Compression;
@@ -62,7 +62,7 @@ mod tests {
 
     fn temp_file_path(prefix: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "stackctl-dump-io-{}-{}",
+            "berth-dump-io-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

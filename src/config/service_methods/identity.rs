@@ -1,6 +1,6 @@
 //! config service methods identity module.
 //!
-//! Contains config service methods identity logic used by Stackctl command workflows.
+//! Contains config service methods identity logic used by Berth command workflows.
 
 use anyhow::{Result, anyhow};
 

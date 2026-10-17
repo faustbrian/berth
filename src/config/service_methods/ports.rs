@@ -1,6 +1,6 @@
 //! config service methods ports module.
 //!
-//! Contains config service methods ports logic used by Stackctl command workflows.
+//! Contains config service methods ports logic used by Berth command workflows.
 
 use super::{Driver, ServiceConfig};
 

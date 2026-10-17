@@ -1,6 +1,6 @@
 //! docker health module.
 //!
-//! Contains docker health logic used by Stackctl command workflows.
+//! Contains docker health logic used by Berth command workflows.
 
 use anyhow::Result;
 

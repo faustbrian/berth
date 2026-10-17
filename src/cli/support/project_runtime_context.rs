@@ -90,7 +90,7 @@ mod tests {
 
     fn temp_config_path() -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!(
-            "stackctl-project-runtime-context-{}",
+            "berth-project-runtime-context-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -99,11 +99,11 @@ mod tests {
         drop(std::fs::remove_dir_all(&path));
         std::fs::create_dir_all(&path).expect("create temp workspace");
         std::fs::write(
-            path.join(".stackctl.toml"),
+            path.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("write config");
-        path.join(".stackctl.toml")
+        path.join(".berth.toml")
     }
 
     #[test]
@@ -115,7 +115,7 @@ mod tests {
 
         assert_eq!(context.workspace_root, workspace_root);
         assert_eq!(
-            context.app_env.get("STACKCTL_SQL_CLIENT_FLAVOR"),
+            context.app_env.get("BERTH_SQL_CLIENT_FLAVOR"),
             Some(&"mysql".to_owned())
         );
         assert_eq!(

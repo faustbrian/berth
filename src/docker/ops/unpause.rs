@@ -1,6 +1,6 @@
 //! docker ops unpause module.
 //!
-//! Contains docker unpause operation used by Stackctl command workflows.
+//! Contains docker unpause operation used by Berth command workflows.
 
 use anyhow::Result;
 

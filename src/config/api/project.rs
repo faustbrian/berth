@@ -1,6 +1,6 @@
 //! config api project module.
 //!
-//! Contains config api project logic used by Stackctl command workflows.
+//! Contains config api project logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::{Path, PathBuf};
@@ -30,7 +30,7 @@ impl<'a> ProjectRootPathOptions<'a> {
     }
 }
 
-/// Returns the directory containing the Stackctl config file.
+/// Returns the directory containing the Berth config file.
 ///
 /// # Errors
 ///
@@ -39,7 +39,7 @@ pub fn project_root() -> Result<PathBuf> {
     paths::project_root()
 }
 
-/// Returns the directory containing the detected Stackctl config file.
+/// Returns the directory containing the detected Berth config file.
 ///
 /// # Errors
 ///
@@ -48,7 +48,7 @@ pub fn project_root_with(options: ProjectRootPathOptions<'_>) -> Result<PathBuf>
     paths::project_root_with(options.config_path, options.project_root)
 }
 
-/// Creates a starter `.stackctl.toml` in the current directory.
+/// Creates a starter `.berth.toml` in the current directory.
 ///
 /// # Errors
 ///
@@ -57,7 +57,7 @@ pub fn init_config() -> Result<PathBuf> {
     paths::init_config()
 }
 
-/// Returns the detected Stackctl config path in a single directory.
+/// Returns the detected Berth config path in a single directory.
 ///
 /// This checks only the provided directory and does not walk parent paths.
 ///

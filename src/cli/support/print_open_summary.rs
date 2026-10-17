@@ -1,6 +1,6 @@
 //! cli support print open summary module.
 //!
-//! Contains cli support print open summary logic used by Stackctl command workflows.
+//! Contains cli support print open summary logic used by Berth command workflows.
 
 use anyhow::Result;
 
@@ -73,7 +73,7 @@ mod tests {
             api_key: None,
             region: None,
             scheme: Some("https".to_owned()),
-            domain: Some("app.stackctl".to_owned()),
+            domain: Some("app.berth".to_owned()),
             domains: None,
             resolved_domain: None,
             container_port: None,
@@ -105,7 +105,7 @@ mod tests {
         F: FnOnce(&Path, &Path) -> T,
     {
         let marker_dir = std::env::temp_dir().join(format!(
-            "stackctl-print-open-summary-{}",
+            "berth-print-open-summary-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("time")

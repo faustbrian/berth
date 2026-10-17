@@ -49,7 +49,7 @@ fn inferred_app_env_includes_core_laravel_service_vars() {
     );
     assert_eq!(vars.get("DB_PORT"), Some(&"33060".to_owned()));
     assert_eq!(
-        vars.get("STACKCTL_SQL_CLIENT_FLAVOR"),
+        vars.get("BERTH_SQL_CLIENT_FLAVOR"),
         Some(&"mysql".to_owned())
     );
     assert_eq!(vars.get("QUEUE_CONNECTION"), Some(&"redis".to_owned()));
@@ -133,7 +133,7 @@ fn inferred_app_env_uses_mariadb_flavor_for_mariadb_only_database_images() {
 
     let vars = inferred_app_env(&config);
     assert_eq!(
-        vars.get("STACKCTL_SQL_CLIENT_FLAVOR"),
+        vars.get("BERTH_SQL_CLIENT_FLAVOR"),
         Some(&"mariadb".to_owned())
     );
 }
@@ -244,7 +244,7 @@ fn inferred_app_env_includes_horizon_queue_defaults() {
 #[test]
 fn inferred_app_env_prefers_object_store_domain_for_aws_url() {
     let mut s3 = svc("s3", Kind::ObjectStore, Driver::Rustfs, 9000);
-    s3.domain = Some("media.stackctl".to_owned());
+    s3.domain = Some("media.berth".to_owned());
 
     let config = Config {
         schema_version: 1,
@@ -256,10 +256,7 @@ fn inferred_app_env_prefers_object_store_domain_for_aws_url() {
     };
 
     let vars = inferred_app_env(&config);
-    assert_eq!(
-        vars.get("AWS_URL"),
-        Some(&"https://media.stackctl".to_owned())
-    );
+    assert_eq!(vars.get("AWS_URL"), Some(&"https://media.berth".to_owned()));
     assert_eq!(
         vars.get("AWS_ENDPOINT"),
         Some(&"http://host.docker.internal:9000".to_owned())
@@ -288,7 +285,7 @@ fn inferred_app_env_uses_sqlsrv_connection_for_sqlserver() {
     let mut db = svc("db", Kind::Database, Driver::Sqlserver, 14330);
     db.database = Some("laravel".to_owned());
     db.username = Some("sa".to_owned());
-    db.password = Some("StackctlSqlServerPassw0rd!".to_owned());
+    db.password = Some("BerthSqlServerPassw0rd!".to_owned());
 
     let config = Config {
         schema_version: 1,

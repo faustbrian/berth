@@ -51,7 +51,7 @@ pub(super) fn temp_env_file(name: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .map_or(0_u128, |dur| dur.as_nanos());
     std::env::temp_dir().join(format!(
-        "stackctl-env-tests-{}-{}-{}.env",
+        "berth-env-tests-{}-{}-{}.env",
         name,
         std::process::id(),
         stamp

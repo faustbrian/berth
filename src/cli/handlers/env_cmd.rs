@@ -1,6 +1,6 @@
 //! cli handlers env cmd module.
 //!
-//! Contains cli handlers env cmd logic used by Stackctl command workflows.
+//! Contains cli handlers env cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::{Path, PathBuf};

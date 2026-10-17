@@ -1,6 +1,6 @@
 //! cli args preset commands module.
 //!
-//! Contains cli args preset commands logic used by Stackctl command workflows.
+//! Contains cli args preset commands logic used by Berth command workflows.
 
 use clap::Subcommand;
 

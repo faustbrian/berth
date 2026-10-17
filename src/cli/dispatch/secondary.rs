@@ -47,7 +47,7 @@ mod tests {
 
     #[test]
     fn secondary_dispatch_returns_none_like_default_when_unhandled() {
-        let cli = Cli::parse_from(["stackctl", "doctor"]);
+        let cli = Cli::parse_from(["berth", "doctor"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
         let result = super::dispatch_secondary(&cli, &mut config, &context)
@@ -57,7 +57,7 @@ mod tests {
 
     #[test]
     fn secondary_dispatch_covers_data_command() {
-        let cli = Cli::parse_from(["stackctl", "status"]);
+        let cli = Cli::parse_from(["berth", "status"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
         let result = super::dispatch_secondary(&cli, &mut config, &context);

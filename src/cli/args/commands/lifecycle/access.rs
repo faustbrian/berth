@@ -1,6 +1,6 @@
 //! cli args commands lifecycle access module.
 //!
-//! Contains cli args commands lifecycle access logic used by Stackctl command workflows.
+//! Contains cli args commands lifecycle access logic used by Berth command workflows.
 
 use clap::Args;
 

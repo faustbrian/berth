@@ -151,7 +151,7 @@ mod tests {
             api_key: None,
             region: None,
             scheme: None,
-            domain: Some("app.stackctl".to_owned()),
+            domain: Some("app.berth".to_owned()),
             domains: None,
             resolved_domain: None,
             container_port: Some(80),

@@ -24,7 +24,7 @@ pub(super) struct RunTargetsOptions<'a, F> {
     pub(super) no_color: bool,
     pub(super) dry_run: bool,
     pub(super) runtime_env: Option<&'a str>,
-    pub(super) stackctl_executable: &'a Path,
+    pub(super) berth_executable: &'a Path,
     pub(super) run_target: F,
 }
 
@@ -67,7 +67,7 @@ where
             options.targets,
             options.output_mode,
             options.fail_fast,
-            options.stackctl_executable,
+            options.berth_executable,
             build_args,
             options.run_target,
         );
@@ -78,7 +78,7 @@ where
         output_mode: options.output_mode,
         parallel: options.parallel,
         fail_fast: options.fail_fast,
-        stackctl_executable: options.stackctl_executable,
+        berth_executable: options.berth_executable,
         build_args,
         run_target: options.run_target,
     })
@@ -88,7 +88,7 @@ fn run_targets_sequential<F, A>(
     targets: &[ResolvedSwarmTarget],
     output_mode: OutputMode,
     fail_fast: bool,
-    stackctl_executable: &Path,
+    berth_executable: &Path,
     build_args: A,
     run_target: F,
 ) -> Result<(Vec<SwarmRunResult>, usize)>
@@ -105,7 +105,7 @@ where
     let mut results = Vec::new();
     for target in targets {
         let args = build_args(target);
-        let result = run_target(stackctl_executable, target, &args, output_mode, None)?;
+        let result = run_target(berth_executable, target, &args, output_mode, None)?;
         let failed = !result.success;
         results.push(result);
         if failed && fail_fast {
@@ -142,7 +142,7 @@ mod tests {
             no_color: false,
             dry_run: false,
             runtime_env: None,
-            stackctl_executable: std::path::Path::new("/bin/echo"),
+            berth_executable: std::path::Path::new("/bin/echo"),
             run_target: run_target_result,
         });
 
@@ -174,7 +174,7 @@ mod tests {
             no_color: false,
             dry_run: false,
             runtime_env: None,
-            stackctl_executable: std::path::Path::new("/bin/echo"),
+            berth_executable: std::path::Path::new("/bin/echo"),
             run_target: run_target_logged,
         })
         .expect("run targets");
@@ -211,7 +211,7 @@ mod tests {
             no_color: false,
             dry_run: false,
             runtime_env: None,
-            stackctl_executable: std::path::Path::new("/bin/echo"),
+            berth_executable: std::path::Path::new("/bin/echo"),
             run_target: fail_fast_target,
         })
         .expect("run targets with fail fast");
@@ -246,7 +246,7 @@ mod tests {
             no_color: false,
             dry_run: false,
             runtime_env: None,
-            stackctl_executable: std::path::Path::new("/bin/echo"),
+            berth_executable: std::path::Path::new("/bin/echo"),
             run_target: run_target_logged,
         })
         .expect("run targets");
@@ -255,7 +255,7 @@ mod tests {
     }
 
     fn run_target_result(
-        _stackctl: &std::path::Path,
+        _berth: &std::path::Path,
         _target: &ResolvedSwarmTarget,
         _args: &[String],
         _mode: OutputMode,
@@ -270,7 +270,7 @@ mod tests {
     }
 
     fn run_target_logged(
-        _stackctl: &std::path::Path,
+        _berth: &std::path::Path,
         target: &ResolvedSwarmTarget,
         _args: &[String],
         _mode: OutputMode,
@@ -285,7 +285,7 @@ mod tests {
     }
 
     fn fail_fast_target(
-        _stackctl: &std::path::Path,
+        _berth: &std::path::Path,
         target: &ResolvedSwarmTarget,
         _args: &[String],
         _mode: OutputMode,

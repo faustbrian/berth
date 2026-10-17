@@ -1,6 +1,6 @@
 //! docker manage container ops module.
 //!
-//! Contains docker manage container ops logic used by Stackctl command workflows.
+//! Contains docker manage container ops logic used by Berth command workflows.
 
 use anyhow::Result;
 

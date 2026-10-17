@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 static TEST_RUNTIME_POOL_SIZE_OVERRIDE: OnceLock<Mutex<Option<usize>>> = OnceLock::new();
 
-/// Builds a unique runtime env namespace for one `stackctl artisan test` run.
+/// Builds a unique runtime env namespace for one `berth artisan test` run.
 pub(super) fn testing_runtime_env_name() -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -121,7 +121,7 @@ fn testing_runtime_pool_size_from_env<F>(lookup: F) -> Option<usize>
 where
     F: Fn(&str) -> Option<String>,
 {
-    let raw = lookup("STACKCTL_TEST_RUNTIME_POOL_SIZE")?;
+    let raw = lookup("BERTH_TEST_RUNTIME_POOL_SIZE")?;
     raw.trim().parse::<usize>().ok().filter(|n| *n > 0)
 }
 
@@ -235,7 +235,7 @@ fn workspace_pool_key(workspace_root: &Path) -> String {
 
 fn pool_lock_root(workspace_key: &str) -> std::path::PathBuf {
     std::env::temp_dir()
-        .join("stackctl-testing-runtime-pool")
+        .join("berth-testing-runtime-pool")
         .join(workspace_key)
 }
 
@@ -298,7 +298,7 @@ mod tests {
 
     fn temp_root(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-test-runtime-{name}-{}",
+            "berth-test-runtime-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -344,10 +344,8 @@ mod tests {
             None
         );
 
-        let invalid = HashMap::from([(
-            "STACKCTL_TEST_RUNTIME_POOL_SIZE".to_owned(),
-            "abc".to_owned(),
-        )]);
+        let invalid =
+            HashMap::from([("BERTH_TEST_RUNTIME_POOL_SIZE".to_owned(), "abc".to_owned())]);
         assert_eq!(
             testing_runtime_pool_size_from_env(|name| invalid.get(name).cloned()),
             None

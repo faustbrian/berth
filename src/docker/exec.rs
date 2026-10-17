@@ -1,6 +1,6 @@
 //! docker exec module.
 //!
-//! Contains docker exec logic used by Stackctl command workflows.
+//! Contains docker exec logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::process::Child;
@@ -87,7 +87,7 @@ mod tests {
         F: FnOnce() -> T,
     {
         let bin_dir = env::temp_dir().join(format!(
-            "stackctl-fake-docker-exec-{}",
+            "berth-fake-docker-exec-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("time")

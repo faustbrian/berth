@@ -1,6 +1,6 @@
 //! cli args commands operations docker ops port module.
 //!
-//! Contains port command args used by Stackctl command workflows.
+//! Contains port command args used by Berth command workflows.
 
 use clap::Args;
 

@@ -1,6 +1,6 @@
 //! cli args commands app task module.
 //!
-//! Contains cli args for `stackctl task` workflows.
+//! Contains cli args for `berth task` workflows.
 
 use clap::{Args, Subcommand};
 

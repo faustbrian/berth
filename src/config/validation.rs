@@ -1,6 +1,6 @@
 //! config validation module.
 //!
-//! Contains config validation logic used by Stackctl command workflows.
+//! Contains config validation logic used by Berth command workflows.
 
 use anyhow::Result;
 

@@ -18,6 +18,15 @@ static TEST_DOCKER_COMMAND: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 #[cfg(test)]
 static TEST_RUNTIME_SCOPE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
+#[cfg(test)]
+thread_local! {
+    /// Per-test engine override. Tests that only read the active engine never
+    /// take the runtime scope lock, so a process-wide override would leak into
+    /// concurrently running tests.
+    static TEST_ENGINE_OVERRIDE: std::cell::Cell<Option<ContainerEngine>> =
+        const { std::cell::Cell::new(None) };
+}
+
 /// Pull behavior used by `up`.
 #[derive(Clone, Copy, Debug)]
 #[non_exhaustive]
@@ -47,14 +56,25 @@ fn active_engine_adapter() -> &'static dyn engine::RuntimeEngineAdapter {
 }
 
 pub(crate) fn set_container_engine(engine: ContainerEngine) {
-    let mut guard = container_engine_lock()
-        .lock()
-        .unwrap_or_else(|err| err.into_inner());
-    *guard = engine;
+    // Test builds keep engine selection per thread so one test's config
+    // cannot change the engine observed by concurrently running tests.
+    #[cfg(test)]
+    TEST_ENGINE_OVERRIDE.set(Some(engine));
+    #[cfg(not(test))]
+    {
+        let mut guard = container_engine_lock()
+            .lock()
+            .unwrap_or_else(|err| err.into_inner());
+        *guard = engine;
+    }
 }
 
 #[must_use]
 pub(crate) fn container_engine() -> ContainerEngine {
+    #[cfg(test)]
+    if let Some(engine) = TEST_ENGINE_OVERRIDE.get() {
+        return engine;
+    }
     *container_engine_lock()
         .lock()
         .unwrap_or_else(|err| err.into_inner())
@@ -98,10 +118,9 @@ pub(crate) fn with_test_runtime_lock<R>(test: impl FnOnce() -> R) -> R {
 #[cfg(test)]
 pub(crate) fn with_container_engine<R>(engine: ContainerEngine, test: impl FnOnce() -> R) -> R {
     with_test_runtime_state(|| {
-        let previous = container_engine();
-        set_container_engine(engine);
+        let previous = TEST_ENGINE_OVERRIDE.replace(Some(engine));
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(test));
-        set_container_engine(previous);
+        TEST_ENGINE_OVERRIDE.set(previous);
 
         match result {
             Ok(result) => result,

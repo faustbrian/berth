@@ -1,6 +1,6 @@
 //! cli args commands module.
 //!
-//! Contains cli args commands logic used by Stackctl command workflows.
+//! Contains cli args commands logic used by Berth command workflows.
 
 use clap::Subcommand;
 
@@ -42,7 +42,7 @@ pub(crate) use operations::{
 #[derive(Subcommand)]
 #[non_exhaustive]
 pub(crate) enum Commands {
-    /// Initialize a new .stackctl.toml config file
+    /// Initialize a new .berth.toml config file
     Init,
     /// Print resolved configuration
     Config(ConfigArgs),
@@ -54,7 +54,7 @@ pub(crate) enum Commands {
     Doctor(DoctorArgs),
     /// Manage workspace lockfile for reproducible image resolution
     Lock(LockArgs),
-    /// Manage per-project Stackctl daemon processes
+    /// Manage per-project Berth daemon processes
     Daemon(DaemonArgs),
     /// Prepare service(s)
     Setup(SetupArgs),
@@ -76,7 +76,7 @@ pub(crate) enum Commands {
     Recreate(RecreateArgs),
     /// Restart service container(s)
     Restart(RestartArgs),
-    /// Recreate containers to apply current Stackctl ownership labels
+    /// Recreate containers to apply current Berth ownership labels
     Relabel(RelabelArgs),
     /// Print connection URL(s)
     Url(UrlArgs),
@@ -113,11 +113,11 @@ pub(crate) enum Commands {
     Unpause(UnpauseArgs),
     /// Block until container(s) stop and print exit status
     Wait(WaitArgs),
-    /// Stream container runtime events (Stackctl scope by default)
+    /// Stream container runtime events (Berth scope by default)
     Events(EventsArgs),
     /// List port mappings for container(s)
     Port(PortArgs),
-    /// Remove stopped Stackctl service containers (or all with --all)
+    /// Remove stopped Berth service containers (or all with --all)
     Prune(PruneArgs),
     /// Pull latest service image(s)
     Pull(PullArgs),
@@ -155,7 +155,7 @@ pub(crate) enum Commands {
     Task(TaskArgs),
     /// List configured services
     Ls(LsArgs),
-    /// Run a stackctl command across configured swarm targets
+    /// Run a berth command across configured swarm targets
     Swarm(SwarmArgs),
     /// Generate shell completions
     Completions(CompletionsArgs),

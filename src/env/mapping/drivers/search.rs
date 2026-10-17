@@ -1,6 +1,6 @@
 //! env mapping drivers search module.
 //!
-//! Contains env mapping drivers search logic used by Stackctl command workflows.
+//! Contains env mapping drivers search logic used by Berth command workflows.
 
 use std::collections::HashMap;
 

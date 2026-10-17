@@ -1,6 +1,6 @@
 //! cli support tail access logs module.
 //!
-//! Contains cli support tail access logs logic used by Stackctl command workflows.
+//! Contains cli support tail access logs logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 use std::process::Command;
@@ -12,7 +12,7 @@ pub(crate) fn tail_access_logs(follow: bool, tail: Option<u64>) -> Result<()> {
     let path = serve::caddy_access_log_path()?;
     if !path.exists() {
         anyhow::bail!(
-            "access log file not found at {}. start an app via `stackctl up` first",
+            "access log file not found at {}. start an app via `berth up` first",
             path.display()
         );
     }

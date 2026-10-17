@@ -1,6 +1,6 @@
 //! config paths search module.
 //!
-//! Contains config paths search logic used by Stackctl command workflows.
+//! Contains config paths search logic used by Berth command workflows.
 
 use anyhow::{Context, Result, anyhow};
 use std::path::{Path, PathBuf};
@@ -21,14 +21,14 @@ pub(super) fn find_project_root(start: &Path) -> Result<PathBuf> {
 
         current = current.parent().ok_or_else(|| {
             anyhow!(
-                "no Stackctl config found (.stackctl.toml or .stackctl.yaml) in current directory or any parent directory"
+                "no Berth config found (.berth.toml or .berth.yaml) in current directory or any parent directory"
             )
         })?;
     }
 }
 
 pub(super) fn config_path_in_dir(dir: &Path) -> Result<Option<PathBuf>> {
-    resolve_config_pair(dir, ".stackctl")
+    resolve_config_pair(dir, ".berth")
 }
 
 #[cfg(test)]
@@ -62,7 +62,7 @@ fn find_config_in_path_internal(
 
         current = current.parent().ok_or_else(|| {
             anyhow!(
-                "no Stackctl config found (.stackctl.toml or .stackctl.yaml) in current directory or any parent directory"
+                "no Berth config found (.berth.toml or .berth.yaml) in current directory or any parent directory"
             )
         })?;
     }
@@ -78,11 +78,11 @@ fn resolve_config_pair(dir: &Path, base_name: &str) -> Result<Option<PathBuf>> {
             toml_path
                 .file_name()
                 .and_then(std::ffi::OsStr::to_str)
-                .unwrap_or(".stackctl.toml"),
+                .unwrap_or(".berth.toml"),
             yaml_path
                 .file_name()
                 .and_then(std::ffi::OsStr::to_str)
-                .unwrap_or(".stackctl.yaml"),
+                .unwrap_or(".berth.yaml"),
             dir.display()
         ),
         (true, false) => Ok(Some(toml_path)),
@@ -105,7 +105,7 @@ mod tests {
     fn temp_tree() -> std::path::PathBuf {
         let sequence = TEMP_TREE_COUNTER.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!(
-            "stackctl-path-search-{}-{}-{sequence}",
+            "berth-path-search-{}-{}-{sequence}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -122,7 +122,7 @@ mod tests {
         let root = temp_tree();
         let nested = root.join("nested");
         fs::write(
-            root.join(".stackctl.toml"),
+            root.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed root config");
@@ -136,13 +136,13 @@ mod tests {
         let root = temp_tree();
         let nested = root.join("nested");
         fs::write(
-            root.join(".stackctl.toml"),
+            root.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed root config");
 
         let result = find_config_in_path(&nested).expect("find config from nested");
-        assert_eq!(result, root.join(".stackctl.toml"));
+        assert_eq!(result, root.join(".berth.toml"));
     }
 
     #[test]
@@ -150,19 +150,19 @@ mod tests {
         let root = temp_tree();
         let nested = root.join("nested");
         fs::write(
-            root.join(".stackctl.toml"),
+            root.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed root config");
         fs::write(
-            root.join(".stackctl.testing.toml"),
+            root.join(".berth.testing.toml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed env config");
 
-        let result = find_config_in_path_with_env(&nested, Some(".stackctl.testing"))
+        let result = find_config_in_path_with_env(&nested, Some(".berth.testing"))
             .expect("find env config from nested");
-        assert_eq!(result, root.join(".stackctl.testing.toml"));
+        assert_eq!(result, root.join(".berth.testing.toml"));
     }
 
     #[test]
@@ -170,7 +170,7 @@ mod tests {
         let _guard = crate::config::paths::CWD_LOCK.lock().expect("cwd lock");
         let root = temp_tree();
         let cwd = std::env::current_dir().expect("capture cwd");
-        let expected = root.join(".stackctl.toml");
+        let expected = root.join(".berth.toml");
         fs::write(
             &expected,
             "schema_version = 1\nproject_type = \"project\"\n",
@@ -190,7 +190,7 @@ mod tests {
     #[test]
     fn config_path_in_dir_returns_yaml_when_present() {
         let root = temp_tree();
-        let expected = root.join(".stackctl.yaml");
+        let expected = root.join(".berth.yaml");
         fs::write(&expected, "schema_version: 1\nproject_type: project\n")
             .expect("seed yaml config");
 

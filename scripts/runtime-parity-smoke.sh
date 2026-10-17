@@ -21,7 +21,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cat >"$TMP_DIR/.stackctl.toml" <<EOF
+cat >"$TMP_DIR/.berth.toml" <<EOF
 schema_version = 1
 container_engine = "$ENGINE"
 container_prefix = "parity"
@@ -32,37 +32,37 @@ preset = "redis"
 name = "cache"
 EOF
 
-run_stackctl() {
+run_berth() {
   cargo run --release --manifest-path "$ROOT/Cargo.toml" -- \
     --project-root "$TMP_DIR" \
     "$@"
 }
 
 echo "==> [$ENGINE] config load"
-run_stackctl about >/dev/null
+run_berth about >/dev/null
 
 echo "==> [$ENGINE] up"
-run_stackctl up --service cache --wait --wait-timeout 30 --no-deps
+run_berth up --service cache --wait --wait-timeout 30 --no-deps
 
 echo "==> [$ENGINE] status"
-run_stackctl ps
+run_berth ps
 
 echo "==> [$ENGINE] inspect"
-run_stackctl inspect --service cache --format '{{.Name}}'
+run_berth inspect --service cache --format '{{.Name}}'
 
 echo "==> [$ENGINE] port"
-run_stackctl port --service cache
+run_berth port --service cache
 
 echo "==> [$ENGINE] logs"
-run_stackctl logs --service cache --tail 5
+run_berth logs --service cache --tail 5
 
 echo "==> [$ENGINE] exec"
-run_stackctl exec --service cache -- redis-cli ping
+run_berth exec --service cache -- redis-cli ping
 
 echo "==> [$ENGINE] top"
-run_stackctl top --service cache aux
+run_berth top --service cache aux
 
 echo "==> [$ENGINE] down"
-run_stackctl down --service cache --no-deps
+run_berth down --service cache --no-deps
 
 echo "runtime parity smoke for '$ENGINE' passed"

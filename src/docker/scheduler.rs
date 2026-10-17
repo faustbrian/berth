@@ -50,7 +50,7 @@ fn lock_root(class: DockerOpClass) -> PathBuf {
         DockerOpClass::Build => "build",
     };
     std::env::temp_dir()
-        .join("stackctl-docker-scheduler")
+        .join("berth-docker-scheduler")
         .join(class_name)
 }
 
@@ -166,7 +166,7 @@ mod tests {
 
     fn temp_root(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-docker-scheduler-{name}-{}",
+            "berth-docker-scheduler-{name}-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("system clock")

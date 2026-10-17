@@ -1,6 +1,6 @@
 //! docker ops attach module.
 //!
-//! Contains docker attach operation used by Stackctl command workflows.
+//! Contains docker attach operation used by Berth command workflows.
 
 use anyhow::Result;
 

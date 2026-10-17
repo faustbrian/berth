@@ -1,6 +1,6 @@
 //! swarm injection values module.
 //!
-//! Contains swarm injection values logic used by Stackctl command workflows.
+//! Contains swarm injection values logic used by Berth command workflows.
 
 use anyhow::Result;
 

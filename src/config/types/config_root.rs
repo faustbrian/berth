@@ -1,6 +1,6 @@
 //! config types config root module.
 //!
-//! Contains config types config root logic used by Stackctl command workflows.
+//! Contains config types config root logic used by Berth command workflows.
 
 use serde::{Deserialize, Serialize};
 

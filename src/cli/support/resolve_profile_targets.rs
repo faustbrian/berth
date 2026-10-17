@@ -1,6 +1,6 @@
 //! cli support resolve profile targets module.
 //!
-//! Contains cli support resolve profile targets logic used by Stackctl command workflows.
+//! Contains cli support resolve profile targets logic used by Berth command workflows.
 
 use anyhow::Result;
 

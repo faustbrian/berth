@@ -13,8 +13,8 @@ use std::cell::RefCell;
 
 use super::daemon_binary;
 
-const LAUNCHD_LABEL: &str = "dev.stackctl.daemon.watch";
-const SYSTEMD_UNIT_NAME: &str = "stackctl-daemon-watch.service";
+const LAUNCHD_LABEL: &str = "dev.berth.daemon.watch";
+const SYSTEMD_UNIT_NAME: &str = "berth-daemon-watch.service";
 
 #[cfg(test)]
 thread_local! {
@@ -325,7 +325,7 @@ fn home_dir() -> Result<PathBuf> {
 }
 
 fn daemon_state_home() -> Result<PathBuf> {
-    Ok(home_dir()?.join(".config/stackctl/daemon"))
+    Ok(home_dir()?.join(".config/berth/daemon"))
 }
 
 fn launchd_plist_path() -> Result<PathBuf> {
@@ -411,7 +411,7 @@ mod tests {
 
     fn temp_home(name: &str) -> std::path::PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-daemon-service-{name}-{}",
+            "berth-daemon-service-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -435,7 +435,7 @@ mod tests {
     fn install_service_writes_launchd_plist_and_records_commands() {
         let home = temp_home("launchd");
         set_test_service_home(home.to_str().expect("home path"));
-        set_test_service_binary("/tmp/stackctl");
+        set_test_service_binary("/tmp/berth");
         set_test_service_manager(ServiceManager::Launchd);
         clear_test_service_commands();
 
@@ -443,7 +443,7 @@ mod tests {
         let plist = fs::read_to_string(&status.path).expect("read plist");
 
         assert!(status.installed);
-        assert!(plist.contains("/tmp/stackctl"));
+        assert!(plist.contains("/tmp/berth"));
         assert!(plist.contains("<string>--dir</string>"));
         assert!(plist.contains("<string>/tmp/projects</string>"));
         assert!(plist.contains("<string>--exclude-dir</string>"));
@@ -465,7 +465,7 @@ mod tests {
     fn install_service_writes_systemd_unit_and_records_commands() {
         let home = temp_home("systemd");
         set_test_service_home(home.to_str().expect("home path"));
-        set_test_service_binary("/tmp/stackctl");
+        set_test_service_binary("/tmp/berth");
         set_test_service_manager(ServiceManager::SystemdUser);
         clear_test_service_commands();
 
@@ -474,7 +474,7 @@ mod tests {
 
         assert!(status.installed);
         assert!(unit.contains("ExecStart="));
-        assert!(unit.contains("/tmp/stackctl"));
+        assert!(unit.contains("/tmp/berth"));
         assert!(unit.contains("--interval"));
         assert!(unit.contains("--exclude-dir"));
         assert!(unit.contains("--max-projects"));
@@ -484,7 +484,7 @@ mod tests {
         assert_eq!(commands[0], "systemctl --user daemon-reload");
         assert_eq!(
             commands[1],
-            "systemctl --user enable --now stackctl-daemon-watch.service"
+            "systemctl --user enable --now berth-daemon-watch.service"
         );
 
         clear_test_service_binary();
@@ -496,7 +496,7 @@ mod tests {
     fn uninstall_service_removes_installed_definition() {
         let home = temp_home("uninstall");
         set_test_service_home(home.to_str().expect("home path"));
-        set_test_service_binary("/tmp/stackctl");
+        set_test_service_binary("/tmp/berth");
         set_test_service_manager(ServiceManager::SystemdUser);
         clear_test_service_commands();
 
@@ -509,7 +509,7 @@ mod tests {
 
         let commands = take_test_service_commands();
         assert!(commands.iter().any(|command| {
-            command == "systemctl --user disable --now stackctl-daemon-watch.service"
+            command == "systemctl --user disable --now berth-daemon-watch.service"
         }));
 
         clear_test_service_binary();
@@ -521,12 +521,12 @@ mod tests {
     fn print_and_status_report_service_definition() {
         let home = temp_home("status");
         set_test_service_home(home.to_str().expect("home path"));
-        set_test_service_binary("/tmp/stackctl");
+        set_test_service_binary("/tmp/berth");
         set_test_service_manager(ServiceManager::Launchd);
 
         let printed = print_service(&service_options()).expect("print");
-        assert_eq!(printed.label, "dev.stackctl.daemon.watch");
-        assert!(printed.contents.contains("/tmp/stackctl"));
+        assert_eq!(printed.label, "dev.berth.daemon.watch");
+        assert!(printed.contents.contains("/tmp/berth"));
 
         let status_before = service_status().expect("status before install");
         assert!(!status_before.installed);

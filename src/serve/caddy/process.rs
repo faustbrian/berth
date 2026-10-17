@@ -35,7 +35,7 @@ pub(super) fn ensure_caddy_installed() -> Result<()> {
     ensure_success(output, "caddy is unavailable").map(|_| ())
 }
 
-/// Validates a Caddy config before Stackctl attempts to reload or start it.
+/// Validates a Caddy config before Berth attempts to reload or start it.
 pub(super) fn validate_caddy_config(caddyfile_path: &Path) -> Result<()> {
     let config_path = caddyfile_path.to_string_lossy().into_owned();
     let output = run_caddy(
@@ -197,7 +197,7 @@ fn failed_output(stderr: &str) -> Output {
     #[cfg(not(unix))]
     {
         let status = Command::new(caddy_binary_name())
-            .arg("__stackctl_failed_output_sentinel__")
+            .arg("__berth_failed_output_sentinel__")
             .output()
             .map(|output| output.status)
             .unwrap_or_else(|_| panic!("failed to synthesize non-zero exit status"));
@@ -234,7 +234,7 @@ mod tests {
     {
         let _guard = TEST_ENV_MUTEX.lock().unwrap_or_else(|err| err.into_inner());
         let temp_dir = std::env::temp_dir().join(format!(
-            "stackctl-mock-caddy-{}-{}",
+            "berth-mock-caddy-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn reload_or_start_caddy_stops_existing_process_before_start_fallback() {
         let temp_dir = std::env::temp_dir().join(format!(
-            "stackctl-caddy-order-{}-{}",
+            "berth-caddy-order-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

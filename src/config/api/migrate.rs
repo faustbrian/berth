@@ -1,6 +1,6 @@
 //! config api migrate module.
 //!
-//! Contains config api migrate logic used by Stackctl command workflows.
+//! Contains config api migrate logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::PathBuf;
@@ -20,7 +20,7 @@ pub fn migrate_config_with(options: MigrateConfigOptions<'_>) -> Result<PathBuf>
     ))?;
     let version = raw.schema_version.unwrap_or(1);
     if version > 1 {
-        anyhow::bail!("schema_version '{version}' is newer than this Stackctl build supports");
+        anyhow::bail!("schema_version '{version}' is newer than this Berth build supports");
     }
 
     raw.schema_version = Some(1);
@@ -48,7 +48,7 @@ mod tests {
 
     fn temp_root() -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-migrate-tests-{}",
+            "berth-migrate-tests-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -60,7 +60,7 @@ mod tests {
     }
 
     fn write_config(root: &Path, content: &str) -> PathBuf {
-        let path = root.join(".stackctl.toml");
+        let path = root.join(".berth.toml");
         fs::write(&path, content).expect("write raw config");
         path
     }
@@ -133,13 +133,13 @@ preset = \"laravel\"
 
         let migrated_raw = fs::read_to_string(&path).expect("read migrated config");
         assert!(migrated_raw.contains("domain_strategy = \"directory\""));
-        assert!(!migrated_raw.contains("domain = \"my-project.stackctl\""));
+        assert!(!migrated_raw.contains("domain = \"my-project.berth\""));
 
         let migrated = load_config_with(LoadConfigPathOptions::new(Some(&path), None))?;
         assert_eq!(migrated.service[0].domain, None);
         assert_eq!(
             migrated.service[0].primary_domain(),
-            Some("my-project.stackctl")
+            Some("my-project.berth")
         );
 
         Ok(())

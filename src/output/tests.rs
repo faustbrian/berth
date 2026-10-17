@@ -1,6 +1,6 @@
 //! output tests module.
 //!
-//! Contains output tests logic used by Stackctl command workflows.
+//! Contains output tests logic used by Berth command workflows.
 
 use super::{
     LogLevel, Persistence,
@@ -111,7 +111,7 @@ fn normalize_log_message_rewrites_error_prefixes() {
 
 #[test]
 fn colorize_message_payload_highlights_semantic_values() {
-    let raw = "Recreating service on random port 58835 using 'stackctl/acme-api-app' at https://acme-api.grid with config /Users/brian/.config/stackctl/caddy/Caddyfile";
+    let raw = "Recreating service on random port 58835 using 'berth/acme-api-app' at https://acme-api.grid with config /Users/brian/.config/berth/caddy/Caddyfile";
     let rendered = colorize_message_payload(raw);
     assert_eq!(strip_ansi_codes(&rendered), raw);
 }
@@ -122,9 +122,9 @@ fn normalize_log_message_strips_simple_identifier_quotes() {
     assert_eq!(
         normalize_log_message(
             LogLevel::Info,
-            "Using cached derived image 'stackctl/acme-api-app-serve-e5b602cccc6e69c0'",
+            "Using cached derived image 'berth/acme-api-app-serve-e5b602cccc6e69c0'",
         ),
-        "Using cached derived image stackctl/acme-api-app-serve-e5b602cccc6e69c0"
+        "Using cached derived image berth/acme-api-app-serve-e5b602cccc6e69c0"
     );
     assert_eq!(
         normalize_log_message(LogLevel::Success, "Purged container 'acme-api-s3'"),
@@ -147,13 +147,11 @@ fn colorize_message_tokens_normalizes_nested_spacing() {
 #[test]
 fn colorize_message_tokens_aligns_single_token_lines_with_three_token_lines() {
     let swarm = strip_ansi_codes(&colorize_message_tokens(
-        "[swarm] Running `stackctl recreate` across 6 target(s)",
+        "[swarm] Running `berth recreate` across 6 target(s)",
     ));
     let bill = strip_ansi_codes(&colorize_message_tokens("[bill] [db] Recreating service"));
 
-    let swarm_start = swarm
-        .find("Running stackctl recreate")
-        .expect("swarm start");
+    let swarm_start = swarm.find("Running berth recreate").expect("swarm start");
     let bill_start = bill.find("Recreating service").expect("bill start");
     assert_eq!(swarm_start, bill_start);
 }

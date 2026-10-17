@@ -4,8 +4,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
 
-const BROWSER_TEST_RUNTIME_ENV_KEY: &str = "STACKCTL_BROWSER_TEST_RUNTIME";
-const BROWSER_TEST_RUNTIME_TARGETS_ENV_KEY: &str = "STACKCTL_BROWSER_TEST_RUNTIME_TARGETS";
+const BROWSER_TEST_RUNTIME_ENV_KEY: &str = "BERTH_BROWSER_TEST_RUNTIME";
+const BROWSER_TEST_RUNTIME_TARGETS_ENV_KEY: &str = "BERTH_BROWSER_TEST_RUNTIME_TARGETS";
 
 /// Marks a runtime env map so derived app images include browser-test deps.
 pub(crate) fn enable_browser_test_runtime(
@@ -69,7 +69,7 @@ mod tests {
 
     fn temp_root(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-browser-runtime-{name}-{}",
+            "berth-browser-runtime-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")

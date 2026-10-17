@@ -1,6 +1,6 @@
 //! cli support matches filter module.
 //!
-//! Contains cli support matches filter logic used by Stackctl command workflows.
+//! Contains cli support matches filter logic used by Berth command workflows.
 
 use crate::config;
 

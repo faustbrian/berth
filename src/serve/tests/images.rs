@@ -13,7 +13,7 @@ fn derived_image_tag_sanitizes_container_name() {
     let signature = "base=image;js=true;exts=pdo_mysql";
     assert!(
         derived_image_tag("acme/api:serve-app", signature)
-            .starts_with("stackctl/acme-api-serve-app-serve-")
+            .starts_with("berth/acme-api-serve-app-serve-")
     );
 }
 

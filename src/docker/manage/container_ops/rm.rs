@@ -1,6 +1,6 @@
 //! docker manage container ops rm module.
 //!
-//! Contains docker manage container ops rm logic used by Stackctl command workflows.
+//! Contains docker manage container ops rm logic used by Berth command workflows.
 
 use anyhow::Result;
 
@@ -28,7 +28,7 @@ pub(super) fn rm(service: &ServiceConfig, force: bool) -> Result<()> {
         && status == "running"
     {
         anyhow::bail!(
-            "Container '{}' is still running. Stop it first with 'stackctl stop --service {}' or use --force",
+            "Container '{}' is still running. Stop it first with 'berth stop --service {}' or use --force",
             container_name,
             service.name
         );

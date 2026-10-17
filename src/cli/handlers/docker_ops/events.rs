@@ -1,6 +1,6 @@
 //! cli handlers docker ops events module.
 //!
-//! Contains events handler used by Stackctl command workflows.
+//! Contains events handler used by Berth command workflows.
 
 use anyhow::Result;
 
@@ -57,7 +57,7 @@ pub(crate) fn handle_events(
         .collect::<Result<Vec<String>>>()?;
     let all_filters = build_scoped_event_filters(options.filter, &container_names);
     super::log::info(&format!(
-        "Streaming Stackctl-scoped {} events",
+        "Streaming Berth-scoped {} events",
         docker::runtime_event_source_label()
     ));
     docker::events(options.since, options.until, effective_format, &all_filters)
@@ -85,8 +85,8 @@ mod tests {
         let containers = vec!["acme-db".to_owned(), "acme-app".to_owned()];
         let filters = build_scoped_event_filters(&base, &containers);
         assert!(filters.contains(&"type=container".to_owned()));
-        assert!(filters.contains(&"label=com.stackctl.managed=true".to_owned()));
-        assert!(filters.contains(&"label=com.stackctl.container=acme-db".to_owned()));
-        assert!(filters.contains(&"label=com.stackctl.container=acme-app".to_owned()));
+        assert!(filters.contains(&"label=dev.berth.managed=true".to_owned()));
+        assert!(filters.contains(&"label=dev.berth.container=acme-db".to_owned()));
+        assert!(filters.contains(&"label=dev.berth.container=acme-app".to_owned()));
     }
 }

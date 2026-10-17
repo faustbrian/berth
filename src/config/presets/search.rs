@@ -1,6 +1,6 @@
 //! config presets search module.
 //!
-//! Contains config presets search logic used by Stackctl command workflows.
+//! Contains config presets search logic used by Berth command workflows.
 
 use super::{Driver, Kind, PresetDefaults};
 

@@ -1,6 +1,6 @@
 //! config api lockfile module.
 //!
-//! Contains config api lockfile logic used by Stackctl command workflows.
+//! Contains config api lockfile logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 use std::path::PathBuf;
@@ -51,13 +51,13 @@ pub fn save_lockfile_with(
 pub fn verify_lockfile_with(config: &Config, options: ProjectRootPathOptions<'_>) -> Result<()> {
     let expected = build_image_lock(config)?;
     let actual = load_lockfile_with(options)
-        .context("failed to load .stackctl.lock.toml; run `stackctl lock images` to generate it")?;
+        .context("failed to load .berth.lock.toml; run `berth lock images` to generate it")?;
     let diff = lockfile_diff(&expected, &actual);
     if diff.missing.is_empty() && diff.changed.is_empty() && diff.extra.is_empty() {
         return Ok(());
     }
 
-    anyhow::bail!("lockfile is out of sync; run `stackctl lock images`")
+    anyhow::bail!("lockfile is out of sync; run `berth lock images`")
 }
 
 #[cfg(test)]
@@ -118,7 +118,7 @@ mod tests {
         Config {
             schema_version: 1,
             project_type: crate::config::ProjectType::Project,
-            container_prefix: Some("stackctl".to_owned()),
+            container_prefix: Some("berth".to_owned()),
             domain_strategy: None,
             service: vec![
                 service("db", "postgres@sha256:db"),
@@ -130,7 +130,7 @@ mod tests {
 
     fn temp_dir() -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!(
-            "stackctl-lockfile-tests-{}",
+            "berth-lockfile-tests-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -142,7 +142,7 @@ mod tests {
     }
 
     fn config_path(root: &Path) -> std::path::PathBuf {
-        root.join(".stackctl.toml")
+        root.join(".berth.toml")
     }
 
     #[test]

@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 fn temp_root(prefix: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "stackctl-domain-strategy-{prefix}-{}",
+        "berth-domain-strategy-{prefix}-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock")
@@ -17,7 +17,7 @@ fn temp_root(prefix: &str) -> PathBuf {
 }
 
 fn write_config(root: &std::path::Path, content: &str) -> PathBuf {
-    let path = root.join(".stackctl.toml");
+    let path = root.join(".berth.toml");
     fs::write(&path, content).expect("write config");
     path
 }
@@ -64,15 +64,12 @@ preset = "mailhog"
         .find(|service| service.name == "mailhog")
         .expect("mailhog service");
 
-    assert_eq!(app.primary_domain(), Some("my-project.stackctl"));
+    assert_eq!(app.primary_domain(), Some("my-project.berth"));
     assert_eq!(
         gotenberg.primary_domain(),
-        Some("my-project-gotenberg.stackctl")
+        Some("my-project-gotenberg.berth")
     );
-    assert_eq!(
-        mailhog.primary_domain(),
-        Some("my-project-mailhog.stackctl")
-    );
+    assert_eq!(mailhog.primary_domain(), Some("my-project-mailhog.berth"));
     assert_eq!(app.domain, None);
     assert_eq!(gotenberg.domain, None);
     assert_eq!(mailhog.domain, None);
@@ -120,9 +117,9 @@ preset = "mailhog"
 
     let base = first_app.primary_domain().expect("generated domain");
     assert_eq!(Some(base), second_app.primary_domain());
-    assert!(base.starts_with("stackctl-"));
-    assert!(base.ends_with(".stackctl"));
-    let expected_mailhog = format!("{}-mailhog.stackctl", base.trim_end_matches(".stackctl"));
+    assert!(base.starts_with("berth-"));
+    assert!(base.ends_with(".berth"));
+    let expected_mailhog = format!("{}-mailhog.berth", base.trim_end_matches(".berth"));
     assert_eq!(
         second_mailhog.primary_domain(),
         Some(expected_mailhog.as_str())

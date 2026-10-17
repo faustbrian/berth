@@ -1,6 +1,6 @@
 //! docker manage container ops recreate module.
 //!
-//! Contains docker manage container ops recreate logic used by Stackctl command workflows.
+//! Contains docker manage container ops recreate logic used by Berth command workflows.
 
 use anyhow::Result;
 

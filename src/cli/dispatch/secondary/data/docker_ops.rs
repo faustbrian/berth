@@ -163,66 +163,66 @@ mod tests {
 
     #[test]
     fn docker_ops_dispatches_top() {
-        assert!(dispatch_result(&["stackctl", "top"]).is_some());
+        assert!(dispatch_result(&["berth", "top"]).is_some());
     }
 
     #[test]
     fn docker_ops_dispatches_stats() {
-        assert!(dispatch_result(&["stackctl", "stats"]).is_some());
+        assert!(dispatch_result(&["berth", "stats"]).is_some());
     }
 
     #[test]
     fn docker_ops_dispatches_inspect() {
-        assert!(dispatch_result(&["stackctl", "inspect"]).is_some());
+        assert!(dispatch_result(&["berth", "inspect"]).is_some());
     }
 
     #[test]
     fn docker_ops_dispatches_attach() {
-        assert!(dispatch_result(&["stackctl", "attach"]).is_some());
+        assert!(dispatch_result(&["berth", "attach"]).is_some());
     }
 
     #[test]
     fn docker_ops_dispatches_cp() {
-        assert!(dispatch_result(&["stackctl", "cp", "src", "dst"]).is_some());
+        assert!(dispatch_result(&["berth", "cp", "src", "dst"]).is_some());
     }
 
     #[test]
     fn docker_ops_dispatches_kill() {
-        assert!(dispatch_result(&["stackctl", "kill"]).is_some());
+        assert!(dispatch_result(&["berth", "kill"]).is_some());
     }
 
     #[test]
     fn docker_ops_dispatches_pause() {
-        assert!(dispatch_result(&["stackctl", "pause"]).is_some());
+        assert!(dispatch_result(&["berth", "pause"]).is_some());
     }
 
     #[test]
     fn docker_ops_dispatches_unpause() {
-        assert!(dispatch_result(&["stackctl", "unpause"]).is_some());
+        assert!(dispatch_result(&["berth", "unpause"]).is_some());
     }
 
     #[test]
     fn docker_ops_dispatches_wait() {
-        assert!(dispatch_result(&["stackctl", "wait"]).is_some());
+        assert!(dispatch_result(&["berth", "wait"]).is_some());
     }
 
     #[test]
     fn docker_ops_dispatches_events() {
-        assert!(dispatch_result(&["stackctl", "events"]).is_some());
+        assert!(dispatch_result(&["berth", "events"]).is_some());
     }
 
     #[test]
     fn docker_ops_dispatches_port() {
-        assert!(dispatch_result(&["stackctl", "port"]).is_some());
+        assert!(dispatch_result(&["berth", "port"]).is_some());
     }
 
     #[test]
     fn docker_ops_dispatches_prune() {
-        assert!(dispatch_result(&["stackctl", "prune"]).is_some());
+        assert!(dispatch_result(&["berth", "prune"]).is_some());
     }
 
     #[test]
     fn docker_ops_dispatches_none_for_core_command() {
-        assert!(dispatch_result(&["stackctl", "about"]).is_none());
+        assert!(dispatch_result(&["berth", "about"]).is_none());
     }
 }

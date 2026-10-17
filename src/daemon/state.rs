@@ -96,11 +96,11 @@ fn project_state_dir(project_root: &Path) -> Result<PathBuf> {
 fn daemon_home_dir() -> Result<PathBuf> {
     #[cfg(test)]
     if let Some(home) = test_daemon_home() {
-        return Ok(PathBuf::from(home).join(".config/stackctl/daemon"));
+        return Ok(PathBuf::from(home).join(".config/berth/daemon"));
     }
 
     let home = std::env::var("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join(".config/stackctl/daemon"))
+    Ok(PathBuf::from(home).join(".config/berth/daemon"))
 }
 
 fn project_key(project_root: &Path) -> String {
@@ -120,7 +120,7 @@ mod tests {
 
     fn temp_home(name: &str) -> std::path::PathBuf {
         let home = std::env::temp_dir().join(format!(
-            "stackctl-daemon-state-{name}-{}",
+            "berth-daemon-state-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -133,7 +133,7 @@ mod tests {
 
     fn temp_project_root(name: &str) -> std::path::PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-daemon-project-{name}-{}",
+            "berth-daemon-project-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")

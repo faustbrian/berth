@@ -15,7 +15,7 @@ pub(super) struct RunTargetsParallelOptions<'a, F, B> {
     pub(super) output_mode: OutputMode,
     pub(super) parallel: usize,
     pub(super) fail_fast: bool,
-    pub(super) stackctl_executable: &'a Path,
+    pub(super) berth_executable: &'a Path,
     pub(super) build_args: B,
     pub(super) run_target: F,
 }
@@ -49,7 +49,7 @@ where
                     }
                     let args = (options.build_args)(target);
                     let result = (options.run_target)(
-                        options.stackctl_executable,
+                        options.berth_executable,
                         target,
                         &args,
                         options.output_mode,

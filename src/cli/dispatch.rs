@@ -77,13 +77,13 @@ mod tests {
             .expect("system clock")
             .as_nanos();
         let dir = std::env::temp_dir().join(format!(
-            "stackctl-dispatch-run-{}-{}",
+            "berth-dispatch-run-{}-{}",
             std::process::id(),
             nanos
         ));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).expect("create temporary project root");
-        let config_path = dir.join(".stackctl.toml");
+        let config_path = dir.join(".berth.toml");
         fs::write(
             &config_path,
             "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
@@ -97,7 +97,7 @@ mod tests {
         let project_root = minimal_config_dir();
         crate::docker::with_test_runtime_lock(|| {
             let args = [
-                "stackctl",
+                "berth",
                 "--project-root",
                 project_root.to_str().expect("project root is valid utf-8"),
                 "about",
@@ -113,7 +113,7 @@ mod tests {
         let project_root = minimal_config_dir();
         crate::docker::with_test_runtime_lock(|| {
             let args = [
-                "stackctl",
+                "berth",
                 "--project-root",
                 project_root.to_str().expect("project root is valid utf-8"),
                 "status",
@@ -127,7 +127,7 @@ mod tests {
     #[test]
     fn run_applies_container_engine_from_config() {
         let project_root = minimal_config_dir();
-        let config_path = project_root.join(".stackctl.toml");
+        let config_path = project_root.join(".berth.toml");
         fs::write(
             &config_path,
             "schema_version = 1\nproject_type = \"project\"\ncontainer_engine = \"podman\"\nservice = []\nswarm = []\n",
@@ -136,7 +136,7 @@ mod tests {
 
         crate::docker::with_container_engine(crate::config::ContainerEngine::Docker, || {
             let args = [
-                "stackctl",
+                "berth",
                 "--project-root",
                 project_root.to_str().expect("project root is valid utf-8"),
                 "status",

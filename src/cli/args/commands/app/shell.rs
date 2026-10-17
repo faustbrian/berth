@@ -1,6 +1,6 @@
 //! cli args commands app shell module.
 //!
-//! Contains cli args commands app shell logic used by Stackctl command workflows.
+//! Contains cli args commands app shell logic used by Berth command workflows.
 
 use clap::Args;
 

@@ -1,6 +1,6 @@
 //! swarm injection context module.
 //!
-//! Contains swarm injection context logic used by Stackctl command workflows.
+//! Contains swarm injection context logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};

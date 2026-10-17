@@ -1,6 +1,6 @@
 //! docker up args builder env object store module.
 //!
-//! Contains docker up args builder env object store logic used by Stackctl command workflows.
+//! Contains docker up args builder env object store logic used by Berth command workflows.
 
 use crate::config::{Driver, ServiceConfig};
 

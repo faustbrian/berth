@@ -117,7 +117,7 @@ mod tests {
 
     fn temp_root(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-daemon-discovery-{name}-{}",
+            "berth-daemon-discovery-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("time")
@@ -131,10 +131,10 @@ mod tests {
     fn write_project(root: &PathBuf) {
         fs::create_dir_all(root).expect("create project root");
         fs::write(
-            root.join(".stackctl.toml"),
+            root.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
         )
-        .expect("write stackctl config");
+        .expect("write berth config");
     }
 
     #[test]
@@ -175,7 +175,7 @@ mod tests {
         let invalid = root.join("invalid");
         fs::create_dir_all(&invalid).expect("create invalid dir");
         fs::write(
-            invalid.join(".stackctl.toml"),
+            invalid.join(".berth.toml"),
             "schema_version = 1\nservice = []\n",
         )
         .expect("write invalid config");
@@ -237,7 +237,7 @@ mod tests {
         let project = root.join("project");
         fs::create_dir_all(&project).expect("create project root");
         fs::write(
-            project.join(".stackctl.yaml"),
+            project.join(".berth.yaml"),
             "schema_version: 1\nproject_type: project\nservice: []\nswarm: []\n",
         )
         .expect("write yaml config");

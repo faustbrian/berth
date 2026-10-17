@@ -21,7 +21,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cat >"$TMP_DIR/.stackctl.toml" <<EOF_CONF
+cat >"$TMP_DIR/.berth.toml" <<EOF_CONF
 schema_version = 1
 container_engine = "$ENGINE"
 container_prefix = "parity"
@@ -31,7 +31,7 @@ preset = "redis"
 name = "cache"
 EOF_CONF
 
-run_stackctl() {
+run_berth() {
   cargo run --release --manifest-path "$ROOT/Cargo.toml" -- \
     --project-root "$TMP_DIR" \
     "$@"
@@ -39,7 +39,7 @@ run_stackctl() {
 
 step() {
   echo "==> [$ENGINE] $*"
-  run_stackctl "$@"
+  run_berth "$@"
 }
 
 # Runtime and config resolution checks

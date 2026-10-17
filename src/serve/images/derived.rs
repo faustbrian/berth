@@ -161,7 +161,7 @@ mod tests {
 
     fn temp_root(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-derived-browser-audit-{name}-{}",
+            "berth-derived-browser-audit-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -188,7 +188,7 @@ mod tests {
             api_key: None,
             region: None,
             scheme: None,
-            domain: Some("app.stackctl".to_owned()),
+            domain: Some("app.berth".to_owned()),
             domains: None,
             resolved_domain: None,
             container_port: Some(80),
@@ -232,7 +232,7 @@ mod tests {
             api_key: None,
             region: None,
             scheme: None,
-            domain: Some("mailhog.stackctl".to_owned()),
+            domain: Some("mailhog.berth".to_owned()),
             domains: None,
             resolved_domain: None,
             container_port: Some(8025),
@@ -273,15 +273,15 @@ mod tests {
         .expect("write package.json");
 
         let env = HashMap::from([
-            ("STACKCTL_BROWSER_TEST_RUNTIME".to_owned(), "1".to_owned()),
+            ("BERTH_BROWSER_TEST_RUNTIME".to_owned(), "1".to_owned()),
             (
-                "STACKCTL_BROWSER_TEST_RUNTIME_TARGETS".to_owned(),
+                "BERTH_BROWSER_TEST_RUNTIME_TARGETS".to_owned(),
                 "app".to_owned(),
             ),
         ]);
 
         let result = docker::with_dry_run_state(false, || {
-            docker::with_docker_command("/tmp/stackctl-unexpected-docker", || {
+            docker::with_docker_command("/tmp/berth-unexpected-docker", || {
                 resolve_runtime_image(&frankenphp_app(), false, &env, &root)
             })
         })
@@ -296,15 +296,15 @@ mod tests {
         fs::write(root.join("package.json"), "{}").expect("write package.json");
 
         let env = HashMap::from([
-            ("STACKCTL_BROWSER_TEST_RUNTIME".to_owned(), "1".to_owned()),
+            ("BERTH_BROWSER_TEST_RUNTIME".to_owned(), "1".to_owned()),
             (
-                "STACKCTL_BROWSER_TEST_RUNTIME_TARGETS".to_owned(),
+                "BERTH_BROWSER_TEST_RUNTIME_TARGETS".to_owned(),
                 "app".to_owned(),
             ),
         ]);
 
         let result = docker::with_dry_run_state(false, || {
-            docker::with_docker_command("/tmp/stackctl-unexpected-docker", || {
+            docker::with_docker_command("/tmp/berth-unexpected-docker", || {
                 resolve_runtime_image(&mailhog_app(), false, &env, &root)
             })
         })

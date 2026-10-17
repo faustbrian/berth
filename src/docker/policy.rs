@@ -65,18 +65,18 @@ where
     F: Fn(&str) -> Option<String>,
 {
     let mut policy = DockerPolicy::default();
-    if let Some(value) = lookup("STACKCTL_DOCKER_MAX_HEAVY_OPS")
-        && let Ok(parsed) = parse_positive_u32("STACKCTL_DOCKER_MAX_HEAVY_OPS", &value)
+    if let Some(value) = lookup("BERTH_DOCKER_MAX_HEAVY_OPS")
+        && let Ok(parsed) = parse_positive_u32("BERTH_DOCKER_MAX_HEAVY_OPS", &value)
     {
         policy.max_heavy_ops = parsed as usize;
     }
-    if let Some(value) = lookup("STACKCTL_DOCKER_MAX_BUILD_OPS")
-        && let Ok(parsed) = parse_positive_u32("STACKCTL_DOCKER_MAX_BUILD_OPS", &value)
+    if let Some(value) = lookup("BERTH_DOCKER_MAX_BUILD_OPS")
+        && let Ok(parsed) = parse_positive_u32("BERTH_DOCKER_MAX_BUILD_OPS", &value)
     {
         policy.max_build_ops = parsed as usize;
     }
-    if let Some(value) = lookup("STACKCTL_DOCKER_RETRY_BUDGET")
-        && let Ok(parsed) = parse_positive_u32("STACKCTL_DOCKER_RETRY_BUDGET", &value)
+    if let Some(value) = lookup("BERTH_DOCKER_RETRY_BUDGET")
+        && let Ok(parsed) = parse_positive_u32("BERTH_DOCKER_RETRY_BUDGET", &value)
     {
         policy.retry_budget = parsed;
     }
@@ -119,9 +119,9 @@ mod tests {
     #[test]
     fn docker_policy_reads_valid_env_overrides() {
         let env = HashMap::from([
-            ("STACKCTL_DOCKER_MAX_HEAVY_OPS".to_owned(), "4".to_owned()),
-            ("STACKCTL_DOCKER_MAX_BUILD_OPS".to_owned(), "2".to_owned()),
-            ("STACKCTL_DOCKER_RETRY_BUDGET".to_owned(), "5".to_owned()),
+            ("BERTH_DOCKER_MAX_HEAVY_OPS".to_owned(), "4".to_owned()),
+            ("BERTH_DOCKER_MAX_BUILD_OPS".to_owned(), "2".to_owned()),
+            ("BERTH_DOCKER_RETRY_BUDGET".to_owned(), "5".to_owned()),
         ]);
         let policy = policy_from_env(|name| env.get(name).cloned());
 

@@ -1,6 +1,6 @@
 //! cli args module.
 //!
-//! Contains cli args logic used by Stackctl command workflows.
+//! Contains cli args logic used by Berth command workflows.
 
 use clap::Parser;
 use std::path::Path;
@@ -48,7 +48,7 @@ pub(crate) fn default_parallelism() -> usize {
 }
 
 #[derive(Parser)]
-#[command(name = "stackctl", about = "Local data service manager", version)]
+#[command(name = "berth", about = "Local data service manager", version)]
 #[non_exhaustive]
 pub(crate) struct Cli {
     #[command(subcommand)]
@@ -83,7 +83,7 @@ pub(crate) struct Cli {
     /// Retry attempts for transient Docker failures
     #[arg(global = true, long, value_name = "N")]
     pub(crate) docker_retry_budget: Option<u32>,
-    /// Number of pooled runtimes for `stackctl artisan test`
+    /// Number of pooled runtimes for `berth artisan test`
     #[arg(global = true, long, value_name = "N")]
     pub(crate) test_runtime_pool_size: Option<usize>,
     /// Enable reproducible mode (deterministic behavior with lockfile checks)

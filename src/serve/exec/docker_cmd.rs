@@ -46,7 +46,7 @@ mod tests {
         F: FnOnce() -> T,
     {
         let bin_dir = env::temp_dir().join(format!(
-            "stackctl-fake-serve-exec-{}",
+            "berth-fake-serve-exec-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("time")

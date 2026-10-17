@@ -65,6 +65,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
+name = "berth"
+version = "6.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "clap_complete",
+ "colored",
+ "flate2",
+ "indicatif",
+ "rayon",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tabled",
+ "time",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -576,27 +597,6 @@ name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
-
-[[package]]
-name = "stackctl"
-version = "6.0.0"
-dependencies = [
- "anyhow",
- "clap",
- "clap_complete",
- "colored",
- "flate2",
- "indicatif",
- "rayon",
- "serde",
- "serde_json",
- "serde_yaml",
- "tabled",
- "time",
- "toml",
- "tracing",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "strsim"

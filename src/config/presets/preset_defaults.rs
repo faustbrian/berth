@@ -1,6 +1,6 @@
 //! config presets preset defaults module.
 //!
-//! Contains config presets preset defaults logic used by Stackctl command workflows.
+//! Contains config presets preset defaults logic used by Berth command workflows.
 
 use super::{Driver, Kind};
 

@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-pub(crate) const SQL_CLIENT_FLAVOR_ENV: &str = "STACKCTL_SQL_CLIENT_FLAVOR";
+pub(crate) const SQL_CLIENT_FLAVOR_ENV: &str = "BERTH_SQL_CLIENT_FLAVOR";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SqlClientFlavor {
@@ -64,10 +64,7 @@ mod tests {
     #[test]
     fn parses_mariadb() {
         let mut injected = HashMap::new();
-        injected.insert(
-            "STACKCTL_SQL_CLIENT_FLAVOR".to_owned(),
-            "mariadb".to_owned(),
-        );
+        injected.insert("BERTH_SQL_CLIENT_FLAVOR".to_owned(), "mariadb".to_owned());
         assert_eq!(
             sql_client_flavor_from_injected_env(&injected),
             SqlClientFlavor::Mariadb

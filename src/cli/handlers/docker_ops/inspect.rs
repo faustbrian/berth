@@ -1,6 +1,6 @@
 //! cli handlers docker ops inspect module.
 //!
-//! Contains inspect handler used by Stackctl command workflows.
+//! Contains inspect handler used by Berth command workflows.
 
 use anyhow::Result;
 

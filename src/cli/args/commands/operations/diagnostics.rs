@@ -1,6 +1,6 @@
 //! cli args commands operations diagnostics module.
 //!
-//! Contains cli args commands operations diagnostics logic used by Stackctl command workflows.
+//! Contains cli args commands operations diagnostics logic used by Berth command workflows.
 
 use clap::Args;
 use std::path::PathBuf;
@@ -86,13 +86,13 @@ pub(crate) struct EnvArgs {
     pub(crate) kind: Option<config::Kind>,
     #[arg(long)]
     pub(crate) env_file: Option<PathBuf>,
-    /// Sync Stackctl-managed app env vars from running app container(s)
+    /// Sync Berth-managed app env vars from running app container(s)
     #[arg(long, default_value_t = false)]
     pub(crate) sync: bool,
-    /// Remove stale Stackctl-managed app env vars missing from sync/config
+    /// Remove stale Berth-managed app env vars missing from sync/config
     #[arg(long, default_value_t = false)]
     pub(crate) purge: bool,
-    /// Persist discovered runtime host/port bindings into `.stackctl.toml`
+    /// Persist discovered runtime host/port bindings into `.berth.toml`
     #[arg(long, default_value_t = false, requires = "sync")]
     pub(crate) persist_runtime: bool,
     #[arg(long, default_value_t = false)]

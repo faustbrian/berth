@@ -52,10 +52,10 @@ pub(crate) fn base_label_for_project_root(project_root: &Path, strategy: DomainS
 #[must_use]
 pub(crate) fn generated_domain(base_label: &str, service_name: &str) -> String {
     if service_name == "app" {
-        return format!("{base_label}.stackctl");
+        return format!("{base_label}.berth");
     }
 
-    format!("{base_label}-{service_name}.stackctl")
+    format!("{base_label}-{service_name}.berth")
 }
 
 fn random_project_label(project_root: &Path) -> String {
@@ -64,7 +64,7 @@ fn random_project_label(project_root: &Path) -> String {
         .unwrap_or_else(|_| project_root.to_path_buf());
     let normalized = canonical.to_string_lossy();
     let hash = fnv1a_64(normalized.as_bytes());
-    format!("stackctl-{:08x}", hash & 0xffff_ffff)
+    format!("berth-{:08x}", hash & 0xffff_ffff)
 }
 
 fn fnv1a_64(input: &[u8]) -> u64 {
@@ -92,10 +92,10 @@ mod tests {
 
     #[test]
     fn generated_domain_uses_plain_base_for_app_service() {
-        assert_eq!(generated_domain("my-project", "app"), "my-project.stackctl");
+        assert_eq!(generated_domain("my-project", "app"), "my-project.berth");
         assert_eq!(
             generated_domain("my-project", "mailhog"),
-            "my-project-mailhog.stackctl"
+            "my-project-mailhog.berth"
         );
     }
 
@@ -106,6 +106,6 @@ mod tests {
         let second = base_label_for_project_root(root, DomainStrategy::Random);
 
         assert_eq!(first, second);
-        assert!(first.starts_with("stackctl-"));
+        assert!(first.starts_with("berth-"));
     }
 }

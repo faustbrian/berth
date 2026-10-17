@@ -1,6 +1,6 @@
 //! cli support run doctor module.
 //!
-//! Contains cli support run doctor logic used by Stackctl command workflows.
+//! Contains cli support run doctor logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;

@@ -1,6 +1,6 @@
 //! cli support open in browser module.
 //!
-//! Contains cli support open in browser logic used by Stackctl command workflows.
+//! Contains cli support open in browser logic used by Berth command workflows.
 
 use std::process::Command;
 
@@ -78,7 +78,7 @@ mod tests {
     fn with_fake_binary<F: FnOnce(&Path, &str)>(name: &str, body: F) {
         let base = std::env::temp_dir();
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("time");
-        let bin_dir = base.join(format!("stackctl-open-browser-{}", stamp.as_nanos()));
+        let bin_dir = base.join(format!("berth-open-browser-{}", stamp.as_nanos()));
         fs::create_dir_all(&bin_dir).expect("create fake bin dir");
 
         let fake = bin_dir.join(name);

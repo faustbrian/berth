@@ -1,6 +1,6 @@
 //! cli handlers daemon cmd module.
 //!
-//! Contains pre-config daemon command routing used by Stackctl command workflows.
+//! Contains pre-config daemon command routing used by Berth command workflows.
 
 mod service;
 
@@ -100,7 +100,7 @@ fn log_discovery_report(report: &DiscoveryReport) {
             "daemon",
             LogLevel::Error,
             &format!(
-                "Skipping invalid Stackctl project config at {}",
+                "Skipping invalid Berth project config at {}",
                 invalid.display()
             ),
             Persistence::Persistent,
@@ -112,7 +112,7 @@ fn log_discovery_report(report: &DiscoveryReport) {
             "daemon",
             LogLevel::Info,
             &format!(
-                "Skipping duplicate discovered Stackctl project at {}",
+                "Skipping duplicate discovered Berth project at {}",
                 duplicate.display()
             ),
             Persistence::Persistent,
@@ -124,7 +124,7 @@ fn log_discovery_report(report: &DiscoveryReport) {
             "daemon",
             LogLevel::Info,
             &format!(
-                "Skipping discovered Stackctl project at {} because the watch project limit was reached",
+                "Skipping discovered Berth project at {} because the watch project limit was reached",
                 limited.display()
             ),
             Persistence::Persistent,
@@ -233,7 +233,7 @@ mod tests {
 
     fn temp_project_root(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-daemon-handler-{name}-{}",
+            "berth-daemon-handler-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -242,16 +242,16 @@ mod tests {
         drop(fs::remove_dir_all(&root));
         fs::create_dir_all(&root).expect("create project root");
         fs::write(
-            root.join(".stackctl.toml"),
+            root.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
         )
-        .expect("write stackctl config");
+        .expect("write berth config");
         root
     }
 
     fn temp_home(name: &str) -> PathBuf {
         let home = std::env::temp_dir().join(format!(
-            "stackctl-daemon-home-{name}-{}",
+            "berth-daemon-home-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -263,7 +263,7 @@ mod tests {
     }
 
     fn mock_daemon_binary(home: &PathBuf) -> String {
-        let script = home.join("stackctl-daemon-mock");
+        let script = home.join("berth-daemon-mock");
         fs::write(&script, "#!/usr/bin/env sh\nexec sleep 60\n").expect("write mock daemon");
         #[cfg(unix)]
         {
@@ -328,10 +328,10 @@ mod tests {
         let project_root = watch_root.join("project-a");
         fs::create_dir_all(&project_root).expect("create project root");
         fs::write(
-            project_root.join(".stackctl.toml"),
+            project_root.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
         )
-        .expect("write stackctl config");
+        .expect("write berth config");
 
         let home = temp_home("watch-home");
         let binary = mock_daemon_binary(&home);

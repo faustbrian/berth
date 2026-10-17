@@ -1,6 +1,6 @@
 //! cli handlers health cmd module.
 //!
-//! Contains cli handlers health cmd logic used by Stackctl command workflows.
+//! Contains cli handlers health cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 use serde::Serialize;

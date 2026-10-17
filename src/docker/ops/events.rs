@@ -1,6 +1,6 @@
 //! docker ops events module.
 //!
-//! Contains docker events operation used by Stackctl command workflows.
+//! Contains docker events operation used by Berth command workflows.
 
 use anyhow::Result;
 

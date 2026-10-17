@@ -92,7 +92,7 @@ mod tests {
     fn prepare_up_context_skips_swarm_injected_env_when_project_deps_are_disabled()
     -> anyhow::Result<()> {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-up-preflight-no-deps-{}",
+            "berth-up-preflight-no-deps-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("time")
@@ -100,7 +100,7 @@ mod tests {
         ));
         fs::create_dir_all(&root)?;
         fs::write(
-            root.join(".stackctl.toml"),
+            root.join(".berth.toml"),
             r#"
 project_type = "project"
 [[swarm]]

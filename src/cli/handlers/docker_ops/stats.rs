@@ -1,6 +1,6 @@
 //! cli handlers docker ops stats module.
 //!
-//! Contains stats handler used by Stackctl command workflows.
+//! Contains stats handler used by Berth command workflows.
 
 use anyhow::Result;
 

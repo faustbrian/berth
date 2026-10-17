@@ -1,6 +1,6 @@
 //! docker up state module.
 //!
-//! Contains docker up state logic used by Stackctl command workflows.
+//! Contains docker up state logic used by Berth command workflows.
 
 use anyhow::Result;
 

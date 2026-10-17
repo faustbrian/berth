@@ -1,6 +1,6 @@
 //! config expansion service selection module.
 //!
-//! Contains config expansion service selection logic used by Stackctl command workflows.
+//! Contains config expansion service selection logic used by Berth command workflows.
 
 use anyhow::{Result, anyhow};
 

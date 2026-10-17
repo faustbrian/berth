@@ -70,13 +70,13 @@ pub(crate) fn resolve_javascript_runtime(
 
     if runtime == JavaScriptRuntime::Deno && options.require_package_manager {
         anyhow::bail!(
-            "configured JavaScript runtime is deno; use `stackctl deno` instead of Node package-manager workflows"
+            "configured JavaScript runtime is deno; use `berth deno` instead of Node package-manager workflows"
         );
     }
 
     if runtime == JavaScriptRuntime::Bun && options.require_package_manager {
         anyhow::bail!(
-            "configured JavaScript runtime is bun; use `stackctl bun` instead of Node package-manager workflows"
+            "configured JavaScript runtime is bun; use `berth bun` instead of Node package-manager workflows"
         );
     }
 
@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     fn resolve_javascript_runtime_reads_version_from_nvmrc() {
-        let root = temp_root("stackctl-node-runtime-nvmrc");
+        let root = temp_root("berth-node-runtime-nvmrc");
         fs::write(root.join(".nvmrc"), "22\n").expect("write nvmrc");
 
         let runtime = resolve_javascript_runtime(ResolveJavaScriptRuntimeOptions {
@@ -138,7 +138,7 @@ mod tests {
 
     #[test]
     fn resolve_javascript_runtime_requires_version_for_non_system_manager() {
-        let root = temp_root("stackctl-node-runtime-version-required");
+        let root = temp_root("berth-node-runtime-version-required");
 
         let error = resolve_javascript_runtime(ResolveJavaScriptRuntimeOptions {
             configured: Some(&JavaScriptToolchain {
@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn resolve_javascript_runtime_detects_deno_workspace() {
-        let root = temp_root("stackctl-js-runtime-deno");
+        let root = temp_root("berth-js-runtime-deno");
         fs::write(root.join("deno.json"), "{\"tasks\":{}}").expect("write deno config");
 
         let runtime = resolve_javascript_runtime(ResolveJavaScriptRuntimeOptions {
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn resolve_javascript_runtime_detects_bun_workspace() {
-        let root = temp_root("stackctl-js-runtime-bun");
+        let root = temp_root("berth-js-runtime-bun");
         fs::write(root.join("bun.lock"), "{}").expect("write bun lockfile");
 
         let runtime = resolve_javascript_runtime(ResolveJavaScriptRuntimeOptions {

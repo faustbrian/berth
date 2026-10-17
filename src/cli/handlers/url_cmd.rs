@@ -1,6 +1,6 @@
 //! cli handlers url cmd module.
 //!
-//! Contains cli handlers url cmd logic used by Stackctl command workflows.
+//! Contains cli handlers url cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 use colored::Colorize;

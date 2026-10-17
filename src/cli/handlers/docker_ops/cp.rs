@@ -1,6 +1,6 @@
 //! cli handlers docker ops cp module.
 //!
-//! Contains cp handler used by Stackctl command workflows.
+//! Contains cp handler used by Berth command workflows.
 
 use anyhow::Result;
 

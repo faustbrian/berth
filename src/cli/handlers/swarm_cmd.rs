@@ -1,6 +1,6 @@
 //! cli handlers swarm cmd module.
 //!
-//! Contains cli handlers swarm cmd logic used by Stackctl command workflows.
+//! Contains cli handlers swarm cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;

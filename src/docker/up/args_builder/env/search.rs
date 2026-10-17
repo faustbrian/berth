@@ -1,6 +1,6 @@
 //! docker up args builder env search module.
 //!
-//! Contains docker up args builder env search logic used by Stackctl command workflows.
+//! Contains docker up args builder env search logic used by Berth command workflows.
 
 use crate::config::{Driver, ServiceConfig};
 

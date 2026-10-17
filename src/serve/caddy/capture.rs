@@ -13,7 +13,7 @@ impl CommandCapture {
     pub(super) fn new() -> Result<Self> {
         let temp_dir = std::env::temp_dir();
         let unique = format!(
-            "stackctl-caddy-capture-{}-{}",
+            "berth-caddy-capture-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

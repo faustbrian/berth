@@ -1,11 +1,11 @@
 # Usage
 
-This document describes every command and flag exposed by `stackctl`.
+This document describes every command and flag exposed by `berth`.
 
 ## CLI Shape
 
 ```bash
-stackctl [GLOBAL_OPTIONS] <COMMAND> [COMMAND_OPTIONS]
+berth [GLOBAL_OPTIONS] <COMMAND> [COMMAND_OPTIONS]
 ```
 
 ## Global Options
@@ -19,15 +19,15 @@ These apply to all commands.
 - `--dry-run`
   - Print planned actions without changing containers/config where supported.
 - `--config <PATH>`
-  - Use an explicit `.stackctl.toml` or `.stackctl.yaml` path.
+  - Use an explicit `.berth.toml` or `.berth.yaml` path.
   - Conflicts with `--project-root`.
 - `--project-root <DIR>`
-  - Resolve `.stackctl.toml` or `.stackctl.yaml` from a specific directory.
+  - Resolve `.berth.toml` or `.berth.yaml` from a specific directory.
 - `--env <NAME>`
   - Runtime namespace (for example `testing` / `test`).
 - `--engine <docker|podman>`
   - Override container runtime engine for this invocation.
-  - When omitted, Stackctl uses `container_engine` from config, then defaults to
+  - When omitted, Berth uses `container_engine` from config, then defaults to
     `docker`.
 - `--repro`
   - Enable reproducibility mode (lockfile + deterministic checks).
@@ -36,7 +36,7 @@ These apply to all commands.
 
 ## Runtime Engine
 
-Set a project default engine in `.stackctl.toml` or `.stackctl.yaml`:
+Set a project default engine in `.berth.toml` or `.berth.yaml`:
 
 ```toml
 container_engine = "docker" # or "podman"
@@ -44,14 +44,14 @@ container_engine = "docker" # or "podman"
 
 Notes:
 
-- Stackctl defaults to `docker` when `container_engine` is not set.
+- Berth defaults to `docker` when `container_engine` is not set.
 - Podman support covers core Docker-compatible CLI flows.
 - Some advanced runtime/network behavior can differ by engine and host setup.
 
 ## Domain Strategy
 
-Set a project default app-domain strategy in `.stackctl.toml` or
-`.stackctl.yaml`:
+Set a project default app-domain strategy in `.berth.toml` or
+`.berth.yaml`:
 
 ```toml
 domain_strategy = "directory" # or "random"
@@ -60,11 +60,11 @@ domain_strategy = "directory" # or "random"
 Rules:
 
 - `directory` uses the kebab-case project directory name as the base label.
-- `random` uses a stable project-specific `stackctl-<hash>` base label.
-- Stackctl only auto-generates domains for app services that do not already define
+- `random` uses a stable project-specific `berth-<hash>` base label.
+- Berth only auto-generates domains for app services that do not already define
   `domain` or `domains`.
-- The generated app service named `app` uses `<base>.stackctl`.
-- Other app services use `<base>-<service>.stackctl`.
+- The generated app service named `app` uses `<base>.berth`.
+- Other app services use `<base>-<service>.berth`.
 
 Example for `/Users/brian/Developer/my-project`:
 
@@ -83,9 +83,9 @@ preset = "mailhog"
 
 This resolves to:
 
-- `my-project.stackctl`
-- `my-project-gotenberg.stackctl`
-- `my-project-mailhog.stackctl`
+- `my-project.berth`
+- `my-project-gotenberg.berth`
+- `my-project-mailhog.berth`
 
 ## Common Selectors
 
@@ -151,13 +151,13 @@ If `--service` is omitted, commands operate on all matching services.
 - `random` (default)
 - `stable` (uses `--port-seed` if provided)
 
-### Node Package Manager (`stackctl node --package-manager`)
+### Node Package Manager (`berth node --package-manager`)
 
 - `npm`
 - `pnpm`
 - `yarn`
 
-### Node Version Manager (`stackctl node --version-manager`)
+### Node Version Manager (`berth node --version-manager`)
 
 - `system` (default)
 - `fnm`
@@ -177,23 +177,23 @@ If `--service` is omitted, commands operate on all matching services.
 
 ## Top-Level Commands
 
-### `stackctl init`
+### `berth init`
 
-Initialize a new `.stackctl.toml` in the current directory.
+Initialize a new `.berth.toml` in the current directory.
 
 - New configs default `domain_strategy` to `directory`.
 - The generated template omits explicit app `domain` entries and relies on the
   configured strategy instead.
 
-### `stackctl config [--format <toml|json>] [migrate]`
+### `berth config [--format <toml|json>] [migrate]`
 
 - Without subcommand: print resolved config.
 - `--format <FORMAT>`: output format (`toml` default, `json` supported).
-- `stackctl config migrate`: migrate local config schema to latest supported version.
+- `berth config migrate`: migrate local config schema to latest supported version.
 
-### `stackctl daemon <start|watch|status|stop|logs>`
+### `berth daemon <start|watch|status|stop|logs>`
 
-Manage a per-project Stackctl daemon target by explicit path instead of the
+Manage a per-project Berth daemon target by explicit path instead of the
 current working directory.
 
 Flags:
@@ -202,35 +202,35 @@ Flags:
 
 Notes:
 
-- `--path` may point at the Stackctl project root or any nested directory inside
+- `--path` may point at the Berth project root or any nested directory inside
   that project.
-- Daemon commands resolve `.stackctl.toml` from the explicit path before regular
+- Daemon commands resolve `.berth.toml` from the explicit path before regular
   config loading, so they do not depend on the caller's current directory.
 - `daemon start` persists per-project session metadata and a log path under
-  `~/.config/stackctl/daemon/`.
+  `~/.config/berth/daemon/`.
 - `daemon watch --dir <DIR>` scans one or more parent directories for
-  `.stackctl.toml` projects and starts missing per-project daemons.
+  `.berth.toml` projects and starts missing per-project daemons.
 - `daemon watch --exclude-dir <DIR>` skips specific subtrees inside watched
   roots.
-- `daemon watch --max-projects <N>` caps how many discovered projects Stackctl
+- `daemon watch --max-projects <N>` caps how many discovered projects Berth
   will auto-start from one watch pass.
 - `daemon watch --once` runs one discovery pass and exits.
 - `daemon watch --interval <SECONDS>` controls the repeat scan delay when
   `--once` is not set.
 - `daemon status`, `stop`, and `logs` read that persisted session state instead
   of inferring daemon ownership from the current shell process.
-- The daemon child bootstraps the project through Stackctl's existing `start`
+- The daemon child bootstraps the project through Berth's existing `start`
   flow, then polls managed services and reruns `up` if any service container is
   missing or no longer `running`.
 - Repeated recovery failures use exponential backoff before retrying.
 - Watch mode deduplicates overlapping watch roots, ignores nested child
   projects under an already managed project root, and reports invalid
-  `.stackctl.toml` files without stopping discovery for valid sibling projects.
+  `.berth.toml` files without stopping discovery for valid sibling projects.
 - When `--max-projects` is set, extra discovered projects are skipped instead
   of being auto-started, which keeps broad watch roots from starting an
   unbounded number of daemons.
 
-### `stackctl daemon service <install|status|print|uninstall>`
+### `berth daemon service <install|status|print|uninstall>`
 
 Manage a login-time watch service backed by the local user service manager.
 
@@ -247,34 +247,34 @@ Flags:
 
 Notes:
 
-- On macOS Stackctl installs a `launchd` user agent under
+- On macOS Berth installs a `launchd` user agent under
   `~/Library/LaunchAgents/`.
-- On Linux Stackctl installs a `systemd --user` unit under
+- On Linux Berth installs a `systemd --user` unit under
   `~/.config/systemd/user/`.
 - `install` writes the rendered service definition, enables it for the current
   user, and starts it immediately.
 - Installed services preserve the same watch policy flags as interactive
-  `stackctl daemon watch`, including exclusions and max project limits.
+  `berth daemon watch`, including exclusions and max project limits.
 - `status` reports whether the service definition is currently installed.
 - `print` shows the rendered unit/plist without writing it.
 - `uninstall` stops the installed service and removes its definition file.
 
-### `stackctl preset <SUBCOMMAND>`
+### `berth preset <SUBCOMMAND>`
 
-- `stackctl preset list`: list available preset names.
-- `stackctl preset show <NAME> [--format <toml|json>]`: show resolved defaults.
+- `berth preset list`: list available preset names.
+- `berth preset show <NAME> [--format <toml|json>]`: show resolved defaults.
 
-### `stackctl profile <SUBCOMMAND>`
+### `berth profile <SUBCOMMAND>`
 
-- `stackctl profile list`: list built-in profile names.
-- `stackctl profile show <NAME> [--format <FORMAT>]`: show services in profile.
+- `berth profile list`: list built-in profile names.
+- `berth profile show <NAME> [--format <FORMAT>]`: show services in profile.
   - `json`: structured JSON
   - `markdown`: markdown table
   - other values/default (`table`): plain tab-separated output
 
 Built-in profiles include: `full`, `all`, `infra`, `data`, `app`, `web`, `api`.
 
-### `stackctl doctor [--fix] [--repro] [--reachability]`
+### `berth doctor [--fix] [--repro] [--reachability]`
 
 Validate local setup and configuration health.
 
@@ -283,32 +283,32 @@ Validate local setup and configuration health.
 - `--reachability`: probe app URLs and health endpoints.
 - `--format <FORMAT>` (`table` default, `json` supported)
 
-### `stackctl lock <SUBCOMMAND>`
+### `berth lock <SUBCOMMAND>`
 
-- `stackctl lock images`: resolve configured images to immutable digests.
-- `stackctl lock verify`: verify lockfile exists and is in sync.
-- `stackctl lock diff`: preview lockfile changes.
+- `berth lock images`: resolve configured images to immutable digests.
+- `berth lock verify`: verify lockfile exists and is in sync.
+- `berth lock diff`: preview lockfile changes.
 
-### `stackctl task deps bump`
+### `berth task deps bump`
 
 Run opinionated dependency bump workflows for Composer and selected
 JavaScript runtimes.
 
-### `stackctl task deps audit`
+### `berth task deps audit`
 
 Run dependency vulnerability audits for Composer and selected
 JavaScript runtimes.
 
-### `stackctl task deps normalize`
+### `berth task deps normalize`
 
 Normalize dependency manifests and lockfiles for Composer and selected
 JavaScript runtimes.
 
-### `stackctl task deps install`
+### `berth task deps install`
 
 Install dependencies for Composer and selected JavaScript runtimes.
 
-### `stackctl setup`
+### `berth setup`
 
 Prepare services before startup.
 
@@ -319,7 +319,7 @@ Flags:
 - `--timeout <SECONDS>` (default: `30`)
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl start`
+### `berth start`
 
 Run doctor checks, start selected services, then open app URL summaries.
 
@@ -338,7 +338,7 @@ Flags:
 - `--no-deps`
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl up`
+### `berth up`
 
 Start service containers.
 
@@ -362,7 +362,7 @@ Flags:
 - `--seed`
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl apply`
+### `berth apply`
 
 Converge services and apply configured seed files.
 
@@ -370,7 +370,7 @@ Flags:
 
 - `--no-deps`
 
-### `stackctl update`
+### `berth update`
 
 Pull and restart selected services.
 
@@ -384,7 +384,7 @@ Flags:
 - `--wait`
 - `--wait-timeout <SECONDS>` (default: `30`)
 
-### `stackctl down`
+### `berth down`
 
 Stop and remove services.
 
@@ -401,7 +401,7 @@ Flags:
 
 ## Service Hooks
 
-Define per-service lifecycle hooks in `.stackctl.toml` with `[[service.hook]]`.
+Define per-service lifecycle hooks in `.berth.toml` with `[[service.hook]]`.
 Supported phases are `post_up`, `pre_down`, and `post_down`.
 
 ```toml
@@ -421,16 +421,16 @@ argv = ["php", "artisan", "db:seed", "--class=DevUserSeeder"]
 
 `run.type = "exec"` runs inside the selected service container.
 `run.type = "script"` runs a host script (relative paths are resolved from
-the Stackctl project root).
+the Berth project root).
 
 ## Service Restart Policy
 
-Stackctl applies Docker restart policies to long-lived service containers.
-When `restart` is omitted, Stackctl uses `unless-stopped` so services come
+Berth applies Docker restart policies to long-lived service containers.
+When `restart` is omitted, Berth uses `unless-stopped` so services come
 back after Docker restarts or laptop sleep without requiring a manual
-morning `stackctl up`.
+morning `berth up`.
 
-Override per service in `.stackctl.toml` when a container should opt out or
+Override per service in `.berth.toml` when a container should opt out or
 use a stricter Docker policy:
 
 ```toml
@@ -444,9 +444,9 @@ preset = "dusk"
 restart = "no"
 ```
 
-Stackctl passes the configured value through to Docker `run --restart ...`.
+Berth passes the configured value through to Docker `run --restart ...`.
 
-### `stackctl stop`
+### `berth stop`
 
 Stop services without removing containers.
 
@@ -459,7 +459,7 @@ Flags:
 - `--timeout <SECONDS>` (default: `30`)
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl rm`
+### `berth rm`
 
 Remove service containers.
 
@@ -472,7 +472,7 @@ Flags:
 - `-f, --force`
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl recreate`
+### `berth recreate`
 
 Destroy and recreate service containers.
 
@@ -490,7 +490,7 @@ Flags:
 - `--env-output`
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl restart`
+### `berth restart`
 
 Restart service containers.
 
@@ -504,9 +504,9 @@ Flags:
 - `--wait-timeout <SECONDS>` (default: `30`)
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl relabel`
+### `berth relabel`
 
-Recreate containers to apply current Stackctl ownership labels.
+Recreate containers to apply current Berth ownership labels.
 
 Flags:
 
@@ -518,7 +518,7 @@ Flags:
 - `--wait-timeout <SECONDS>` (default: `30`)
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl url`
+### `berth url`
 
 Print service connection URLs.
 
@@ -531,7 +531,7 @@ Flags:
 - `--kind <KIND>`
 - `--driver <DRIVER>`
 
-### `stackctl restore`
+### `berth restore`
 
 Restore SQL data into a database service.
 
@@ -544,7 +544,7 @@ Flags:
 - `--schema-dump`
 - `--gzip`
 
-### `stackctl dump`
+### `berth dump`
 
 Dump a database service to SQL.
 
@@ -555,7 +555,7 @@ Flags:
 - `--stdout`
 - `--gzip`
 
-### `stackctl ps`
+### `berth ps`
 
 Show runtime status for services.
 
@@ -567,7 +567,7 @@ Flags:
 - `--kind <KIND>`
 - `--driver <DRIVER>`
 
-### `stackctl about`
+### `berth about`
 
 Show runtime project overview.
 
@@ -575,7 +575,7 @@ Flags:
 
 - `--format <FORMAT>` (`table` default, `json` supported)
 
-### `stackctl health`
+### `berth health`
 
 Run health checks against selected services.
 
@@ -591,7 +591,7 @@ Flags:
 - `--retries <N>`
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl env [generate]`
+### `berth env [generate]`
 
 Manage `.env` values based on resolved/running services.
 
@@ -607,10 +607,10 @@ Main command flags:
 
 Subcommands:
 
-- `stackctl env generate --output <PATH>`
-  - Generate a full env file from managed Stackctl app variables.
+- `berth env generate --output <PATH>`
+  - Generate a full env file from managed Berth app variables.
 
-### `stackctl logs`
+### `berth logs`
 
 Show container logs.
 
@@ -629,7 +629,7 @@ Flags:
 - `-t, --timestamps`
 - `--access` (tail local Caddy access logs instead)
 
-### `stackctl top [ARGS...]`
+### `berth top [ARGS...]`
 
 Show running processes in container(s).
 
@@ -641,7 +641,7 @@ Flags:
 - `--profile <NAME>` (conflicts with `--service` and `--kind`)
 - Trailing `ARGS...` are passed to `<engine> top` (for example: `aux`).
 
-### `stackctl stats`
+### `berth stats`
 
 Show a live stream of container resource usage.
 
@@ -654,7 +654,7 @@ Flags:
 - `--no-stream` (single snapshot mode)
 - `--format <FORMAT>` (passed to Docker stats format)
 
-### `stackctl inspect`
+### `berth inspect`
 
 Show low-level details for container(s).
 
@@ -670,7 +670,7 @@ Flags:
 - `--size`
 - `--type <OBJECT_TYPE>`
 
-### `stackctl attach`
+### `berth attach`
 
 Attach local standard input/output/error streams to a running container.
 
@@ -681,7 +681,7 @@ Flags:
 - `--sig-proxy`
 - `--detach-keys <KEYS>`
 
-### `stackctl cp <SOURCE> <DESTINATION>`
+### `berth cp <SOURCE> <DESTINATION>`
 
 Copy files/folders between host and container.
 
@@ -693,7 +693,7 @@ Flags:
 - `-L, --follow-link`
 - `-a, --archive`
 
-### `stackctl kill`
+### `berth kill`
 
 Force-stop running container(s).
 
@@ -706,7 +706,7 @@ Flags:
 - `--signal <SIGNAL>`
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl pause`
+### `berth pause`
 
 Pause all processes in container(s).
 
@@ -718,7 +718,7 @@ Flags:
 - `--profile <NAME>` (conflicts with `--service` and `--kind`)
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl unpause`
+### `berth unpause`
 
 Unpause all processes in container(s).
 
@@ -730,7 +730,7 @@ Flags:
 - `--profile <NAME>` (conflicts with `--service` and `--kind`)
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl wait`
+### `berth wait`
 
 Block until container(s) stop and print exit status.
 
@@ -743,9 +743,9 @@ Flags:
 - `--condition <CONDITION>`
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl events`
+### `berth events`
 
-Stream Docker daemon events (Stackctl container scope by default).
+Stream Docker daemon events (Berth container scope by default).
 
 Flags:
 
@@ -755,11 +755,11 @@ Flags:
 - `--until <VALUE>`
 - `--format <FORMAT>`
 - `--json` (newline-delimited JSON objects)
-- `--all` (disable Stackctl-only event scoping)
+- `--all` (disable Berth-only event scoping)
 - `--allow-empty`
 - `--filter <KEY=VALUE>` (repeatable)
 
-### `stackctl port [PRIVATE_PORT]`
+### `berth port [PRIVATE_PORT]`
 
 List port mappings for container(s).
 
@@ -773,9 +773,9 @@ Flags:
 - `--json` (structured JSON array)
 - Optional positional `PRIVATE_PORT` (for example `80/tcp`)
 
-### `stackctl prune`
+### `berth prune`
 
-Remove stopped Stackctl service containers (or all with `--all`).
+Remove stopped Berth service containers (or all with `--all`).
 
 Flags:
 
@@ -788,7 +788,7 @@ Flags:
 - `-f, --force` (required with `--all`)
 - `--filter <KEY=VALUE>` (global mode only)
 
-### `stackctl pull`
+### `berth pull`
 
 Pull service images.
 
@@ -798,7 +798,7 @@ Flags:
 - `--kind <KIND>`
 - `--parallel <N>` (default: `auto` = min(4, CPU cores))
 
-### `stackctl exec [-- <COMMAND...>]`
+### `berth exec [-- <COMMAND...>]`
 
 Run a command inside a service container.
 
@@ -810,9 +810,9 @@ Flags:
 - `--tty`
 - `--no-tty`
 - Trailing command is optional after flags.
-- If no command is provided, Stackctl opens an interactive shell session.
+- If no command is provided, Berth opens an interactive shell session.
 
-### `stackctl app-create`
+### `berth app-create`
 
 Bootstrap Laravel runtime tasks.
 
@@ -823,7 +823,7 @@ Flags:
 - `--seed`
 - `--no-storage-link`
 
-### `stackctl artisan -- <COMMAND...>`
+### `berth artisan -- <COMMAND...>`
 
 Run `php artisan` inside the app container.
 
@@ -836,7 +836,7 @@ Flags:
 - `--no-tty`
 - Trailing Artisan command/args.
 
-### `stackctl composer -- <COMMAND...>`
+### `berth composer -- <COMMAND...>`
 
 Run `composer` inside the app container.
 
@@ -849,7 +849,7 @@ Flags:
 - `--no-tty`
 - Trailing Composer command/args.
 
-### `stackctl phpstan -- <COMMAND...>`
+### `berth phpstan -- <COMMAND...>`
 
 Run `phpstan` inside the app container.
 
@@ -862,7 +862,7 @@ Flags:
 - `--no-tty`
 - Trailing PHPStan command/args.
 
-### `stackctl ecs -- <COMMAND...>`
+### `berth ecs -- <COMMAND...>`
 
 Run `ecs` inside the app container.
 
@@ -875,7 +875,7 @@ Flags:
 - `--no-tty`
 - Trailing ECS command/args.
 
-### `stackctl php-cs-fixer -- <COMMAND...>`
+### `berth php-cs-fixer -- <COMMAND...>`
 
 Run `php-cs-fixer` inside the app container.
 
@@ -888,7 +888,7 @@ Flags:
 - `--no-tty`
 - Trailing PHP CS Fixer command/args.
 
-### `stackctl psalm -- <COMMAND...>`
+### `berth psalm -- <COMMAND...>`
 
 Run `psalm` inside the app container.
 
@@ -901,7 +901,7 @@ Flags:
 - `--no-tty`
 - Trailing Psalm command/args.
 
-### `stackctl pint -- <COMMAND...>`
+### `berth pint -- <COMMAND...>`
 
 Run `pint` inside the app container.
 
@@ -914,7 +914,7 @@ Flags:
 - `--no-tty`
 - Trailing Pint command/args.
 
-### `stackctl pest -- <COMMAND...>`
+### `berth pest -- <COMMAND...>`
 
 Run `pest` inside the app container.
 
@@ -927,7 +927,7 @@ Flags:
 - `--no-tty`
 - Trailing Pest command/args.
 
-### `stackctl phpunit -- <COMMAND...>`
+### `berth phpunit -- <COMMAND...>`
 
 Run `phpunit` inside the app container.
 
@@ -940,7 +940,7 @@ Flags:
 - `--no-tty`
 - Trailing PHPUnit command/args.
 
-### `stackctl rector -- <COMMAND...>`
+### `berth rector -- <COMMAND...>`
 
 Run `rector` inside the app container.
 
@@ -953,7 +953,7 @@ Flags:
 - `--no-tty`
 - Trailing Rector command/args.
 
-### `stackctl node -- <COMMAND...>`
+### `berth node -- <COMMAND...>`
 
 Run Node package manager commands inside the app container.
 
@@ -972,11 +972,11 @@ Flags:
 Node package-manager resolution order:
 
 - CLI overrides
-- `[service.javascript]` in `.stackctl.toml`
+- `[service.javascript]` in `.berth.toml`
 - Project files:
   `.nvmrc`, `.node-version`, `package.json.packageManager`,
   `package.json.volta.node`, and `package.json.engines.node`
-- Stackctl defaults (`system` version manager)
+- Berth defaults (`system` version manager)
 
 Config example:
 
@@ -992,7 +992,7 @@ version_manager = "fnm"
 version = "22"
 ```
 
-### `stackctl deno -- <COMMAND...>`
+### `berth deno -- <COMMAND...>`
 
 Run Deno inside the app container.
 
@@ -1009,9 +1009,9 @@ Flags:
 Deno resolution order:
 
 - CLI `--deno-version`
-- `[service.javascript]` in `.stackctl.toml`
+- `[service.javascript]` in `.berth.toml`
 - Project files: `deno.json`, `deno.jsonc`, or `deno.lock`
-- Stackctl default Deno installer version
+- Berth default Deno installer version
 
 Config example:
 
@@ -1025,7 +1025,7 @@ runtime = "deno"
 version = "2.2.3"
 ```
 
-### `stackctl bun -- <COMMAND...>`
+### `berth bun -- <COMMAND...>`
 
 Run Bun inside the app container.
 
@@ -1042,9 +1042,9 @@ Flags:
 Bun resolution order:
 
 - CLI `--bun-version`
-- `[service.javascript]` in `.stackctl.toml`
+- `[service.javascript]` in `.berth.toml`
 - Project files: `bun.lock`, `bun.lockb`, or `package.json.packageManager`
-- Stackctl default Bun installer version
+- Berth default Bun installer version
 
 Config example:
 
@@ -1058,7 +1058,7 @@ runtime = "bun"
 version = "1.2.5"
 ```
 
-### `stackctl task deps <bump|audit|normalize|install>`
+### `berth task deps <bump|audit|normalize|install>`
 
 Run opinionated dependency workflows inside the app container.
 
@@ -1092,19 +1092,19 @@ Notes:
   - Composer: `composer audit`
   - Node: manager-specific audit flow
   - Bun: `bun audit`
-  - Deno: currently skipped with a warning because Stackctl does not define a
+  - Deno: currently skipped with a warning because Berth does not define a
     Deno dependency-audit equivalent yet
 - `normalize` runs:
   - Composer: `composer normalize`
   - Node: manager-specific lockfile normalization flow
   - Bun: `bun install`
-  - Deno: currently skipped with a warning because Stackctl does not define a
+  - Deno: currently skipped with a warning because Berth does not define a
     Deno dependency-normalize equivalent yet
 - `install` runs:
   - Composer: `composer install`
   - Node: manager-specific install flow
   - Bun: `bun install`
-  - Deno: currently skipped with a warning because Stackctl does not define a
+  - Deno: currently skipped with a warning because Berth does not define a
     Deno dependency-install equivalent yet
 - Node workflow targets infer the package manager from
   `package.json.packageManager` first, then lockfiles, when
@@ -1117,7 +1117,7 @@ Notes:
 - Missing `composer.json`, `package.json`, or Deno project files are
   skipped with a warning.
 
-### `stackctl ls`
+### `berth ls`
 
 List configured services.
 
@@ -1129,9 +1129,9 @@ Flags:
 - `--kind <KIND>`
 - `--driver <DRIVER>`
 
-### `stackctl swarm -- <COMMAND...>`
+### `berth swarm -- <COMMAND...>`
 
-Run a Stackctl command across workspace swarm targets.
+Run a Berth command across workspace swarm targets.
 
 Flags:
 
@@ -1145,14 +1145,14 @@ Flags:
 - `--env-output`
 - Trailing command is required (examples: `up`, `down`, `ps --format json`).
 
-### `stackctl completions <SHELL>`
+### `berth completions <SHELL>`
 
 Generate shell completion scripts.
 
 `<SHELL>` is one of clap-complete supported targets (for example `bash`,
 `zsh`, `fish`, `powershell`, `elvish`).
 
-### `stackctl serve`
+### `berth serve`
 
 Start and expose an app service through local HTTPS routing.
 
@@ -1166,7 +1166,7 @@ Flags:
 - `--env-output`
 - `--trust-container-ca`
 
-### `stackctl open`
+### `berth open`
 
 Print or open serve URLs and health summary.
 
@@ -1180,21 +1180,21 @@ Flags:
 - `--no-browser`
 - `--json`
 
-### `stackctl share <SUBCOMMAND>`
+### `berth share <SUBCOMMAND>`
 
 Expose an app service through a supported tunnel provider.
 
-- `stackctl share start (--provider <cloudflare|expose|tailscale> | --cloudflare | --expose | --tailscale) [--service <NAME>] [--detached] [--timeout <SECONDS>] [--json]`
-- `stackctl share status [--service <NAME>] [--provider <cloudflare|expose|tailscale> | --cloudflare | --expose | --tailscale] [--json]`
-- `stackctl share stop [--all] [--service <NAME>] [--provider <cloudflare|expose|tailscale> | --cloudflare | --expose | --tailscale] [--json]`
+- `berth share start (--provider <cloudflare|expose|tailscale> | --cloudflare | --expose | --tailscale) [--service <NAME>] [--detached] [--timeout <SECONDS>] [--json]`
+- `berth share status [--service <NAME>] [--provider <cloudflare|expose|tailscale> | --cloudflare | --expose | --tailscale] [--json]`
+- `berth share stop [--all] [--service <NAME>] [--provider <cloudflare|expose|tailscale> | --cloudflare | --expose | --tailscale] [--json]`
 
 Notes:
 
 - `share start` requires provider binaries on `PATH` (`cloudflared`, `expose`, or `tailscale`).
 - `--detached` keeps the provider process running in background.
-- Session state is persisted under `~/.config/stackctl/share/`.
+- Session state is persisted under `~/.config/berth/share/`.
 
-### `stackctl env-scrub`
+### `berth env-scrub`
 
 Scrub sensitive `.env` values and replace with local-safe placeholders.
 

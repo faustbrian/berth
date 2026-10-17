@@ -51,21 +51,21 @@ mod tests {
 
     #[test]
     fn operation_dispatch_prioritizes_lifecycle() {
-        assert!(dispatch_result(&["stackctl", "up"]).is_some());
+        assert!(dispatch_result(&["berth", "up"]).is_some());
     }
 
     #[test]
     fn operation_dispatch_handles_management_when_lifecycle_does_not_match() {
-        assert!(dispatch_result(&["stackctl", "stop"]).is_some());
+        assert!(dispatch_result(&["berth", "stop"]).is_some());
     }
 
     #[test]
     fn operation_dispatch_routes_to_access_command() {
-        assert!(dispatch_result(&["stackctl", "url"]).is_some());
+        assert!(dispatch_result(&["berth", "url"]).is_some());
     }
 
     #[test]
     fn operation_dispatch_returns_none_for_primary_meta() {
-        assert!(dispatch_result(&["stackctl", "about"]).is_none());
+        assert!(dispatch_result(&["berth", "about"]).is_none());
     }
 }

@@ -1,6 +1,6 @@
 //! swarm targets bootstrap module.
 //!
-//! Contains swarm targets bootstrap logic used by Stackctl command workflows.
+//! Contains swarm targets bootstrap logic used by Berth command workflows.
 
 use anyhow::Result;
 
@@ -39,7 +39,7 @@ pub(super) fn ensure_target_configs_exist(targets: &[ResolvedSwarmTarget]) -> Re
     for target in targets {
         if crate::config::config_path_in_dir(&target.root)?.is_none() {
             anyhow::bail!(
-                "missing Stackctl config (.stackctl.toml or .stackctl.yaml) for swarm target '{}' at {}",
+                "missing Berth config (.berth.toml or .berth.yaml) for swarm target '{}' at {}",
                 target.name,
                 target.root.display()
             );
@@ -62,7 +62,7 @@ mod tests {
         let nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos();
-        let base = std::env::temp_dir().join(format!("stackctl-swarm-bootstrap-{nonce}"));
+        let base = std::env::temp_dir().join(format!("berth-swarm-bootstrap-{nonce}"));
         let source = base.join("source");
         let workspace = base.join("workspace");
         let target_root = workspace.join("rate");
@@ -72,12 +72,9 @@ mod tests {
 
         run_git(["init", "--initial-branch=main"], &source)?;
         run_git(["config", "user.email", "tests@example.com"], &source)?;
-        run_git(["config", "user.name", "Stackctl Tests"], &source)?;
-        std::fs::write(
-            source.join(".stackctl.toml"),
-            "container_prefix = \"rate\"\n",
-        )?;
-        run_git(["add", ".stackctl.toml"], &source)?;
+        run_git(["config", "user.name", "Berth Tests"], &source)?;
+        std::fs::write(source.join(".berth.toml"), "container_prefix = \"rate\"\n")?;
+        run_git(["add", ".berth.toml"], &source)?;
         run_git(["commit", "-m", "init"], &source)?;
         run_git(["branch", "develop"], &source)?;
 
@@ -107,15 +104,20 @@ mod tests {
         bootstrap_swarm_targets(&config, &targets, false)?;
 
         assert!(target_root.exists());
-        assert!(target_root.join(".stackctl.toml").exists());
+        assert!(target_root.join(".berth.toml").exists());
 
         std::fs::remove_dir_all(base)?;
         Ok(())
     }
 
     fn run_git<const N: usize>(args: [&str; N], cwd: &Path) -> Result<()> {
+        // Fixture repositories must not inherit the developer's global git
+        // configuration: global commit-msg hooks reject the fixture commit.
         let output = Command::new("git")
+            .args(["-c", "core.hooksPath=/dev/null"])
             .args(args)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
             .current_dir(cwd)
             .output()
             .with_context(|| format!("failed to execute git {}", args.join(" ")))?;

@@ -1,6 +1,6 @@
 //! config presets app health module.
 //!
-//! Contains config presets app health logic used by Stackctl command workflows.
+//! Contains config presets app health logic used by Berth command workflows.
 
 /// Returns the default value for health path for preset.
 pub(super) fn default_health_path_for_preset(preset: &str) -> Option<&'static str> {

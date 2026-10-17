@@ -1,6 +1,6 @@
 //! cli module.
 //!
-//! Contains cli logic used by Stackctl command workflows.
+//! Contains cli logic used by Berth command workflows.
 
 pub mod args;
 pub mod dispatch;

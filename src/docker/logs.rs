@@ -1,6 +1,6 @@
 //! docker logs module.
 //!
-//! Contains docker logs logic used by Stackctl command workflows.
+//! Contains docker logs logic used by Berth command workflows.
 
 use anyhow::Result;
 

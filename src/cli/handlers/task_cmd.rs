@@ -739,7 +739,7 @@ mod tests {
 
     #[test]
     fn detect_node_manager_prefers_matching_lockfile() {
-        let root = temp_root("stackctl-task-node-manager");
+        let root = temp_root("berth-task-node-manager");
         fs::write(root.join("pnpm-lock.yaml"), "lockfileVersion: '9.0'").expect("lockfile");
 
         let manager = detect_node_package_manager(&root);
@@ -750,7 +750,7 @@ mod tests {
 
     #[test]
     fn detect_node_manager_reads_package_manager_from_package_json() {
-        let root = temp_root("stackctl-task-node-package-manager");
+        let root = temp_root("berth-task-node-package-manager");
         fs::write(
             root.join("package.json"),
             r#"{"name":"demo","packageManager":"yarn@4.6.0"}"#,
@@ -765,7 +765,7 @@ mod tests {
 
     #[test]
     fn read_package_name_defaults_to_unknown_without_name() {
-        let root = temp_root("stackctl-task-read-package-name");
+        let root = temp_root("berth-task-read-package-name");
         let manifest = root.join("composer.json");
         fs::write(&manifest, "{}").expect("write manifest");
 

@@ -1,6 +1,6 @@
 //! cli args commands app share module.
 //!
-//! Contains cli args for `stackctl share` workflows.
+//! Contains cli args for `berth share` workflows.
 
 use clap::{Args, Subcommand};
 

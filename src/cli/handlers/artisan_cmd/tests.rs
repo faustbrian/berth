@@ -1,6 +1,6 @@
 //! cli handlers artisan cmd tests module.
 //!
-//! Contains cli handlers artisan cmd tests logic used by Stackctl command workflows.
+//! Contains cli handlers artisan cmd tests logic used by Berth command workflows.
 
 use super::{
     HandleArtisanOptions, build_artisan_command, build_artisan_test_command,
@@ -118,14 +118,14 @@ fn loads_testing_config_when_present_and_falls_back_to_default() {
     let testing_service = service_toml("testing");
 
     fs::write(
-        root.join(".stackctl.toml"),
+        root.join(".berth.toml"),
         format!(
             "schema_version = 1\nproject_type = \"project\"\ncontainer_prefix = \"test\"\nservice = [{default_service}]\nswarm = []\n"
         ),
     )
     .expect("write default config");
     fs::write(
-        root.join(".stackctl.testing.toml"),
+        root.join(".berth.testing.toml"),
         format!(
             "schema_version = 1\nproject_type = \"project\"\ncontainer_prefix = \"test\"\nservice = [{testing_service}]\nswarm = []\n"
         ),
@@ -135,7 +135,7 @@ fn loads_testing_config_when_present_and_falls_back_to_default() {
     let loaded = load_artisan_test_base_config(None, None, &root).expect("load testing config");
     assert_eq!(loaded.service[0].name, "testing");
 
-    fs::remove_file(root.join(".stackctl.testing.toml")).expect("remove testing config");
+    fs::remove_file(root.join(".berth.testing.toml")).expect("remove testing config");
     let fallback = load_artisan_test_base_config(None, None, &root).expect("load fallback config");
     assert_eq!(fallback.service[0].name, "default");
 }
@@ -178,7 +178,7 @@ fn handle_artisan_rejects_library_project_type() {
 
 fn temp_root(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "stackctl-artisan-cfg-{name}-{}",
+        "berth-artisan-cfg-{name}-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock")

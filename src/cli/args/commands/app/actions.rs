@@ -1,6 +1,6 @@
 //! cli args commands app actions module.
 //!
-//! Contains cli args commands app actions logic used by Stackctl command workflows.
+//! Contains cli args commands app actions logic used by Berth command workflows.
 
 use clap::Args;
 use std::path::Path;

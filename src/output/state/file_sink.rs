@@ -17,7 +17,7 @@ pub(super) fn default_log_dir_path() -> Option<PathBuf> {
     let Ok(home) = std::env::var("HOME") else {
         return None;
     };
-    Some(PathBuf::from(home).join(".config/stackctl/logs"))
+    Some(PathBuf::from(home).join(".config/berth/logs"))
 }
 
 pub(super) fn persist_entry(file_state: &Mutex<FileState>, entry: &LogEntry) {

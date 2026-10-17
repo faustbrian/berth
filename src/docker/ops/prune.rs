@@ -1,6 +1,6 @@
 //! docker ops prune module.
 //!
-//! Contains docker container prune operation used by Stackctl command workflows.
+//! Contains docker container prune operation used by Berth command workflows.
 
 use anyhow::Result;
 
@@ -64,13 +64,11 @@ pub(super) fn prune_stopped_container(service: &ServiceConfig) -> Result<()> {
         );
         return Ok(());
     };
-    if !is_stackctl_managed_label(&managed_label) {
+    if !is_berth_managed_label(&managed_label) {
         output::event(
             &service.name,
             LogLevel::Info,
-            &format!(
-                "Skipped pruning container {container_name} because it is not Stackctl-managed"
-            ),
+            &format!("Skipped pruning container {container_name} because it is not Berth-managed"),
             Persistence::Persistent,
         );
         return Ok(());
@@ -108,13 +106,13 @@ fn is_active_status(status: &str) -> bool {
     matches!(status, "running" | "paused" | "restarting")
 }
 
-fn is_stackctl_managed_label(value: &str) -> bool {
+fn is_berth_managed_label(value: &str) -> bool {
     value == VALUE_MANAGED_TRUE
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{is_active_status, is_stackctl_managed_label};
+    use super::{is_active_status, is_berth_managed_label};
 
     #[test]
     fn active_status_detection_matches_runtime_states() {
@@ -126,8 +124,8 @@ mod tests {
 
     #[test]
     fn managed_label_detection_requires_true_value() {
-        assert!(is_stackctl_managed_label("true"));
-        assert!(!is_stackctl_managed_label(""));
-        assert!(!is_stackctl_managed_label("false"));
+        assert!(is_berth_managed_label("true"));
+        assert!(!is_berth_managed_label(""));
+        assert!(!is_berth_managed_label("false"));
     }
 }

@@ -117,7 +117,7 @@ mod tests {
     fn resolve_app_runtime_context_with_workspace_root_builds_context() {
         let cfg = config();
         let workspace_root = std::env::temp_dir().join(format!(
-            "stackctl-workspace-root-{}",
+            "berth-workspace-root-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -125,7 +125,7 @@ mod tests {
         ));
         fs::create_dir_all(&workspace_root).expect("create workspace root");
         fs::write(
-            workspace_root.join(".stackctl.toml"),
+            workspace_root.join(".berth.toml"),
             "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
         )
         .expect("seed workspace config");
@@ -139,7 +139,7 @@ mod tests {
         assert_eq!(context.target.name, "app");
         assert_eq!(context.workspace_root, workspace_root);
         assert_eq!(
-            context.app_env.get("STACKCTL_SQL_CLIENT_FLAVOR"),
+            context.app_env.get("BERTH_SQL_CLIENT_FLAVOR"),
             Some(&"mysql".to_owned())
         );
         fs::remove_dir_all(workspace_root).expect("cleanup workspace root");
@@ -148,7 +148,7 @@ mod tests {
     #[test]
     fn resolve_app_runtime_context_uses_config_path() -> anyhow::Result<()> {
         let dir = std::env::temp_dir().join(format!(
-            "stackctl-app-runtime-context-{}",
+            "berth-app-runtime-context-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -156,7 +156,7 @@ mod tests {
         ));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).expect("create temp workspace");
-        let path = dir.join(".stackctl.toml");
+        let path = dir.join(".berth.toml");
         fs::write(&path, "schema_version = 1\nproject_type = \"project\"\n").expect("write config");
 
         let cfg = config();
@@ -170,7 +170,7 @@ mod tests {
             Path::new(&dir)
         );
         assert_eq!(
-            context.app_env.get("STACKCTL_SQL_CLIENT_FLAVOR"),
+            context.app_env.get("BERTH_SQL_CLIENT_FLAVOR"),
             Some(&"mysql".to_owned())
         );
         Ok(())
@@ -180,7 +180,7 @@ mod tests {
     fn resolve_app_runtime_context_with_workspace_root_merges_swarm_injected_env()
     -> anyhow::Result<()> {
         let workspace_root = std::env::temp_dir().join(format!(
-            "stackctl-app-runtime-context-injected-env-{}",
+            "berth-app-runtime-context-injected-env-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -189,7 +189,7 @@ mod tests {
         let location_root = workspace_root.join("location");
         fs::create_dir_all(&location_root).expect("create dependency workspace");
         fs::write(
-            workspace_root.join(".stackctl.toml"),
+            workspace_root.join(".berth.toml"),
             r#"
 project_type = "project"
 [[swarm]]
@@ -209,14 +209,14 @@ root = "location"
         )
         .expect("write workspace config");
         fs::write(
-            location_root.join(".stackctl.toml"),
+            location_root.join(".berth.toml"),
             r#"
 project_type = "project"
 container_prefix = "location"
 
 [[service]]
 preset = "laravel"
-domain = "location.stackctl"
+domain = "location.berth"
 "#,
         )
         .expect("write location config");
@@ -231,7 +231,7 @@ domain = "location.stackctl"
 
         assert_eq!(
             context.app_env.get("LOCATION_API_BASE_URL"),
-            Some(&"https://location.stackctl".to_owned())
+            Some(&"https://location.berth".to_owned())
         );
 
         fs::remove_dir_all(workspace_root).expect("cleanup workspace");

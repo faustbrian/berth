@@ -36,7 +36,7 @@ pub(super) fn handle_setup_commands(
 
     if let Commands::Completions(args) = &cli.command {
         let mut cmd = Cli::command();
-        generate(args.shell, &mut cmd, "stackctl", &mut std::io::stdout());
+        generate(args.shell, &mut cmd, "berth", &mut std::io::stdout());
         return Ok(true);
     }
 
@@ -80,13 +80,11 @@ mod tests {
     use super::{handle_setup_commands, load_config_for_cli};
 
     fn minimal_config_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            "stackctl-dispatch-bootstrap-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("berth-dispatch-bootstrap-{}", std::process::id()));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).expect("create temp dir");
-        let config_path = dir.join(".stackctl.toml");
+        let config_path = dir.join(".berth.toml");
         fs::write(
             &config_path,
             "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
@@ -97,7 +95,7 @@ mod tests {
 
     #[test]
     fn setup_commands_ignore_regular_commands() {
-        let cli = Cli::parse_from(["stackctl", "about"]);
+        let cli = Cli::parse_from(["berth", "about"]);
         let context = CliDispatchContext::from_cli(&cli);
         let handled = handle_setup_commands(&cli, &context).expect("handle setup");
         assert!(!handled);
@@ -107,7 +105,7 @@ mod tests {
     fn load_config_uses_explicit_project_root() {
         let root = minimal_config_dir();
         let cli = Cli::parse_from([
-            "stackctl",
+            "berth",
             "--project-root",
             root.to_str().expect("root path"),
             "status",

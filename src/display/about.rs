@@ -1,6 +1,6 @@
 //! display about module.
 //!
-//! Contains display about logic used by Stackctl command workflows.
+//! Contains display about logic used by Berth command workflows.
 
 use colored::Colorize;
 use std::path::Path;
@@ -22,7 +22,7 @@ pub(crate) fn print_about(
 
     let application_rows = [
         AboutRow::plain("Application Name", app_name),
-        AboutRow::plain("Stackctl Version", env!("CARGO_PKG_VERSION")),
+        AboutRow::plain("Berth Version", env!("CARGO_PKG_VERSION")),
         AboutRow::plain("Runtime Environment", runtime),
         AboutRow::plain("Project Root", project_root.display().to_string()),
         AboutRow::plain("Config File", config_path.display().to_string()),
@@ -196,7 +196,7 @@ mod tests {
     fn print_about_runs_with_swarm_config() {
         let project_root = Path::new("/tmp");
         let config = config();
-        let config_path = Path::new("/tmp/.stackctl.toml");
+        let config_path = Path::new("/tmp/.berth.toml");
         print_about(&config, project_root, config_path, Some("test"));
     }
 
@@ -211,7 +211,7 @@ mod tests {
             service: Vec::new(),
             swarm: Vec::new(),
         };
-        let config_path = Path::new("/tmp/.stackctl.toml");
+        let config_path = Path::new("/tmp/.berth.toml");
         print_about(&config, project_root, config_path, None);
     }
 

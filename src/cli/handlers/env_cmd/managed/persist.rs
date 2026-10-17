@@ -1,6 +1,6 @@
 //! cli handlers env cmd managed persist module.
 //!
-//! Contains cli handlers env cmd managed persist logic used by Stackctl command workflows.
+//! Contains cli handlers env cmd managed persist logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;
@@ -142,7 +142,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("time")
             .as_nanos();
-        let bin_dir = std::env::temp_dir().join(format!("stackctl-persist-docker-{stamp}"));
+        let bin_dir = std::env::temp_dir().join(format!("berth-persist-docker-{stamp}"));
         fs::create_dir_all(&bin_dir).expect("create fake docker dir");
         let command = bin_dir.join("docker");
         fs::write(&command, format!("#!/bin/sh\n{script}")).expect("write fake docker");
@@ -189,13 +189,13 @@ mod tests {
         let targets = vec![("db".to_owned(), "db-running".to_owned(), 3306)];
         let config_path = std::env::temp_dir()
             .join(format!(
-                "stackctl-persist-runtime-{}",
+                "berth-persist-runtime-{}",
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .expect("time")
                     .as_nanos()
             ))
-            .join(".stackctl.toml");
+            .join(".berth.toml");
         fs::create_dir_all(config_path.parent().expect("config dir")).expect("create config dir");
         fs::write(
             &config_path,

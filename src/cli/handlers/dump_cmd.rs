@@ -1,6 +1,6 @@
 //! cli handlers dump cmd module.
 //!
-//! Contains cli handlers dump cmd logic used by Stackctl command workflows.
+//! Contains cli handlers dump cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::PathBuf;
@@ -103,7 +103,7 @@ mod tests {
 
     fn fake_docker_binary(script: &str) -> String {
         let bin_dir = env::temp_dir().join(format!(
-            "stackctl-fake-docker-{}-{}",
+            "berth-fake-docker-{}-{}",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -136,7 +136,7 @@ mod tests {
         )]);
 
         let file = env::temp_dir().join(format!(
-            "stackctl-dump-cmd-stdout-{}.sql",
+            "berth-dump-cmd-stdout-{}.sql",
             SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
         ));
 
@@ -163,7 +163,7 @@ mod tests {
             "db-container",
         )]);
         let file = env::temp_dir().join(format!(
-            "stackctl-dump-cmd-file-{}.sql",
+            "berth-dump-cmd-file-{}.sql",
             SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
         ));
 
@@ -222,7 +222,7 @@ mod tests {
             "app-container",
         )]);
         let path = env::temp_dir().join(format!(
-            "stackctl-dump-cmd-invalid-{}.sql",
+            "berth-dump-cmd-invalid-{}.sql",
             SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
         ));
 

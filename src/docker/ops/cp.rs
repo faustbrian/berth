@@ -1,6 +1,6 @@
 //! docker ops cp module.
 //!
-//! Contains docker cp operation used by Stackctl command workflows.
+//! Contains docker cp operation used by Berth command workflows.
 
 use anyhow::Result;
 

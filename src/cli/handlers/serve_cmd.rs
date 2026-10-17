@@ -1,6 +1,6 @@
 //! cli handlers serve cmd module.
 //!
-//! Contains cli handlers serve cmd logic used by Stackctl command workflows.
+//! Contains cli handlers serve cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;

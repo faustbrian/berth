@@ -1,6 +1,6 @@
 //! docker ops stats module.
 //!
-//! Contains docker stats operation used by Stackctl command workflows.
+//! Contains docker stats operation used by Berth command workflows.
 
 use anyhow::Result;
 

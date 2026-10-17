@@ -1,6 +1,6 @@
 //! cli handlers docker ops attach module.
 //!
-//! Contains attach handler used by Stackctl command workflows.
+//! Contains attach handler used by Berth command workflows.
 
 use anyhow::Result;
 

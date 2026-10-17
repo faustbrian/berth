@@ -17,7 +17,7 @@ pub(super) fn derived_image_tag(container_name: &str, signature: &str) -> String
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     signature.hash(&mut hasher);
     let digest = hasher.finish();
-    format!("stackctl/{}-serve-{:x}", sanitized.to_lowercase(), digest)
+    format!("berth/{}-serve-{:x}", sanitized.to_lowercase(), digest)
 }
 
 /// Derives the cache signature describing derived image contents.

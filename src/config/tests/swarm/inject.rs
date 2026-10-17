@@ -6,10 +6,10 @@ fn load_config_with_parses_swarm_injected_env_rules() {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock should be after unix epoch")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("stackctl-config-swarm-inject-{nonce}"));
+    let root = std::env::temp_dir().join(format!("berth-config-swarm-inject-{nonce}"));
     std::fs::create_dir_all(&root).expect("create temp config directory");
 
-    let config_path = root.join(".stackctl.toml");
+    let config_path = root.join(".berth.toml");
     std::fs::write(
         &config_path,
         r#"
@@ -48,10 +48,10 @@ fn load_config_with_rejects_unknown_swarm_inject_token() {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock should be after unix epoch")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("stackctl-config-swarm-inject-token-{nonce}"));
+    let root = std::env::temp_dir().join(format!("berth-config-swarm-inject-token-{nonce}"));
     std::fs::create_dir_all(&root).expect("create temp config directory");
 
-    let config_path = root.join(".stackctl.toml");
+    let config_path = root.join(".berth.toml");
     std::fs::write(
         &config_path,
         r#"

@@ -1,6 +1,6 @@
 //! cli handlers env cmd managed runtime sync module.
 //!
-//! Contains cli handlers env cmd managed runtime sync logic used by Stackctl command workflows.
+//! Contains cli handlers env cmd managed runtime sync logic used by Berth command workflows.
 
 use std::collections::{HashMap, HashSet};
 
@@ -112,7 +112,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("time")
             .as_nanos();
-        let bin_dir = std::env::temp_dir().join(format!("stackctl-runtime-sync-{stamp}"));
+        let bin_dir = std::env::temp_dir().join(format!("berth-runtime-sync-{stamp}"));
         std::fs::create_dir_all(&bin_dir).expect("create fake docker dir");
         let command = bin_dir.join("docker");
         std::fs::write(&command, format!("#!/bin/sh\n{script}")).expect("write fake docker");

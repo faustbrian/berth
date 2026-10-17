@@ -1,6 +1,6 @@
 //! cli handlers artisan cmd command module.
 //!
-//! Contains cli handlers artisan cmd command logic used by Stackctl command workflows.
+//! Contains cli handlers artisan cmd command logic used by Berth command workflows.
 
 use crate::cli;
 

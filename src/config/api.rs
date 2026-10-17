@@ -1,6 +1,6 @@
 //! config api module.
 //!
-//! Contains config api logic used by Stackctl command workflows.
+//! Contains config api logic used by Berth command workflows.
 
 mod config_io;
 mod load_save;

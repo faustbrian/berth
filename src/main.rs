@@ -1,6 +1,6 @@
 //! Data service container manager CLI.
 //!
-//! Stackctl is a command-line tool for managing local data services with Docker.
+//! Berth is a command-line tool for managing local data services with Docker.
 
 #![allow(clippy::print_stdout)] // CLI tool needs to print to stdout
 #![allow(clippy::clone_on_ref_ptr)] // Arc clones are explicit at call sites for clarity

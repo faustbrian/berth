@@ -1,6 +1,6 @@
 //! cli support ensure sql service module.
 //!
-//! Contains cli support ensure sql service logic used by Stackctl command workflows.
+//! Contains cli support ensure sql service logic used by Berth command workflows.
 
 use anyhow::Result;
 

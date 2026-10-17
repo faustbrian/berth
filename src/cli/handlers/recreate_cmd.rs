@@ -1,6 +1,6 @@
 //! cli handlers recreate cmd module.
 //!
-//! Contains cli handlers recreate cmd logic used by Stackctl command workflows.
+//! Contains cli handlers recreate cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;

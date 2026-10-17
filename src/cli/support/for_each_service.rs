@@ -1,6 +1,6 @@
 //! cli support for each service module.
 //!
-//! Contains cli support for each service logic used by Stackctl command workflows.
+//! Contains cli support for each service logic used by Berth command workflows.
 
 use anyhow::Result;
 use rayon::prelude::*;

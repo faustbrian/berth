@@ -1,6 +1,6 @@
 //! env mapping module.
 //!
-//! Contains env mapping logic used by Stackctl command workflows.
+//! Contains env mapping logic used by Berth command workflows.
 
 use std::collections::HashMap;
 

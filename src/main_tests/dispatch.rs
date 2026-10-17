@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 fn temporary_project_root() -> PathBuf {
     let root = std::env::temp_dir().join(format!(
-        "stackctl-main-test-dispatch-{}-{}",
+        "berth-main-test-dispatch-{}-{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -19,7 +19,7 @@ fn temporary_project_root() -> PathBuf {
     drop(fs::remove_dir_all(&root));
     fs::create_dir_all(&root).expect("create temporary project root");
 
-    let config_path = root.join(".stackctl.toml");
+    let config_path = root.join(".berth.toml");
     fs::write(
         &config_path,
         "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
@@ -36,7 +36,7 @@ fn temporary_project_root() -> PathBuf {
 
 fn temporary_project_config() -> PathBuf {
     let root = temporary_project_root();
-    let config_path = root.join(".stackctl.toml");
+    let config_path = root.join(".berth.toml");
     fs::write(
         &config_path,
         r#"
@@ -63,7 +63,7 @@ where
     F: FnOnce() -> T,
 {
     let dir = std::env::temp_dir().join(format!(
-        "stackctl-dispatch-open-curl-{}",
+        "berth-dispatch-open-curl-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("time")
@@ -100,7 +100,7 @@ where
     F: FnOnce(&Path) -> T,
 {
     let marker_dir = std::env::temp_dir().join(format!(
-        "stackctl-dispatch-open-browser-{}",
+        "berth-dispatch-open-browser-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("time")
@@ -143,7 +143,7 @@ fn cli_dispatch_run_about_uses_temporary_project_root() {
     let project_root = temporary_project_root();
     crate::docker::with_test_runtime_lock(|| {
         let cli = Cli::parse_from([
-            "stackctl",
+            "berth",
             "--project-root",
             project_root
                 .to_str()
@@ -160,7 +160,7 @@ fn cli_dispatch_run_status_succeeds_with_empty_services() {
     let project_root = temporary_project_root();
     crate::docker::with_test_runtime_lock(|| {
         let cli = Cli::parse_from([
-            "stackctl",
+            "berth",
             "--project-root",
             project_root
                 .to_str()
@@ -177,7 +177,7 @@ fn cli_dispatch_runs_ls_with_json_format() {
     let project_root = temporary_project_root();
     crate::docker::with_test_runtime_lock(|| {
         let cli = Cli::parse_from([
-            "stackctl",
+            "berth",
             "--project-root",
             project_root
                 .to_str()
@@ -197,7 +197,7 @@ fn cli_dispatch_generates_env_file_from_full_pipeline() {
     let output_path = project_root.join(".env.generated");
     crate::docker::with_test_runtime_lock(|| {
         let cli = Cli::parse_from([
-            "stackctl",
+            "berth",
             "--project-root",
             project_root
                 .to_str()
@@ -222,7 +222,7 @@ fn cli_dispatch_open_succeeds_and_records_browser_invocation() {
         with_fake_curl("200", true, || {
             crate::docker::with_test_runtime_lock(|| {
                 let cli = Cli::parse_from([
-                    "stackctl",
+                    "berth",
                     "--project-root",
                     project_root
                         .to_str()
@@ -243,7 +243,7 @@ fn cli_dispatch_daemon_status_uses_explicit_path_without_local_project_context()
     let project_root = temporary_project_root();
     crate::docker::with_test_runtime_lock(|| {
         let cli = Cli::parse_from([
-            "stackctl",
+            "berth",
             "daemon",
             "status",
             "--path",

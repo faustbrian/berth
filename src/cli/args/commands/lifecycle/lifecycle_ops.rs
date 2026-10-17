@@ -1,6 +1,6 @@
 //! cli args commands lifecycle lifecycle ops module.
 //!
-//! Contains cli args commands lifecycle lifecycle ops logic used by Stackctl command workflows.
+//! Contains cli args commands lifecycle lifecycle ops logic used by Berth command workflows.
 
 use clap::Args;
 
@@ -136,7 +136,7 @@ pub(crate) struct RecreateArgs {
     /// Publish all exposed ports to random host ports after start
     #[arg(long, short = 'P', default_value_t = false)]
     pub(crate) publish_all: bool,
-    /// Persist random port assignments into `.stackctl.toml`
+    /// Persist random port assignments into `.berth.toml`
     #[arg(long, default_value_t = false, requires = "publish_all")]
     pub(crate) save_ports: bool,
     /// Skip recreating workspace swarm dependencies

@@ -1,6 +1,6 @@
 //! config types swarm module.
 //!
-//! Contains config types swarm logic used by Stackctl command workflows.
+//! Contains config types swarm logic used by Berth command workflows.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

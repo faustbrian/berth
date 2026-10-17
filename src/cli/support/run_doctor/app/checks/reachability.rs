@@ -146,7 +146,7 @@ mod tests {
         F: FnOnce() -> T,
     {
         let bin_dir = std::env::temp_dir().join(format!(
-            "stackctl-doctor-reachability-{}",
+            "berth-doctor-reachability-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("time")
@@ -180,7 +180,7 @@ mod tests {
         F: FnOnce() -> T,
     {
         let bin_dir = std::env::temp_dir().join(format!(
-            "stackctl-doctor-reachability-curl-{}",
+            "berth-doctor-reachability-curl-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("time")

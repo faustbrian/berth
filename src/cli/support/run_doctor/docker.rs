@@ -1,6 +1,6 @@
 //! cli support run doctor docker module.
 //!
-//! Contains cli support run doctor docker logic used by Stackctl command workflows.
+//! Contains cli support run doctor docker logic used by Berth command workflows.
 
 use super::report;
 
@@ -43,7 +43,7 @@ mod tests {
         F: FnOnce(std::path::PathBuf) -> T,
     {
         let root = env::temp_dir().join(format!(
-            "stackctl-doctor-runtime-{}",
+            "berth-doctor-runtime-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("clock")

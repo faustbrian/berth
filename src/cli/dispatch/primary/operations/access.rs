@@ -44,7 +44,7 @@ mod tests {
 
     #[test]
     fn access_dispatches_url() {
-        let cli = Cli::parse_from(["stackctl", "url"]);
+        let cli = Cli::parse_from(["berth", "url"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
         let result = super::dispatch(&cli, &mut config, &context);

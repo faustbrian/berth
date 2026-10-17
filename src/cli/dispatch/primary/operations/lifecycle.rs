@@ -47,16 +47,16 @@ mod tests {
 
     #[test]
     fn lifecycle_prefers_up_apply() {
-        assert!(dispatch_result(&["stackctl", "up"]).is_some());
+        assert!(dispatch_result(&["berth", "up"]).is_some());
     }
 
     #[test]
     fn lifecycle_falls_back_to_service_ops() {
-        assert!(dispatch_result(&["stackctl", "start"]).is_some());
+        assert!(dispatch_result(&["berth", "start"]).is_some());
     }
 
     #[test]
     fn lifecycle_handles_non_matching_commands_as_none() {
-        assert!(dispatch_result(&["stackctl", "status"]).is_none());
+        assert!(dispatch_result(&["berth", "status"]).is_none());
     }
 }

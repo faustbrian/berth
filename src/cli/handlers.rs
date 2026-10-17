@@ -1,6 +1,6 @@
 //! cli handlers module.
 //!
-//! Contains cli handlers logic used by Stackctl command workflows.
+//! Contains cli handlers logic used by Berth command workflows.
 
 mod about_cmd;
 mod app_create_cmd;

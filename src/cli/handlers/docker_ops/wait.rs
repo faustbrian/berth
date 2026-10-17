@@ -1,6 +1,6 @@
 //! cli handlers docker ops wait module.
 //!
-//! Contains wait handler used by Stackctl command workflows.
+//! Contains wait handler used by Berth command workflows.
 
 use anyhow::Result;
 

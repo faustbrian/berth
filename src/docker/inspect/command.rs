@@ -1,6 +1,6 @@
 //! docker inspect command module.
 //!
-//! Contains docker inspect command logic used by Stackctl command workflows.
+//! Contains docker inspect command logic used by Berth command workflows.
 
 use std::process::Output;
 

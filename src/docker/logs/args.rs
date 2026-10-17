@@ -1,6 +1,6 @@
 //! docker logs args module.
 //!
-//! Contains docker logs args logic used by Stackctl command workflows.
+//! Contains docker logs args logic used by Berth command workflows.
 
 use super::LogsOptions;
 

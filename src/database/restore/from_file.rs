@@ -1,6 +1,6 @@
 //! database restore from file module.
 //!
-//! Contains database restore from file logic used by Stackctl command workflows.
+//! Contains database restore from file logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 use flate2::read::GzDecoder;

@@ -1,6 +1,6 @@
 //! docker inspect tests module.
 //!
-//! Contains docker inspect tests logic used by Stackctl command workflows.
+//! Contains docker inspect tests logic used by Berth command workflows.
 
 use super::parse::extract_host_port_binding_from_inspect;
 

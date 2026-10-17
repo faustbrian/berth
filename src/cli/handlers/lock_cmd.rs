@@ -1,6 +1,6 @@
 //! cli handlers lock cmd module.
 //!
-//! Contains cli handlers lock cmd logic used by Stackctl command workflows.
+//! Contains cli handlers lock cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;
@@ -48,7 +48,7 @@ pub(crate) fn handle_lock(
             }
 
             print_diff(&diff);
-            anyhow::bail!("lockfile is out of sync; run `stackctl lock images`")
+            anyhow::bail!("lockfile is out of sync; run `berth lock images`")
         }
         LockCommands::Diff => {
             let expected = config::build_image_lock(config_data)?;
@@ -155,7 +155,7 @@ mod tests {
 
     fn project_root() -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!(
-            "stackctl-lock-cmd-{}-{}",
+            "berth-lock-cmd-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -172,7 +172,7 @@ mod tests {
             version: 1,
             images: entries,
         };
-        let path = root.join(".stackctl.lock.toml");
+        let path = root.join(".berth.lock.toml");
         let content = toml::to_string_pretty(&lockfile).expect("serialize lockfile");
         std::fs::write(&path, content).expect("write lockfile");
     }
@@ -182,7 +182,7 @@ mod tests {
         F: FnOnce() -> T,
     {
         let bin_dir = std::env::temp_dir().join(format!(
-            "stackctl-lock-cmd-docker-{}",
+            "berth-lock-cmd-docker-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("time")
@@ -227,9 +227,9 @@ fi\n"
     fn handle_lock_images_writes_lockfile() {
         let root = project_root();
         let cfg = config();
-        let lock_path = root.join(".stackctl.lock.toml");
+        let lock_path = root.join(".berth.lock.toml");
 
-        let cfg_path = root.join("custom.stackctl.toml");
+        let cfg_path = root.join("custom.berth.toml");
         let cfg_path = cfg_path.as_path();
         let result = with_fake_docker(|| {
             handle_lock(
@@ -249,7 +249,7 @@ fi\n"
     fn handle_lock_verify_succeeds_when_in_sync_and_fails_when_out_of_sync() {
         let root = project_root();
         let cfg = config();
-        let cfg_path = root.join("custom.stackctl.toml");
+        let cfg_path = root.join("custom.berth.toml");
         let cfg_path = cfg_path.as_path();
         set_lockfile(
             &root,
@@ -302,7 +302,7 @@ fi\n"
     fn handle_lock_diff_prints_missing_and_extra_entries() {
         let root = project_root();
         let cfg = config();
-        let cfg_path = root.join("custom.stackctl.toml");
+        let cfg_path = root.join("custom.berth.toml");
         let cfg_path = cfg_path.as_path();
 
         set_lockfile(

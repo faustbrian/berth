@@ -1,6 +1,6 @@
 //! config api services module.
 //!
-//! Contains config api services logic used by Stackctl command workflows.
+//! Contains config api services logic used by Berth command workflows.
 
 use anyhow::Result;
 

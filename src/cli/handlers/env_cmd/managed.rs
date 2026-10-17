@@ -1,6 +1,6 @@
 //! cli handlers env cmd managed module.
 //!
-//! Contains cli handlers env cmd managed logic used by Stackctl command workflows.
+//! Contains cli handlers env cmd managed logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::collections::HashSet;
@@ -86,7 +86,7 @@ pub(super) fn handle_managed_env_update(
                 ""
             },
             if options.persist_runtime {
-                " and persisted runtime host/port to .stackctl.toml"
+                " and persisted runtime host/port to .berth.toml"
             } else {
                 ""
             }
@@ -174,7 +174,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("time")
             .as_nanos();
-        let bin_dir = std::env::temp_dir().join(format!("stackctl-managed-update-{stamp}"));
+        let bin_dir = std::env::temp_dir().join(format!("berth-managed-update-{stamp}"));
         fs::create_dir_all(&bin_dir).expect("create fake docker dir");
         let command = bin_dir.join("docker");
         fs::write(&command, format!("#!/bin/sh\n{script}")).expect("write fake docker");
@@ -202,7 +202,7 @@ mod tests {
     {
         let mut config = config_with(vec![app_service("app", "app-static", ("CUSTOM", "base"))]);
         let env_path = std::env::temp_dir().join(format!(
-            "stackctl-managed-update-base-{}",
+            "berth-managed-update-base-{}",
             SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
         ));
         fs::write(&env_path, "CUSTOM=\"base\"\n")?;
@@ -235,7 +235,7 @@ mod tests {
     fn handle_managed_env_update_overrides_explicit_values_from_runtime() -> anyhow::Result<()> {
         let mut config = config_with(vec![app_service("app", "app-running", ("CUSTOM", "base"))]);
         let env_path = std::env::temp_dir().join(format!(
-            "stackctl-managed-update-runtime-{}",
+            "berth-managed-update-runtime-{}",
             SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
         ));
         fs::write(&env_path, "CUSTOM=\"base\"\n")?;
@@ -283,16 +283,16 @@ exit 1
     fn handle_managed_env_update_persists_runtime_host_port() -> anyhow::Result<()> {
         let mut config = config_with(vec![app_service("app", "app-running", ("CUSTOM", "base"))]);
         let env_path = std::env::temp_dir().join(format!(
-            "stackctl-managed-update-port-{}",
+            "berth-managed-update-port-{}",
             SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
         ));
         fs::write(&env_path, "CUSTOM=\"base\"\n")?;
         let root = std::env::temp_dir().join(format!(
-            "stackctl-managed-update-port-root-{}",
+            "berth-managed-update-port-root-{}",
             SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
         ));
         fs::create_dir_all(&root).expect("create config root");
-        let config_path = root.join(".stackctl.toml");
+        let config_path = root.join(".berth.toml");
         fs::write(
             &config_path,
             "schema_version = 1\nproject_type = \"project\"\n",

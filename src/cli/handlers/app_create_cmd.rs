@@ -1,6 +1,6 @@
 //! cli handlers app create cmd module.
 //!
-//! Contains cli handlers app create cmd logic used by Stackctl command workflows.
+//! Contains cli handlers app create cmd logic used by Berth command workflows.
 
 use crate::{cli, config};
 use anyhow::Result;
@@ -22,7 +22,7 @@ pub(crate) fn handle_app_create(
     options: HandleAppCreateOptions<'_>,
 ) -> Result<()> {
     if config.project_type == config::ProjectType::Library {
-        anyhow::bail!("`stackctl app-create` is only supported when project_type is \"project\"");
+        anyhow::bail!("`berth app-create` is only supported when project_type is \"project\"");
     }
 
     let runtime = cli::support::resolve_app_runtime_context(

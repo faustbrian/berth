@@ -1,6 +1,6 @@
 //! database restore preflight module.
 //!
-//! Contains shared restore preflight logic used by Stackctl command workflows.
+//! Contains shared restore preflight logic used by Berth command workflows.
 
 use anyhow::Result;
 

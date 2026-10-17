@@ -40,7 +40,7 @@ mod tests {
 
     #[test]
     fn data_module_dispatch_prefers_core() {
-        let cli = Cli::parse_from(["stackctl", "about"]);
+        let cli = Cli::parse_from(["berth", "about"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
         let result = super::dispatch(&cli, &mut config, &context);
@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn data_module_dispatch_falls_back_to_docker_ops() {
-        let cli = Cli::parse_from(["stackctl", "top"]);
+        let cli = Cli::parse_from(["berth", "top"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
         let result = super::dispatch(&cli, &mut config, &context);

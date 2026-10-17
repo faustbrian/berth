@@ -1,6 +1,6 @@
 //! cli support default env path module.
 //!
-//! Contains cli support default env path logic used by Stackctl command workflows.
+//! Contains cli support default env path logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::{Path, PathBuf};

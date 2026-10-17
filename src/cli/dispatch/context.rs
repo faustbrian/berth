@@ -73,7 +73,7 @@ mod tests {
     #[test]
     fn context_exposes_cli_flags() {
         let cli = Cli::parse_from([
-            "stackctl",
+            "berth",
             "--quiet",
             "--dry-run",
             "--non-interactive",
@@ -100,7 +100,7 @@ mod tests {
 
     #[test]
     fn context_defaults() {
-        let cli = Cli::parse_from(["stackctl", "status"]);
+        let cli = Cli::parse_from(["berth", "status"]);
         let context = CliDispatchContext::from_cli(&cli);
 
         assert!(!context.quiet());

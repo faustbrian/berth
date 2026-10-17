@@ -1,6 +1,6 @@
 //! swarm injection resolver module.
 //!
-//! Contains swarm injection resolver logic used by Stackctl command workflows.
+//! Contains swarm injection resolver logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 
@@ -42,7 +42,7 @@ pub(super) fn resolve_injected_env_from_swarm_context(
             let dependency_config_path =
                 crate::config::config_path_in_dir(&dependency_root)?.ok_or_else(|| {
                     anyhow::anyhow!(
-                        "missing Stackctl config (.stackctl.toml or .stackctl.yaml) for swarm target '{}' at {}",
+                        "missing Berth config (.berth.toml or .berth.yaml) for swarm target '{}' at {}",
                         target_name,
                         dependency_root.display()
                     )

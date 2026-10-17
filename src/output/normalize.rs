@@ -1,6 +1,6 @@
 //! output normalize module.
 //!
-//! Contains output normalization helpers used by Stackctl command workflows.
+//! Contains output normalization helpers used by Berth command workflows.
 
 use super::LogLevel;
 mod ansi;

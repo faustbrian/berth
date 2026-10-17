@@ -1,6 +1,6 @@
 //! env mapping drivers object store module.
 //!
-//! Contains env mapping drivers object store logic used by Stackctl command workflows.
+//! Contains env mapping drivers object store logic used by Berth command workflows.
 
 use std::collections::HashMap;
 

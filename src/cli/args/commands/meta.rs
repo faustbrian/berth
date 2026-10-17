@@ -1,6 +1,6 @@
 //! cli args commands meta module.
 //!
-//! Contains cli args commands meta logic used by Stackctl command workflows.
+//! Contains cli args commands meta logic used by Berth command workflows.
 
 use clap::Args;
 

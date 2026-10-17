@@ -1,6 +1,6 @@
 //! cli support resolve tty module.
 //!
-//! Contains cli support resolve tty logic used by Stackctl command workflows.
+//! Contains cli support resolve tty logic used by Berth command workflows.
 
 /// Resolves tty using configured inputs and runtime state.
 pub(crate) fn resolve_tty(tty: bool, no_tty: bool) -> bool {

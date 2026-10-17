@@ -44,7 +44,7 @@ mod tests {
             api_key: None,
             region: None,
             scheme: Some("https".to_owned()),
-            domain: Some("app.stackctl".to_owned()),
+            domain: Some("app.berth".to_owned()),
             domains: None,
             resolved_domain: None,
             container_port: None,
@@ -75,7 +75,7 @@ mod tests {
     fn health_url_for_target_normalizes_path_without_leading_slash() {
         let target = make_target();
         let url = health_url_for_target(&target, Some("ready")).expect("url");
-        assert_eq!(url, "https://app.stackctl/ready");
+        assert_eq!(url, "https://app.berth/ready");
     }
 
     #[test]
@@ -83,6 +83,6 @@ mod tests {
         let mut target = make_target();
         target.health_path = Some("ready".to_owned());
         let url = health_url_for_target(&target, None).expect("url");
-        assert_eq!(url, "https://app.stackctl/ready");
+        assert_eq!(url, "https://app.berth/ready");
     }
 }

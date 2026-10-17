@@ -1,6 +1,6 @@
 //! docker inspect module.
 //!
-//! Contains docker inspect logic used by Stackctl command workflows.
+//! Contains docker inspect logic used by Berth command workflows.
 
 use std::collections::HashMap;
 use std::process::Output;

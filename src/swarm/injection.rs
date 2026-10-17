@@ -1,6 +1,6 @@
 //! swarm injection module.
 //!
-//! Contains swarm injection logic used by Stackctl command workflows.
+//! Contains swarm injection logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;

@@ -1,6 +1,6 @@
 //! cli support run doctor repro module.
 //!
-//! Contains cli support run doctor repro logic used by Stackctl command workflows.
+//! Contains cli support run doctor repro logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;
@@ -104,7 +104,7 @@ mod tests {
 
     fn temp_root() -> std::path::PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-repro-tests-{}",
+            "berth-repro-tests-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -116,7 +116,7 @@ mod tests {
     }
 
     fn config_path(root: &Path) -> std::path::PathBuf {
-        let path = root.join(".stackctl.toml");
+        let path = root.join(".berth.toml");
         fs::write(&path, "schema_version = 1\nproject_type = \"project\"\n").expect("write config");
         path
     }

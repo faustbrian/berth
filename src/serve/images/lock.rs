@@ -9,7 +9,7 @@ use super::super::DerivedImageLock;
 /// Returns the lockfile path used to map image signatures to derived tags.
 fn derived_image_lock_path() -> Result<PathBuf> {
     let home = std::env::var("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join(".config/stackctl/cache/derived-image-lock.toml"))
+    Ok(PathBuf::from(home).join(".config/berth/cache/derived-image-lock.toml"))
 }
 
 /// Reads derived image lock from persisted or external state.
@@ -134,7 +134,7 @@ mod tests {
 
     fn temp_path(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
-            "stackctl-derived-lock-{name}-{}",
+            "berth-derived-lock-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")

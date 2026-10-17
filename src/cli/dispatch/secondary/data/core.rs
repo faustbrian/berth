@@ -133,46 +133,46 @@ mod tests {
 
     #[test]
     fn data_core_dispatches_about() {
-        assert!(dispatch_result(&["stackctl", "about"]).is_some());
+        assert!(dispatch_result(&["berth", "about"]).is_some());
     }
 
     #[test]
     fn data_core_dispatches_restore() {
-        assert!(dispatch_result(&["stackctl", "restore", "--file", "/tmp/file.sql"]).is_some());
+        assert!(dispatch_result(&["berth", "restore", "--file", "/tmp/file.sql"]).is_some());
     }
 
     #[test]
     fn data_core_dispatches_dump() {
-        assert!(dispatch_result(&["stackctl", "dump", "--file", "/tmp/dump.sql"]).is_some());
+        assert!(dispatch_result(&["berth", "dump", "--file", "/tmp/dump.sql"]).is_some());
     }
 
     #[test]
     fn data_core_dispatches_list_as_status() {
-        assert!(dispatch_result(&["stackctl", "ps"]).is_some());
+        assert!(dispatch_result(&["berth", "ps"]).is_some());
     }
 
     #[test]
     fn data_core_dispatches_health() {
-        assert!(dispatch_result(&["stackctl", "health"]).is_some());
+        assert!(dispatch_result(&["berth", "health"]).is_some());
     }
 
     #[test]
     fn data_core_dispatches_env() {
-        assert!(dispatch_result(&["stackctl", "env"]).is_some());
+        assert!(dispatch_result(&["berth", "env"]).is_some());
     }
 
     #[test]
     fn data_core_dispatches_logs() {
-        assert!(dispatch_result(&["stackctl", "logs"]).is_some());
+        assert!(dispatch_result(&["berth", "logs"]).is_some());
     }
 
     #[test]
     fn data_core_dispatches_pull() {
-        assert!(dispatch_result(&["stackctl", "pull"]).is_some());
+        assert!(dispatch_result(&["berth", "pull"]).is_some());
     }
 
     #[test]
     fn data_core_dispatches_none_for_setup_command() {
-        assert!(dispatch_result(&["stackctl", "setup"]).is_none());
+        assert!(dispatch_result(&["berth", "setup"]).is_none());
     }
 }

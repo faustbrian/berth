@@ -1,6 +1,6 @@
 //! cli args commands operations docker ops module.
 //!
-//! Contains docker passthrough command args used by Stackctl command workflows.
+//! Contains docker passthrough command args used by Berth command workflows.
 
 mod attach;
 mod cp;

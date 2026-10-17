@@ -1,6 +1,6 @@
 //! env files update module.
 //!
-//! Contains env files update logic used by Stackctl command workflows.
+//! Contains env files update logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;
@@ -83,7 +83,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("unix epoch")
             .as_nanos();
-        std::env::temp_dir().join(format!("stackctl-env-update-{suffix}-{nanos}.env"))
+        std::env::temp_dir().join(format!("berth-env-update-{suffix}-{nanos}.env"))
     }
 
     #[test]

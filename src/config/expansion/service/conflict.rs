@@ -1,6 +1,6 @@
 //! config expansion service conflict module.
 //!
-//! Contains config expansion service conflict logic used by Stackctl command workflows.
+//! Contains config expansion service conflict logic used by Berth command workflows.
 
 use anyhow::Result;
 

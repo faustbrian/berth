@@ -1,6 +1,6 @@
 //! cli handlers app create cmd commands module.
 //!
-//! Contains cli handlers app create cmd commands logic used by Stackctl command workflows.
+//! Contains cli handlers app create cmd commands logic used by Berth command workflows.
 
 pub(super) fn setup_commands() -> Vec<Vec<String>> {
     vec![

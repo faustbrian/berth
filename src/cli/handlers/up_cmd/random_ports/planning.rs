@@ -137,7 +137,7 @@ mod tests {
             api_key: None,
             region: None,
             scheme: None,
-            domain: Some("app.stackctl".to_owned()),
+            domain: Some("app.berth".to_owned()),
             domains: None,
             resolved_domain: None,
             container_port: Some(80),
@@ -220,7 +220,7 @@ mod tests {
     }
 
     fn with_fake_docker<T>(script: &str, test: impl FnOnce(std::path::PathBuf) -> T) -> T {
-        let root = std::env::temp_dir().join(format!("stackctl-random-ports-{}", unique_suffix()));
+        let root = std::env::temp_dir().join(format!("berth-random-ports-{}", unique_suffix()));
         fs::create_dir_all(&root).expect("create temp root");
         let docker = root.join("docker");
         let mut file = fs::File::create(&docker).expect("create fake docker");
@@ -234,7 +234,7 @@ mod tests {
             fs::set_permissions(&docker, perms).expect("chmod fake docker");
         }
 
-        let config_path = root.join(".stackctl.toml");
+        let config_path = root.join(".berth.toml");
         fs::write(
             &config_path,
             "schema_version = 1\nproject_type = \"project\"\n[[service]]\nname = \"app\"\n[[service]]\nname = \"db\"\n",

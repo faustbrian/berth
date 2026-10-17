@@ -3,41 +3,32 @@ use std::collections::HashMap;
 
 #[test]
 fn merge_blocks_http_downgrade_for_app_url() {
-    let mut base = HashMap::from([("APP_URL".to_owned(), "https://app.stackctl".to_owned())]);
-    let incoming = HashMap::from([("APP_URL".to_owned(), "http://app.stackctl".to_owned())]);
+    let mut base = HashMap::from([("APP_URL".to_owned(), "https://app.berth".to_owned())]);
+    let incoming = HashMap::from([("APP_URL".to_owned(), "http://app.berth".to_owned())]);
 
     merge_with_protected_https_app_urls(&mut base, &incoming);
 
-    assert_eq!(
-        base.get("APP_URL"),
-        Some(&"https://app.stackctl".to_owned())
-    );
+    assert_eq!(base.get("APP_URL"), Some(&"https://app.berth".to_owned()));
 }
 
 #[test]
 fn merge_blocks_http_downgrade_for_asset_url() {
-    let mut base = HashMap::from([("ASSET_URL".to_owned(), "https://app.stackctl".to_owned())]);
-    let incoming = HashMap::from([("ASSET_URL".to_owned(), "http://app.stackctl".to_owned())]);
+    let mut base = HashMap::from([("ASSET_URL".to_owned(), "https://app.berth".to_owned())]);
+    let incoming = HashMap::from([("ASSET_URL".to_owned(), "http://app.berth".to_owned())]);
 
     merge_with_protected_https_app_urls(&mut base, &incoming);
 
-    assert_eq!(
-        base.get("ASSET_URL"),
-        Some(&"https://app.stackctl".to_owned())
-    );
+    assert_eq!(base.get("ASSET_URL"), Some(&"https://app.berth".to_owned()));
 }
 
 #[test]
 fn merge_allows_https_override() {
-    let mut base = HashMap::from([("APP_URL".to_owned(), "https://old.stackctl".to_owned())]);
-    let incoming = HashMap::from([("APP_URL".to_owned(), "https://new.stackctl".to_owned())]);
+    let mut base = HashMap::from([("APP_URL".to_owned(), "https://old.berth".to_owned())]);
+    let incoming = HashMap::from([("APP_URL".to_owned(), "https://new.berth".to_owned())]);
 
     merge_with_protected_https_app_urls(&mut base, &incoming);
 
-    assert_eq!(
-        base.get("APP_URL"),
-        Some(&"https://new.stackctl".to_owned())
-    );
+    assert_eq!(base.get("APP_URL"), Some(&"https://new.berth".to_owned()));
 }
 
 #[test]

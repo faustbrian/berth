@@ -1,6 +1,6 @@
 //! cli handlers up cmd startup module.
 //!
-//! Contains cli handlers up cmd startup logic used by Stackctl command workflows.
+//! Contains cli handlers up cmd startup logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::collections::HashMap;

@@ -1,6 +1,6 @@
 //! swarm targets resolver selection module.
 //!
-//! Contains swarm targets resolver selection logic used by Stackctl command workflows.
+//! Contains swarm targets resolver selection logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::collections::HashMap;

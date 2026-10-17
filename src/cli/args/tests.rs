@@ -21,7 +21,7 @@ fn default_parallelism_is_bounded() {
 #[test]
 fn cli_accessors_reflect_global_flags() {
     let cli = Cli::try_parse_from([
-        "stackctl",
+        "berth",
         "--quiet",
         "--repro",
         "--config",
@@ -221,7 +221,7 @@ fn app_share_argument_methods() {
 #[test]
 fn lifecycle_argument_methods() {
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "url",
         "--service",
         "db",
@@ -242,7 +242,7 @@ fn lifecycle_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "setup",
         "--service",
         "api",
@@ -260,7 +260,7 @@ fn lifecycle_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "start",
         "--profile",
         "full",
@@ -277,7 +277,7 @@ fn lifecycle_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "up",
         "--service",
         "worker",
@@ -301,7 +301,7 @@ fn lifecycle_argument_methods() {
         panic!("expected up command");
     }
 
-    let cli = Cli::parse_from(["stackctl", "apply", "--no-deps"]);
+    let cli = Cli::parse_from(["berth", "apply", "--no-deps"]);
     if let commands::Commands::Apply(args) = cli.command {
         assert!(args.no_deps);
     } else {
@@ -309,7 +309,7 @@ fn lifecycle_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "update",
         "--profile",
         "default",
@@ -328,7 +328,7 @@ fn lifecycle_argument_methods() {
 #[test]
 fn operations_argument_methods() {
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "restore",
         "--service",
         "mysql",
@@ -351,7 +351,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "dump",
         "--service",
         "mysql",
@@ -370,7 +370,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "pull",
         "--service",
         "api",
@@ -387,7 +387,7 @@ fn operations_argument_methods() {
         panic!("expected pull command");
     }
 
-    let cli = Cli::parse_from(["stackctl", "about"]);
+    let cli = Cli::parse_from(["berth", "about"]);
     if let commands::Commands::About(_args) = cli.command {
         // AboutArgs is intentionally empty and uses default behavior.
     } else {
@@ -395,7 +395,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl", "ps", "--format", "json", "--kind", "app", "--driver", "postgres",
+        "berth", "ps", "--format", "json", "--kind", "app", "--driver", "postgres",
     ]);
     if let commands::Commands::Ps(args) = cli.command {
         assert_eq!(args.kind(), Some(config::Kind::App));
@@ -405,7 +405,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "health",
         "--service",
         "api",
@@ -429,7 +429,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "env",
         "--service",
         "api",
@@ -459,7 +459,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl", "ls", "--kind", "cache", "--driver", "redis", "--format", "json",
+        "berth", "ls", "--kind", "cache", "--driver", "redis", "--format", "json",
     ]);
     if let commands::Commands::Ls(args) = cli.command {
         assert_eq!(args.kind(), Some(config::Kind::Cache));
@@ -469,7 +469,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "attach",
         "--service",
         "api",
@@ -487,7 +487,7 @@ fn operations_argument_methods() {
         panic!("expected attach command");
     }
 
-    let cli = Cli::parse_from(["stackctl", "cp", "-L", "src", "dst"]);
+    let cli = Cli::parse_from(["berth", "cp", "-L", "src", "dst"]);
     if let commands::Commands::Cp(args) = cli.command {
         assert!(args.follow_link);
         assert!(!args.archive);
@@ -498,7 +498,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "events",
         "--service",
         "db",
@@ -521,7 +521,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "inspect",
         "--service",
         "cache",
@@ -543,7 +543,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "kill",
         "--service",
         "cache",
@@ -563,7 +563,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "pause",
         "--service",
         "cache",
@@ -580,7 +580,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "unpause",
         "--service",
         "api",
@@ -597,7 +597,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "stats",
         "--service",
         "api",
@@ -615,7 +615,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "top",
         "--service",
         "api",
@@ -633,7 +633,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "wait",
         "--service",
         "api",
@@ -653,7 +653,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "logs",
         "--all",
         "--prefix",
@@ -675,7 +675,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "swarm",
         "--force",
         "--parallel",
@@ -700,7 +700,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "port",
         "--service",
         "api",
@@ -718,7 +718,7 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "stackctl",
+        "berth",
         "prune",
         "--all",
         "--force",
@@ -736,21 +736,21 @@ fn operations_argument_methods() {
 
 #[test]
 fn command_variants_parse() {
-    let completion = Cli::parse_from(["stackctl", "completions", "bash"]);
+    let completion = Cli::parse_from(["berth", "completions", "bash"]);
     if let commands::Commands::Completions(args) = completion.command {
         assert_eq!(args.shell, clap_complete::Shell::Bash);
     } else {
         panic!("expected completions command");
     }
 
-    let doctor = Cli::parse_from(["stackctl", "doctor", "--repro"]);
+    let doctor = Cli::parse_from(["berth", "doctor", "--repro"]);
     if let commands::Commands::Doctor(args) = doctor.command {
         assert!(args.repro);
     } else {
         panic!("expected doctor command");
     }
 
-    let preset = Cli::parse_from(["stackctl", "preset", "show", "app", "--format", "toml"]);
+    let preset = Cli::parse_from(["berth", "preset", "show", "app", "--format", "toml"]);
     if let commands::Commands::Preset(commands::PresetArgs { command }) = preset.command {
         assert!(
             matches!(command, PresetCommands::Show { name, format } if name == "app" && format == "toml")
@@ -759,9 +759,7 @@ fn command_variants_parse() {
         panic!("expected preset command");
     }
 
-    let profile = Cli::parse_from([
-        "stackctl", "profile", "show", "default", "--format", "table",
-    ]);
+    let profile = Cli::parse_from(["berth", "profile", "show", "default", "--format", "table"]);
     if let commands::Commands::Profile(commands::ProfileArgs { command }) = profile.command {
         assert!(
             matches!(command, ProfileCommands::Show { name, format } if name == "default" && format == "table")
@@ -770,14 +768,14 @@ fn command_variants_parse() {
         panic!("expected profile command");
     }
 
-    let config = Cli::parse_from(["stackctl", "config", "migrate"]);
+    let config = Cli::parse_from(["berth", "config", "migrate"]);
     if let commands::Commands::Config(commands::ConfigArgs { command, .. }) = config.command {
         assert!(matches!(command, Some(ConfigCommands::Migrate)));
     } else {
         panic!("expected config command");
     }
 
-    let env = Cli::parse_from(["stackctl", "env", "generate", "--output", "/tmp/env-out"]);
+    let env = Cli::parse_from(["berth", "env", "generate", "--output", "/tmp/env-out"]);
     if let commands::Commands::Env(commands::EnvArgs { command, .. }) = env.command {
         assert!(
             matches!(command, Some(EnvCommands::Generate { output }) if output == PathBuf::from("/tmp/env-out"))
@@ -786,7 +784,7 @@ fn command_variants_parse() {
         panic!("expected env command");
     }
 
-    let lock = Cli::parse_from(["stackctl", "lock", "verify"]);
+    let lock = Cli::parse_from(["berth", "lock", "verify"]);
     if let commands::Commands::Lock(commands::LockArgs { command }) = lock.command {
         assert!(matches!(command, LockCommands::Verify));
     } else {
@@ -796,21 +794,21 @@ fn command_variants_parse() {
 
 #[test]
 fn share_command_variants_parse() {
-    let status = Cli::parse_from(["stackctl", "share", "status"]);
+    let status = Cli::parse_from(["berth", "share", "status"]);
     if let commands::Commands::Share(args) = status.command {
         assert!(matches!(args.command, commands::ShareCommands::Status(_)));
     } else {
         panic!("expected share command");
     }
 
-    let start = Cli::parse_from(["stackctl", "share", "start", "--provider", "cloudflare"]);
+    let start = Cli::parse_from(["berth", "share", "start", "--provider", "cloudflare"]);
     if let commands::Commands::Share(args) = start.command {
         assert!(matches!(args.command, commands::ShareCommands::Start(_)));
     } else {
         panic!("expected share command");
     }
 
-    let stop = Cli::parse_from(["stackctl", "share", "stop", "--all"]);
+    let stop = Cli::parse_from(["berth", "share", "stop", "--all"]);
     if let commands::Commands::Share(args) = stop.command {
         assert!(matches!(args.command, commands::ShareCommands::Stop(_)));
     } else {
@@ -820,7 +818,7 @@ fn share_command_variants_parse() {
 
 #[test]
 fn daemon_command_variants_parse() {
-    let start = Cli::parse_from(["stackctl", "daemon", "start", "--path", "/tmp/project"]);
+    let start = Cli::parse_from(["berth", "daemon", "start", "--path", "/tmp/project"]);
     if let commands::Commands::Daemon(args) = start.command {
         assert!(matches!(args.command, commands::DaemonCommands::Start(_)));
     } else {
@@ -828,7 +826,7 @@ fn daemon_command_variants_parse() {
     }
 
     let watch = Cli::parse_from([
-        "stackctl",
+        "berth",
         "daemon",
         "watch",
         "--dir",
@@ -845,7 +843,7 @@ fn daemon_command_variants_parse() {
     }
 
     let service = Cli::parse_from([
-        "stackctl",
+        "berth",
         "daemon",
         "service",
         "install",
@@ -862,21 +860,21 @@ fn daemon_command_variants_parse() {
         panic!("expected daemon command");
     }
 
-    let status = Cli::parse_from(["stackctl", "daemon", "status", "--path", "/tmp/project"]);
+    let status = Cli::parse_from(["berth", "daemon", "status", "--path", "/tmp/project"]);
     if let commands::Commands::Daemon(args) = status.command {
         assert!(matches!(args.command, commands::DaemonCommands::Status(_)));
     } else {
         panic!("expected daemon command");
     }
 
-    let stop = Cli::parse_from(["stackctl", "daemon", "stop", "--path", "/tmp/project"]);
+    let stop = Cli::parse_from(["berth", "daemon", "stop", "--path", "/tmp/project"]);
     if let commands::Commands::Daemon(args) = stop.command {
         assert!(matches!(args.command, commands::DaemonCommands::Stop(_)));
     } else {
         panic!("expected daemon command");
     }
 
-    let logs = Cli::parse_from(["stackctl", "daemon", "logs", "--path", "/tmp/project"]);
+    let logs = Cli::parse_from(["berth", "daemon", "logs", "--path", "/tmp/project"]);
     if let commands::Commands::Daemon(args) = logs.command {
         assert!(matches!(args.command, commands::DaemonCommands::Logs(_)));
     } else {

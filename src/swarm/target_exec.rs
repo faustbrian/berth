@@ -1,6 +1,6 @@
 //! swarm target exec module.
 //!
-//! Contains swarm target exec logic used by Stackctl command workflows.
+//! Contains swarm target exec logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -35,13 +35,13 @@ pub(super) struct SwarmRunResult {
 
 /// Executes the requested command for one swarm target.
 pub(super) fn run_swarm_target(
-    stackctl_executable: &Path,
+    berth_executable: &Path,
     target: &ResolvedSwarmTarget,
     args: &[String],
     output_mode: OutputMode,
     cancel: Option<Arc<AtomicBool>>,
 ) -> Result<SwarmRunResult> {
-    let mut command = Command::new(stackctl_executable);
+    let mut command = Command::new(berth_executable);
     command
         .args(args)
         .stdout(Stdio::piped())

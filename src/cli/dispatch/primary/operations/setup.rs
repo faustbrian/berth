@@ -43,7 +43,7 @@ mod tests {
 
     #[test]
     fn setup_dispatches_setup() {
-        let cli = Cli::parse_from(["stackctl", "setup"]);
+        let cli = Cli::parse_from(["berth", "setup"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
         let result = super::dispatch(&cli, &mut config, &context);

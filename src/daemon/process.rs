@@ -35,7 +35,7 @@ pub(crate) fn daemon_binary() -> Result<String> {
     }
 
     std::env::current_exe()
-        .context("failed to resolve current stackctl executable")
+        .context("failed to resolve current berth executable")
         .map(|path| path.to_string_lossy().into_owned())
 }
 
@@ -100,7 +100,7 @@ mod tests {
 
     fn temp_log_path(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
-            "stackctl-daemon-log-{name}-{}",
+            "berth-daemon-log-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -110,7 +110,7 @@ mod tests {
 
     fn mock_binary(name: &str, script: &str) -> String {
         let root = std::env::temp_dir().join(format!(
-            "stackctl-daemon-binary-{name}-{}",
+            "berth-daemon-binary-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock")
@@ -118,7 +118,7 @@ mod tests {
         ));
         drop(fs::remove_dir_all(&root));
         fs::create_dir_all(&root).expect("create temp root");
-        let path = root.join("stackctl");
+        let path = root.join("berth");
         fs::write(&path, script).expect("write mock daemon");
         #[cfg(unix)]
         {

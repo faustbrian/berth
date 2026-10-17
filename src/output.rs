@@ -1,6 +1,6 @@
 //! output module.
 //!
-//! Contains output logic used by Stackctl command workflows.
+//! Contains output logic used by Berth command workflows.
 
 use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;

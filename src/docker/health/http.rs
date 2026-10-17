@@ -1,6 +1,6 @@
 //! docker health http module.
 //!
-//! Contains docker health http logic used by Stackctl command workflows.
+//! Contains docker health http logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 use std::io::{BufRead, BufReader, Write};

@@ -1,6 +1,6 @@
 //! cli args commands operations module.
 //!
-//! Contains cli args commands operations logic used by Stackctl command workflows.
+//! Contains cli args commands operations logic used by Berth command workflows.
 
 mod data;
 mod diagnostics;

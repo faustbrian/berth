@@ -120,7 +120,7 @@ mod tests {
             api_key: None,
             region: None,
             scheme: None,
-            domain: Some("app.stackctl".to_owned()),
+            domain: Some("app.berth".to_owned()),
             domains: None,
             resolved_domain: None,
             container_port: None,
@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn caddy_access_log_state_file_defaults_from_home() {
-        let caddy_dir = PathBuf::from("/tmp").join(".config/stackctl/caddy");
+        let caddy_dir = PathBuf::from("/tmp").join(".config/berth/caddy");
         let expected = caddy_dir.join("access.log");
         let state = CaddyState::default();
         let caddyfile = super::super::render_caddyfile(

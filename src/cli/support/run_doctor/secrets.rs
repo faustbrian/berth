@@ -1,6 +1,6 @@
 //! cli support run doctor secrets module.
 //!
-//! Contains cli support run doctor secrets logic used by Stackctl command workflows.
+//! Contains cli support run doctor secrets logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;
@@ -28,7 +28,7 @@ pub(super) fn check_sensitive_env_values(
                 sensitive.join(", ")
             ));
             report::info(&format!(
-                "Run: stackctl env-scrub --env-file {}",
+                "Run: berth env-scrub --env-file {}",
                 env_path.display()
             ));
             return Ok(true);

@@ -7,7 +7,7 @@ use std::path::Path;
 #[test]
 fn caddyfile_contains_domain_and_upstream() {
     let mut routes = BTreeMap::new();
-    routes.insert("donkey.stackctl".to_owned(), "127.0.0.1:8080".to_owned());
+    routes.insert("donkey.berth".to_owned(), "127.0.0.1:8080".to_owned());
     let state = CaddyState { routes };
     let ports = CaddyPorts {
         http: 80,
@@ -15,7 +15,7 @@ fn caddyfile_contains_domain_and_upstream() {
     };
 
     let rendered = render_caddyfile(&state, ports, Path::new("/tmp/access.log"));
-    assert!(rendered.contains("donkey.stackctl"));
+    assert!(rendered.contains("donkey.berth"));
     assert!(rendered.contains("reverse_proxy 127.0.0.1:8080"));
     assert!(rendered.contains("header_up X-Forwarded-Proto https"));
     assert!(rendered.contains("header_up X-Forwarded-Port {http.request.port}"));
@@ -25,28 +25,25 @@ fn caddyfile_contains_domain_and_upstream() {
 
 #[test]
 fn hosts_parser_detects_domain() {
-    let content = "127.0.0.1 localhost donkey.stackctl\n";
-    assert!(hosts_file_has_domain(content, "donkey.stackctl"));
+    let content = "127.0.0.1 localhost donkey.berth\n";
+    assert!(hosts_file_has_domain(content, "donkey.berth"));
 }
 
 #[test]
 fn hosts_parser_ignores_comments() {
-    let content = "# 127.0.0.1 donkey.stackctl\n127.0.0.1 localhost\n";
-    assert!(!hosts_file_has_domain(content, "donkey.stackctl"));
+    let content = "# 127.0.0.1 donkey.berth\n127.0.0.1 localhost\n";
+    assert!(!hosts_file_has_domain(content, "donkey.berth"));
 }
 
 #[test]
 fn served_url_hides_default_https_port() {
-    assert_eq!(
-        served_url("acme-api.stackctl", 443),
-        "https://acme-api.stackctl"
-    );
+    assert_eq!(served_url("acme-api.berth", 443), "https://acme-api.berth");
 }
 
 #[test]
 fn served_url_includes_non_default_https_port() {
     assert_eq!(
-        served_url("acme-api.stackctl", 8443),
-        "https://acme-api.stackctl:8443"
+        served_url("acme-api.berth", 8443),
+        "https://acme-api.berth:8443"
     );
 }

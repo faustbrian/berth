@@ -7,7 +7,7 @@ pub(super) fn install_wrapper_script(sql_client_flavor: &str) -> String {
 #!/usr/bin/env bash
 set -euo pipefail
 
-STACKCTL_SQL_CLIENT_FLAVOR={sql_client_flavor}
+BERTH_SQL_CLIENT_FLAVOR={sql_client_flavor}
 real_mysqldump="/usr/bin/mysqldump"
 if [[ ! -x "$real_mysqldump" ]]; then
   real_mysqldump="$(command -v mariadb-dump || command -v mysqldump)"
@@ -29,7 +29,7 @@ done
 
 stderr_file="$(mktemp)"
 if "$real_mysqldump" "${{sanitized[@]}}" 2>"$stderr_file"; then
-  if [[ "$STACKCTL_SQL_CLIENT_FLAVOR" == "mysql" && -n "$result_file" && -f "$result_file" ]]; then
+  if [[ "$BERTH_SQL_CLIENT_FLAVOR" == "mysql" && -n "$result_file" && -f "$result_file" ]]; then
     sed -i '/^\/\*M\!.*\*\/;*$/d' "$result_file"
   fi
   rm -f "$stderr_file"
@@ -44,7 +44,7 @@ if grep -qi "self-signed certificate in certificate chain" "$stderr_file"; then
     "$real_mysqldump" --skip-ssl "${{sanitized[@]}}"
   fi
   retry_status=$?
-  if [[ "$STACKCTL_SQL_CLIENT_FLAVOR" == "mysql" && -n "$result_file" && -f "$result_file" ]]; then
+  if [[ "$BERTH_SQL_CLIENT_FLAVOR" == "mysql" && -n "$result_file" && -f "$result_file" ]]; then
     sed -i '/^\/\*M\!.*\*\/;*$/d' "$result_file"
   fi
   rm -f "$stderr_file"

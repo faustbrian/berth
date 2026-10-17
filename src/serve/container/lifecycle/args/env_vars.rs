@@ -219,8 +219,8 @@ mod tests {
             api_key: None,
             region: None,
             scheme: None,
-            domain: Some("shipit-api.stackctl".to_owned()),
-            domains: Some(vec!["alt-api.stackctl".to_owned()]),
+            domain: Some("shipit-api.berth".to_owned()),
+            domains: Some(vec!["alt-api.berth".to_owned()]),
             resolved_domain: None,
             container_port: Some(80),
             smtp_port: None,
@@ -252,16 +252,16 @@ mod tests {
         let service = app_service();
         let injected = HashMap::from([(
             "POSTAL_API_BASE_URL".to_owned(),
-            "https://postal-api.stackctl".to_owned(),
+            "https://postal-api.berth".to_owned(),
         )]);
 
         append_host_gateway_mapping(&mut run_args, &service, &injected);
         let rendered = run_args.join(" ");
 
         assert!(rendered.contains("--add-host host.docker.internal:host-gateway"));
-        assert!(rendered.contains("--add-host shipit-api.stackctl:host-gateway"));
-        assert!(rendered.contains("--add-host alt-api.stackctl:host-gateway"));
-        assert!(rendered.contains("--add-host postal-api.stackctl:host-gateway"));
+        assert!(rendered.contains("--add-host shipit-api.berth:host-gateway"));
+        assert!(rendered.contains("--add-host alt-api.berth:host-gateway"));
+        assert!(rendered.contains("--add-host postal-api.berth:host-gateway"));
     }
 
     #[test]

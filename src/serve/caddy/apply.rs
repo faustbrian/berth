@@ -317,7 +317,7 @@ mod tests {
 
     fn temp_caddy_dir(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
-            "stackctl-caddy-apply-{name}-{}",
+            "berth-caddy-apply-{name}-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("time")
@@ -343,14 +343,14 @@ mod tests {
         std::fs::write(caddy_dir.join("Caddyfile"), "old config").expect("seed caddyfile");
 
         let controller = MockController::succeeds();
-        let next_state = state("shipit-api.stackctl", "127.0.0.1:8080");
+        let next_state = state("shipit-api.berth", "127.0.0.1:8080");
         apply_caddy_state_with_controller(&caddy_dir, &next_state, "new config", &controller)
             .expect("apply caddy state");
 
         assert!(
             std::fs::read_to_string(caddy_dir.join("sites.toml"))
                 .expect("read state")
-                .contains("shipit-api.stackctl")
+                .contains("shipit-api.berth")
         );
         assert_eq!(
             std::fs::read_to_string(caddy_dir.join("Caddyfile")).expect("read caddyfile"),
@@ -366,12 +366,12 @@ mod tests {
     fn apply_caddy_state_rolls_back_live_files_when_reload_fails() {
         let caddy_dir = temp_caddy_dir("rollback");
         std::fs::create_dir_all(&caddy_dir).expect("create caddy dir");
-        let previous_state = "[routes]\nshipit-bill.stackctl = \"127.0.0.1:3000\"\n";
+        let previous_state = "[routes]\nshipit-bill.berth = \"127.0.0.1:3000\"\n";
         std::fs::write(caddy_dir.join("sites.toml"), previous_state).expect("seed state");
         std::fs::write(caddy_dir.join("Caddyfile"), "old config").expect("seed caddyfile");
 
         let controller = MockController::fails_once_then_succeeds();
-        let next_state = state("shipit-api.stackctl", "127.0.0.1:8080");
+        let next_state = state("shipit-api.berth", "127.0.0.1:8080");
         let error =
             apply_caddy_state_with_controller(&caddy_dir, &next_state, "new config", &controller)
                 .expect_err("reload should fail");
@@ -402,21 +402,21 @@ mod tests {
         std::fs::create_dir_all(&caddy_dir).expect("create caddy dir");
         std::fs::write(
             caddy_dir.join("sites.toml.bak"),
-            "[routes]\nshipit-track.stackctl = \"127.0.0.1:4000\"\n",
+            "[routes]\nshipit-track.berth = \"127.0.0.1:4000\"\n",
         )
         .expect("seed backup state");
         std::fs::write(caddy_dir.join("Caddyfile.bak"), "restorable config")
             .expect("seed backup caddyfile");
 
         let controller = MockController::succeeds();
-        let next_state = state("shipit-postal.stackctl", "127.0.0.1:5000");
+        let next_state = state("shipit-postal.berth", "127.0.0.1:5000");
         apply_caddy_state_with_controller(&caddy_dir, &next_state, "next config", &controller)
             .expect("apply recovered state");
 
         assert!(
             std::fs::read_to_string(caddy_dir.join("sites.toml"))
                 .expect("read state")
-                .contains("shipit-postal.stackctl")
+                .contains("shipit-postal.berth")
         );
         assert_eq!(
             std::fs::read_to_string(caddy_dir.join("Caddyfile")).expect("read caddyfile"),

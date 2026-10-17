@@ -1,6 +1,6 @@
 //! config api load save module.
 //!
-//! Contains config api load save logic used by Stackctl command workflows.
+//! Contains config api load save logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -78,7 +78,7 @@ fn resolve_project_type(raw: &RawConfig, config_path: &Path) -> Result<ProjectTy
         })?;
     if !composer_path.exists() {
         anyhow::bail!(
-            "Unable to resolve project_type: set .stackctl.toml or .stackctl.yaml project_type or composer.json type \
+            "Unable to resolve project_type: set .berth.toml or .berth.yaml project_type or composer.json type \
              (\"project\" or \"library\"). composer.json not found at {}",
             composer_path.display()
         );
@@ -102,7 +102,7 @@ fn resolve_project_type(raw: &RawConfig, config_path: &Path) -> Result<ProjectTy
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Unable to resolve project_type: set .stackctl.toml or .stackctl.yaml project_type or composer.json \
+                "Unable to resolve project_type: set .berth.toml or .berth.yaml project_type or composer.json \
                  type (\"project\" or \"library\"). composer.json missing \"type\" at {}",
                 composer_path.display()
             )
@@ -112,7 +112,7 @@ fn resolve_project_type(raw: &RawConfig, config_path: &Path) -> Result<ProjectTy
         "project" => Ok(ProjectType::Project),
         "library" => Ok(ProjectType::Library),
         _ => anyhow::bail!(
-            "Unable to resolve project_type: set .stackctl.toml or .stackctl.yaml project_type or composer.json type \
+            "Unable to resolve project_type: set .berth.toml or .berth.yaml project_type or composer.json type \
              (\"project\" or \"library\"). composer.json type was \"{}\" at {}",
             composer_type,
             composer_path.display()
@@ -120,7 +120,7 @@ fn resolve_project_type(raw: &RawConfig, config_path: &Path) -> Result<ProjectTy
     }
 }
 
-/// Saves configuration back to the detected Stackctl config format.
+/// Saves configuration back to the detected Berth config format.
 ///
 /// # Errors
 ///
@@ -144,7 +144,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system clock")
             .as_nanos();
-        let root = std::env::temp_dir().join(format!("stackctl-load-save-{nanos}"));
+        let root = std::env::temp_dir().join(format!("berth-load-save-{nanos}"));
         drop(fs::remove_dir_all(&root));
         fs::create_dir_all(&root).expect("create temp root");
         root
@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn load_container_engine_prefers_configured_value() {
         let root = temp_root();
-        let config_path = root.join(".stackctl.toml");
+        let config_path = root.join(".berth.toml");
         fs::write(
             &config_path,
             "schema_version = 1\nproject_type = \"project\"\ncontainer_engine = \"podman\"\nservice = []\n",
@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn load_container_engine_detects_project_type_from_composer_type() {
         let root = temp_root();
-        let config_path = root.join(".stackctl.toml");
+        let config_path = root.join(".berth.toml");
         fs::write(
             &config_path,
             "schema_version = 1\ncontainer_engine = \"podman\"\nservice = []\n",
@@ -188,7 +188,7 @@ mod tests {
     #[test]
     fn load_container_engine_fails_when_project_type_is_unresolved() {
         let root = temp_root();
-        let config_path = root.join(".stackctl.toml");
+        let config_path = root.join(".berth.toml");
         fs::write(&config_path, "schema_version = 1\nservice = []\n").expect("write config");
 
         let error =
@@ -200,7 +200,7 @@ mod tests {
     #[test]
     fn load_container_engine_supports_yaml_config() {
         let root = temp_root();
-        let config_path = root.join(".stackctl.yaml");
+        let config_path = root.join(".berth.yaml");
         fs::write(
             &config_path,
             "schema_version: 1\nproject_type: project\ncontainer_engine: podman\nservice: []\nswarm: []\n",
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn save_config_preserves_yaml_format() {
         let root = temp_root();
-        let config_path = root.join(".stackctl.yaml");
+        let config_path = root.join(".berth.yaml");
         fs::write(
             &config_path,
             "schema_version: 1\nproject_type: project\ncontainer_prefix: demo\nservice: []\nswarm: []\n",

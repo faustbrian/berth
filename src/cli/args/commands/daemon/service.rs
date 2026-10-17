@@ -1,4 +1,4 @@
-//! cli args for `stackctl daemon service` workflows.
+//! cli args for `berth daemon service` workflows.
 
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
@@ -25,7 +25,7 @@ pub(crate) enum DaemonServiceCommands {
 
 #[derive(Args)]
 pub(crate) struct DaemonServiceInstallArgs {
-    /// Directory to scan for Stackctl projects
+    /// Directory to scan for Berth projects
     #[arg(long, value_name = "DIR", required = true)]
     pub(crate) dir: Vec<PathBuf>,
     #[command(flatten)]
@@ -37,7 +37,7 @@ pub(crate) struct DaemonServiceInstallArgs {
 
 #[derive(Args)]
 pub(crate) struct DaemonServicePrintArgs {
-    /// Directory to scan for Stackctl projects
+    /// Directory to scan for Berth projects
     #[arg(long, value_name = "DIR", required = true)]
     pub(crate) dir: Vec<PathBuf>,
     #[command(flatten)]

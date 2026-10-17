@@ -1,6 +1,6 @@
 //! cli support module.
 //!
-//! Contains cli support logic used by Stackctl command workflows.
+//! Contains cli support logic used by Berth command workflows.
 
 mod app_runtime_context;
 mod app_services;

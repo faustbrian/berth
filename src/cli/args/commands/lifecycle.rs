@@ -1,6 +1,6 @@
 //! cli args commands lifecycle module.
 //!
-//! Contains cli args commands lifecycle logic used by Stackctl command workflows.
+//! Contains cli args commands lifecycle logic used by Berth command workflows.
 
 mod access;
 mod lifecycle_ops;

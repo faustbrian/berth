@@ -1,5 +1,5 @@
 [package]
-name = "stackctl"
+name = "berth"
 version = "6.0.0"
 edition = "2024"
 description = "Zero-BS Laravel workspace orchestrator"

@@ -1,6 +1,6 @@
 //! config runtime env module.
 //!
-//! Contains config runtime env logic used by Stackctl command workflows.
+//! Contains config runtime env logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 
@@ -49,7 +49,7 @@ pub(super) fn runtime_env_config_file_name(runtime_env: Option<&str>) -> Result<
     };
 
     let normalized = normalize_runtime_env_name(env_name)?;
-    Ok(Some(format!(".stackctl.{normalized}")))
+    Ok(Some(format!(".berth.{normalized}")))
 }
 
 /// Returns the default value for env file name.

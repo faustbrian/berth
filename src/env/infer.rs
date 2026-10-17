@@ -19,7 +19,7 @@ mod service_backends;
 pub(crate) fn inferred_app_env(config: &Config) -> HashMap<String, String> {
     let mut vars = HashMap::new();
     vars.insert(
-        "STACKCTL_SQL_CLIENT_FLAVOR".to_owned(),
+        "BERTH_SQL_CLIENT_FLAVOR".to_owned(),
         crate::config::preferred_sql_client_flavor(config).to_owned(),
     );
     if config.project_type == ProjectType::Library {

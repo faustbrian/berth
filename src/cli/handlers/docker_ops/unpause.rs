@@ -1,6 +1,6 @@
 //! cli handlers docker ops unpause module.
 //!
-//! Contains unpause handler used by Stackctl command workflows.
+//! Contains unpause handler used by Berth command workflows.
 
 use anyhow::Result;
 

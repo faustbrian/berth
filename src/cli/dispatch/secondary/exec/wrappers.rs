@@ -418,58 +418,58 @@ mod tests {
 
     #[test]
     fn wrapper_dispatches_exec() {
-        assert!(dispatch_result(&["stackctl", "exec"]).is_some());
+        assert!(dispatch_result(&["berth", "exec"]).is_some());
     }
 
     #[test]
     fn wrapper_dispatches_artisan() {
-        assert!(dispatch_result(&["stackctl", "artisan"]).is_some());
+        assert!(dispatch_result(&["berth", "artisan"]).is_some());
     }
 
     #[test]
     fn wrapper_dispatches_composer() {
-        assert!(dispatch_result(&["stackctl", "composer"]).is_some());
+        assert!(dispatch_result(&["berth", "composer"]).is_some());
     }
 
     #[test]
     fn wrapper_dispatches_php_tools() {
-        assert!(dispatch_result(&["stackctl", "phpstan"]).is_some());
-        assert!(dispatch_result(&["stackctl", "ecs"]).is_some());
-        assert!(dispatch_result(&["stackctl", "php-cs-fixer"]).is_some());
-        assert!(dispatch_result(&["stackctl", "psalm"]).is_some());
-        assert!(dispatch_result(&["stackctl", "pint"]).is_some());
-        assert!(dispatch_result(&["stackctl", "pest"]).is_some());
-        assert!(dispatch_result(&["stackctl", "phpunit"]).is_some());
-        assert!(dispatch_result(&["stackctl", "rector"]).is_some());
+        assert!(dispatch_result(&["berth", "phpstan"]).is_some());
+        assert!(dispatch_result(&["berth", "ecs"]).is_some());
+        assert!(dispatch_result(&["berth", "php-cs-fixer"]).is_some());
+        assert!(dispatch_result(&["berth", "psalm"]).is_some());
+        assert!(dispatch_result(&["berth", "pint"]).is_some());
+        assert!(dispatch_result(&["berth", "pest"]).is_some());
+        assert!(dispatch_result(&["berth", "phpunit"]).is_some());
+        assert!(dispatch_result(&["berth", "rector"]).is_some());
     }
 
     #[test]
     fn wrapper_dispatches_node() {
-        assert!(dispatch_result(&["stackctl", "node"]).is_some());
+        assert!(dispatch_result(&["berth", "node"]).is_some());
     }
 
     #[test]
     fn wrapper_dispatches_bun() {
-        assert!(dispatch_result(&["stackctl", "bun"]).is_some());
+        assert!(dispatch_result(&["berth", "bun"]).is_some());
     }
 
     #[test]
     fn wrapper_dispatches_deno() {
-        assert!(dispatch_result(&["stackctl", "deno"]).is_some());
+        assert!(dispatch_result(&["berth", "deno"]).is_some());
     }
 
     #[test]
     fn wrapper_dispatches_app_create() {
-        assert!(dispatch_result(&["stackctl", "app-create"]).is_some());
+        assert!(dispatch_result(&["berth", "app-create"]).is_some());
     }
 
     #[test]
     fn wrapper_dispatches_task() {
-        assert!(dispatch_result(&["stackctl", "task", "deps", "bump", "--composer"]).is_some());
+        assert!(dispatch_result(&["berth", "task", "deps", "bump", "--composer"]).is_some());
     }
 
     #[test]
     fn wrapper_dispatches_none_for_other_commands() {
-        assert!(dispatch_result(&["stackctl", "status"]).is_none());
+        assert!(dispatch_result(&["berth", "status"]).is_none());
     }
 }

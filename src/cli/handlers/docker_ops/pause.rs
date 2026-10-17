@@ -1,6 +1,6 @@
 //! cli handlers docker ops pause module.
 //!
-//! Contains pause handler used by Stackctl command workflows.
+//! Contains pause handler used by Berth command workflows.
 
 use anyhow::Result;
 

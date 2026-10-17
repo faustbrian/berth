@@ -90,18 +90,18 @@ mod tests {
 
     #[test]
     fn up_apply_dispatches_up_command() {
-        let result = dispatch_result(&["stackctl", "up", "--service", "api"]);
+        let result = dispatch_result(&["berth", "up", "--service", "api"]);
         assert!(result.is_some());
     }
 
     #[test]
     fn up_apply_dispatches_apply_command() {
-        let result = dispatch_result(&["stackctl", "apply"]);
+        let result = dispatch_result(&["berth", "apply"]);
         assert!(result.is_some());
     }
 
     #[test]
     fn up_apply_does_not_handle_other_commands() {
-        assert!(dispatch_result(&["stackctl", "down"]).is_none());
+        assert!(dispatch_result(&["berth", "down"]).is_none());
     }
 }

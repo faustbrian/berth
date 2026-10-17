@@ -1,6 +1,6 @@
 //! docker logs stream module.
 //!
-//! Contains docker logs stream logic used by Stackctl command workflows.
+//! Contains docker logs stream logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 use std::io::{BufRead, BufReader};

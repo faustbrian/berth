@@ -1,6 +1,6 @@
-//! Configuration file parsing for stackctl.
+//! Configuration file parsing for berth.
 //!
-//! This module handles loading and parsing Stackctl configuration files.
+//! This module handles loading and parsing Berth configuration files.
 
 #![allow(clippy::assigning_clones)] // Favor straightforward assignment in config mutation
 #![allow(clippy::double_must_use)] // Public API methods intentionally signal important results

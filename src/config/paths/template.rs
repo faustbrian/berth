@@ -1,10 +1,10 @@
 //! config paths template module.
 //!
-//! Contains config paths template logic used by Stackctl command workflows.
+//! Contains config paths template logic used by Berth command workflows.
 
 use crate::config::domain_names::sanitize_project_slug;
 
-/// Builds default `.stackctl.toml` template content for the given project name.
+/// Builds default `.berth.toml` template content for the given project name.
 #[must_use]
 pub(super) fn default_config_template(project_name: &str) -> String {
     let slug = sanitize_project_slug(project_name);

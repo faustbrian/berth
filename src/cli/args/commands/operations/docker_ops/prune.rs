@@ -1,6 +1,6 @@
 //! cli args commands operations docker ops prune module.
 //!
-//! Contains prune command args used by Stackctl command workflows.
+//! Contains prune command args used by Berth command workflows.
 
 use clap::Args;
 
@@ -9,7 +9,7 @@ use crate::config;
 
 #[derive(Args)]
 #[command(
-    after_help = "Examples:\n  stackctl prune\n  stackctl prune --kind database\n  stackctl prune --all --force"
+    after_help = "Examples:\n  berth prune\n  berth prune --kind database\n  berth prune --all --force"
 )]
 pub(crate) struct PruneArgs {
     #[arg(long, conflicts_with = "all")]
@@ -18,7 +18,7 @@ pub(crate) struct PruneArgs {
     pub(crate) kind: Option<config::Kind>,
     #[arg(long, default_value_t = default_parallelism(), conflicts_with = "all")]
     pub(crate) parallel: usize,
-    /// Prune all stopped Docker containers (not only Stackctl-managed services)
+    /// Prune all stopped Docker containers (not only Berth-managed services)
     #[arg(long, default_value_t = false)]
     pub(crate) all: bool,
     /// Required with --all; confirms intentional global prune

@@ -1,6 +1,6 @@
 //! cli support scrub env file module.
 //!
-//! Contains cli support scrub env file logic used by Stackctl command workflows.
+//! Contains cli support scrub env file logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -52,7 +52,7 @@ mod tests {
 
     fn temp_env_file(contents: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
-            "stackctl-scrub-env-{}-{}.env",
+            "berth-scrub-env-{}-{}.env",
             std::process::id(),
             contents.len()
         ));

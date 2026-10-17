@@ -1,6 +1,6 @@
 //! cli args commands operations logs swarm module.
 //!
-//! Contains cli args commands operations logs swarm logic used by Stackctl command workflows.
+//! Contains cli args commands operations logs swarm logic used by Berth command workflows.
 
 use clap::Args;
 

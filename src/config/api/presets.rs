@@ -1,6 +1,6 @@
 //! config api presets module.
 //!
-//! Contains config api presets logic used by Stackctl command workflows.
+//! Contains config api presets logic used by Berth command workflows.
 
 use anyhow::Result;
 

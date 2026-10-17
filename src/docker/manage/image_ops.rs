@@ -1,6 +1,6 @@
 //! docker manage image ops module.
 //!
-//! Contains docker manage image ops logic used by Stackctl command workflows.
+//! Contains docker manage image ops logic used by Berth command workflows.
 
 use anyhow::Result;
 

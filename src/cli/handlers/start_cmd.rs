@@ -1,6 +1,6 @@
 //! cli handlers start cmd module.
 //!
-//! Contains cli handlers start cmd logic used by Stackctl command workflows.
+//! Contains cli handlers start cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;
@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn app_key_missing_returns_false_when_key_present() {
         let path = temp_env_path("present");
-        fs::write(&path, "APP_NAME=Stackctl\nAPP_KEY=base64:abc123\n").expect("write env");
+        fs::write(&path, "APP_NAME=Berth\nAPP_KEY=base64:abc123\n").expect("write env");
 
         assert!(!start_bootstrap::app_key_missing(&path));
 
@@ -126,7 +126,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("time")
             .as_nanos();
-        std::env::temp_dir().join(format!("stackctl-start-{suffix}-{nanos}.env"))
+        std::env::temp_dir().join(format!("berth-start-{suffix}-{nanos}.env"))
     }
 
     #[test]
@@ -161,7 +161,7 @@ mod tests {
             api_key: None,
             region: None,
             scheme: None,
-            domain: Some("app.stackctl".to_owned()),
+            domain: Some("app.berth".to_owned()),
             domains: None,
             resolved_domain: None,
             container_port: Some(80),

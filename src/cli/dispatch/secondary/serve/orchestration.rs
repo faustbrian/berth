@@ -118,7 +118,7 @@ mod tests {
     fn dispatch_share_command_forwards_start_status_stop() {
         let config = sample_config();
         let command = parse_share_command(&[
-            "stackctl",
+            "berth",
             "share",
             "start",
             "--service",
@@ -127,16 +127,16 @@ mod tests {
         ]);
         assert!(super::dispatch_share_command(&config, &command).is_err());
 
-        let command = parse_share_command(&["stackctl", "share", "status"]);
+        let command = parse_share_command(&["berth", "share", "status"]);
         assert!(super::dispatch_share_command(&config, &command).is_ok());
 
-        let command = parse_share_command(&["stackctl", "share", "stop", "--all"]);
+        let command = parse_share_command(&["berth", "share", "stop", "--all"]);
         assert!(super::dispatch_share_command(&config, &command).is_ok());
     }
 
     #[test]
     fn serve_dispatch_handles_swarm_command() {
-        let cli = Cli::parse_from(["stackctl", "swarm", "up"]);
+        let cli = Cli::parse_from(["berth", "swarm", "up"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
         let result = super::dispatch(&cli, &mut config, &context);
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn serve_dispatch_handles_serve_command() {
-        let cli = Cli::parse_from(["stackctl", "serve"]);
+        let cli = Cli::parse_from(["berth", "serve"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
         let result = super::dispatch(&cli, &mut config, &context);
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn serve_dispatch_forwards_share_command() {
-        let cli = Cli::parse_from(["stackctl", "share", "status"]);
+        let cli = Cli::parse_from(["berth", "share", "status"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
         let result = super::dispatch(&cli, &mut config, &context);
@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn serve_dispatch_handles_env_scrub() {
-        let cli = Cli::parse_from(["stackctl", "env-scrub", "--env-file", ".env"]);
+        let cli = Cli::parse_from(["berth", "env-scrub", "--env-file", ".env"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
         let result = super::dispatch(&cli, &mut config, &context);

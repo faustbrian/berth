@@ -1,6 +1,6 @@
 //! config presets cache module.
 //!
-//! Contains config presets cache logic used by Stackctl command workflows.
+//! Contains config presets cache logic used by Berth command workflows.
 
 use super::{Driver, Kind, PresetDefaults};
 

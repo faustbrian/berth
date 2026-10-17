@@ -1,6 +1,6 @@
 //! cli handlers env cmd generate module.
 //!
-//! Contains cli handlers env cmd generate logic used by Stackctl command workflows.
+//! Contains cli handlers env cmd generate logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;
@@ -43,14 +43,14 @@ mod tests {
         let config_root = config::Config {
             schema_version: 1,
             project_type: config::ProjectType::Project,
-            container_prefix: Some("stackctl".to_owned()),
+            container_prefix: Some("berth".to_owned()),
             domain_strategy: None,
             service: vec![laravel, mysql],
             swarm: Vec::new(),
         };
 
         let output_path = PathBuf::from(format!(
-            "/tmp/stackctl-generate-env-{}.env",
+            "/tmp/berth-generate-env-{}.env",
             SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
         ));
         if output_path.exists() {
@@ -63,7 +63,7 @@ mod tests {
         });
         result?;
         let content = std::fs::read_to_string(&output_path)?;
-        assert!(content.contains("STACKCTL_SQL_CLIENT_FLAVOR"));
+        assert!(content.contains("BERTH_SQL_CLIENT_FLAVOR"));
         Ok(())
     }
 }

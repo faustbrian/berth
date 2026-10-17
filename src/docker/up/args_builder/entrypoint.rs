@@ -1,6 +1,6 @@
 //! docker up args builder entrypoint module.
 //!
-//! Contains docker up args builder entrypoint logic used by Stackctl command workflows.
+//! Contains docker up args builder entrypoint logic used by Berth command workflows.
 
 use crate::config::{Driver, ServiceConfig};
 

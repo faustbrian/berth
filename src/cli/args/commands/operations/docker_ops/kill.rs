@@ -1,6 +1,6 @@
 //! cli args commands operations docker ops kill module.
 //!
-//! Contains kill command args used by Stackctl command workflows.
+//! Contains kill command args used by Berth command workflows.
 
 use clap::Args;
 

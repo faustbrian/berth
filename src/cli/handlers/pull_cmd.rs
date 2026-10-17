@@ -1,6 +1,6 @@
 //! cli handlers pull cmd module.
 //!
-//! Contains cli handlers pull cmd logic used by Stackctl command workflows.
+//! Contains cli handlers pull cmd logic used by Berth command workflows.
 
 use anyhow::Result;
 

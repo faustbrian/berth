@@ -1,6 +1,6 @@
 //! cli handlers artisan cmd module.
 //!
-//! Contains cli handlers artisan cmd logic used by Stackctl command workflows.
+//! Contains cli handlers artisan cmd logic used by Berth command workflows.
 
 use anyhow::{Result, anyhow};
 use std::path::Path;
@@ -41,7 +41,7 @@ pub(crate) fn handle_artisan(
     options: HandleArtisanOptions<'_>,
 ) -> Result<()> {
     if config.project_type == config::ProjectType::Library {
-        anyhow::bail!("`stackctl artisan` is only supported when project_type is \"project\"");
+        anyhow::bail!("`berth artisan` is only supported when project_type is \"project\"");
     }
 
     let browser_requested = options.browser

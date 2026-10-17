@@ -1,6 +1,6 @@
 //! docker ops inspect module.
 //!
-//! Contains docker inspect operation used by Stackctl command workflows.
+//! Contains docker inspect operation used by Berth command workflows.
 
 use anyhow::Result;
 

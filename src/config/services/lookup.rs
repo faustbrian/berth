@@ -1,6 +1,6 @@
 //! config services lookup module.
 //!
-//! Contains config services lookup logic used by Stackctl command workflows.
+//! Contains config services lookup logic used by Berth command workflows.
 
 use anyhow::Result;
 

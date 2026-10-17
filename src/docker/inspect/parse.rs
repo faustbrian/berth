@@ -1,6 +1,6 @@
 //! docker inspect parse module.
 //!
-//! Contains docker inspect parse logic used by Stackctl command workflows.
+//! Contains docker inspect parse logic used by Berth command workflows.
 
 use serde_json::Value;
 

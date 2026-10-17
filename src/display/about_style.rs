@@ -1,6 +1,6 @@
 //! display about style module.
 //!
-//! Contains display about style logic used by Stackctl command workflows.
+//! Contains display about style logic used by Berth command workflows.
 
 use std::borrow::Cow;
 

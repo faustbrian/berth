@@ -21,7 +21,7 @@ pub(super) fn validate_swarm_invocation<'a>(
         anyhow::bail!("missing swarm command");
     };
     if subcommand == "swarm" {
-        anyhow::bail!("nested `stackctl swarm` is not supported");
+        anyhow::bail!("nested `berth swarm` is not supported");
     }
 
     Ok(subcommand)
@@ -64,9 +64,7 @@ pub(super) fn resolve_execution_targets(
 ) -> Result<Vec<ResolvedSwarmTarget>> {
     if command.first().is_some_and(|sub| sub == "logs") && command.iter().any(|arg| arg == "--tui")
     {
-        anyhow::bail!(
-            "`stackctl swarm logs --tui` was removed. Use `stackctl swarm logs` instead."
-        );
+        anyhow::bail!("`berth swarm logs --tui` was removed. Use `berth swarm logs` instead.");
     }
 
     let mut targets = resolve_swarm_targets(config, workspace_root, only, include_deps)?;
@@ -101,15 +99,15 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("time")
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("stackctl-swarm-planning-{nanos}"));
+        let path = std::env::temp_dir().join(format!("berth-swarm-planning-{nanos}"));
         std::fs::create_dir_all(&path).expect("create workspace");
         path
     }
 
     fn target(name: &str) -> SwarmTarget {
-        let root = std::env::temp_dir().join(format!("stackctl-swarm-target-{name}"));
+        let root = std::env::temp_dir().join(format!("berth-swarm-target-{name}"));
         std::fs::create_dir_all(&root).expect("create target root");
-        std::fs::write(root.join(".stackctl.toml"), "container_prefix = \"test\"\n")
+        std::fs::write(root.join(".berth.toml"), "container_prefix = \"test\"\n")
             .expect("write target config");
         SwarmTarget {
             name: name.to_owned(),

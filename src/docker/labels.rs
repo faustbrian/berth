@@ -1,13 +1,13 @@
 //! docker labels module.
 //!
-//! Contains Stackctl Docker label keys and values used by Stackctl command workflows.
+//! Contains Berth Docker label keys and values used by Berth command workflows.
 
 use crate::config::Kind;
 
-pub(crate) const LABEL_MANAGED: &str = "com.stackctl.managed";
-pub(crate) const LABEL_SERVICE: &str = "com.stackctl.service";
-pub(crate) const LABEL_KIND: &str = "com.stackctl.kind";
-pub(crate) const LABEL_CONTAINER: &str = "com.stackctl.container";
+pub(crate) const LABEL_MANAGED: &str = "dev.berth.managed";
+pub(crate) const LABEL_SERVICE: &str = "dev.berth.service";
+pub(crate) const LABEL_KIND: &str = "dev.berth.kind";
+pub(crate) const LABEL_CONTAINER: &str = "dev.berth.container";
 pub(crate) const VALUE_MANAGED_TRUE: &str = "true";
 
 pub(crate) fn kind_label_value(kind: Kind) -> &'static str {

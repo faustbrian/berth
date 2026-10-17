@@ -1,6 +1,6 @@
 //! cli args lock commands module.
 //!
-//! Contains cli args lock commands logic used by Stackctl command workflows.
+//! Contains cli args lock commands logic used by Berth command workflows.
 
 use clap::Subcommand;
 

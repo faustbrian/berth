@@ -1,6 +1,6 @@
 //! cli args commands operations docker ops inspect module.
 //!
-//! Contains inspect command args used by Stackctl command workflows.
+//! Contains inspect command args used by Berth command workflows.
 
 use clap::Args;
 

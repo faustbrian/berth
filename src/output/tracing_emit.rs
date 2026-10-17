@@ -1,6 +1,6 @@
 //! output tracing emit module.
 //!
-//! Contains tracing event emission helpers used by Stackctl command workflows.
+//! Contains tracing event emission helpers used by Berth command workflows.
 
 use tracing::Level;
 
@@ -18,7 +18,7 @@ pub(super) fn emit_tracing_event(
             body = %message,
             context = %json,
             persistence = persistence,
-            "stackctl_log"
+            "berth_log"
         ),
         (Level::WARN, Some(json)) => tracing::event!(
             Level::WARN,
@@ -26,7 +26,7 @@ pub(super) fn emit_tracing_event(
             body = %message,
             context = %json,
             persistence = persistence,
-            "stackctl_log"
+            "berth_log"
         ),
         (Level::INFO, Some(json)) => tracing::event!(
             Level::INFO,
@@ -34,7 +34,7 @@ pub(super) fn emit_tracing_event(
             body = %message,
             context = %json,
             persistence = persistence,
-            "stackctl_log"
+            "berth_log"
         ),
         (Level::DEBUG, Some(json)) => tracing::event!(
             Level::DEBUG,
@@ -42,7 +42,7 @@ pub(super) fn emit_tracing_event(
             body = %message,
             context = %json,
             persistence = persistence,
-            "stackctl_log"
+            "berth_log"
         ),
         (Level::TRACE, Some(json)) => tracing::event!(
             Level::TRACE,
@@ -50,42 +50,42 @@ pub(super) fn emit_tracing_event(
             body = %message,
             context = %json,
             persistence = persistence,
-            "stackctl_log"
+            "berth_log"
         ),
         (Level::ERROR, None) => tracing::event!(
             Level::ERROR,
             log_level = laravel_level,
             body = %message,
             persistence = persistence,
-            "stackctl_log"
+            "berth_log"
         ),
         (Level::WARN, None) => tracing::event!(
             Level::WARN,
             log_level = laravel_level,
             body = %message,
             persistence = persistence,
-            "stackctl_log"
+            "berth_log"
         ),
         (Level::INFO, None) => tracing::event!(
             Level::INFO,
             log_level = laravel_level,
             body = %message,
             persistence = persistence,
-            "stackctl_log"
+            "berth_log"
         ),
         (Level::DEBUG, None) => tracing::event!(
             Level::DEBUG,
             log_level = laravel_level,
             body = %message,
             persistence = persistence,
-            "stackctl_log"
+            "berth_log"
         ),
         (Level::TRACE, None) => tracing::event!(
             Level::TRACE,
             log_level = laravel_level,
             body = %message,
             persistence = persistence,
-            "stackctl_log"
+            "berth_log"
         ),
     };
 }

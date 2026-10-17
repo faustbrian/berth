@@ -1,6 +1,6 @@
 //! cli handlers env cmd update module.
 //!
-//! Contains cli handlers env cmd update logic used by Stackctl command workflows.
+//! Contains cli handlers env cmd update logic used by Berth command workflows.
 
 use anyhow::Result;
 use std::path::Path;
@@ -62,14 +62,14 @@ mod tests {
         let mut config = config::Config {
             schema_version: 1,
             project_type: config::ProjectType::Project,
-            container_prefix: Some("stackctl".to_owned()),
+            container_prefix: Some("berth".to_owned()),
             domain_strategy: None,
             service: vec![laravel, mysql],
             swarm: Vec::new(),
         };
 
         let env_path = std::env::temp_dir().join(format!(
-            "stackctl-env-update-{}.env",
+            "berth-env-update-{}.env",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)?
                 .as_nanos()
@@ -99,12 +99,12 @@ mod tests {
         let config = config::Config {
             schema_version: 1,
             project_type: config::ProjectType::Project,
-            container_prefix: Some("stackctl".to_owned()),
+            container_prefix: Some("berth".to_owned()),
             domain_strategy: None,
             service: Vec::new(),
             swarm: Vec::new(),
         };
-        let env_path = std::env::temp_dir().join("stackctl-env-update-missing.env");
+        let env_path = std::env::temp_dir().join("berth-env-update-missing.env");
 
         let result = handle_service_env_update(
             &mut config.clone(),

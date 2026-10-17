@@ -1,6 +1,6 @@
 //! docker inspect label module.
 //!
-//! Contains docker inspect label lookup logic used by Stackctl command workflows.
+//! Contains docker inspect label lookup logic used by Berth command workflows.
 
 use crate::docker::is_dry_run;
 
@@ -34,14 +34,14 @@ mod tests {
 
     #[test]
     fn inspect_label_returns_empty_on_dry_run() {
-        let label = crate::docker::with_dry_run_lock(|| inspect_label("web", "stackctl.managed"));
+        let label = crate::docker::with_dry_run_lock(|| inspect_label("web", "berth.managed"));
         assert_eq!(label, Some(String::new()));
     }
 
     #[test]
     fn inspect_label_reads_value_from_inspect_output() {
         let bin_dir = env::temp_dir().join(format!(
-            "stackctl-inspect-label-{}",
+            "berth-inspect-label-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("time")
@@ -63,7 +63,7 @@ mod tests {
         }
 
         let result = with_docker_command(&binary.to_string_lossy(), || {
-            inspect_label("web", "stackctl.managed")
+            inspect_label("web", "berth.managed")
         });
         fs::remove_dir_all(&bin_dir).ok();
         assert_eq!(result, Some("true".to_owned()));

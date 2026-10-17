@@ -1,6 +1,6 @@
 //! swarm target exec wait module.
 //!
-//! Contains swarm target exec wait logic used by Stackctl command workflows.
+//! Contains swarm target exec wait logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
 use std::process::Child;

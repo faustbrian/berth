@@ -29,7 +29,7 @@ mod tests {
         F: FnOnce() -> T,
     {
         let bin_dir = env::temp_dir().join(format!(
-            "stackctl-image-pull-{}",
+            "berth-image-pull-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("time")

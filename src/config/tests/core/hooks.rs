@@ -6,10 +6,10 @@ fn load_config_with_parses_service_hooks() {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock should be after unix epoch")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("stackctl-config-hooks-{nonce}"));
+    let root = std::env::temp_dir().join(format!("berth-config-hooks-{nonce}"));
     std::fs::create_dir_all(&root).expect("create temp config directory");
 
-    let config_path = root.join(".stackctl.toml");
+    let config_path = root.join(".berth.toml");
     std::fs::write(
         &config_path,
         r#"
@@ -41,7 +41,7 @@ fn load_config_with_parses_service_hooks() {
 
                 [service.hook.run]
                 type = "script"
-                path = ".stackctl/hooks/clean-cache.sh"
+                path = ".berth/hooks/clean-cache.sh"
             "#,
     )
     .expect("write hooks config");
@@ -71,7 +71,7 @@ fn load_config_with_parses_service_hooks() {
     assert_eq!(
         hooks[1].run,
         HookRun::Script {
-            path: ".stackctl/hooks/clean-cache.sh".to_owned(),
+            path: ".berth/hooks/clean-cache.sh".to_owned(),
         }
     );
 

@@ -51,7 +51,7 @@ pub(super) fn apply_app_target_env(vars: &mut HashMap<String, String>, service: 
         insert_if_absent(vars, "MAIL_USERNAME", String::new());
         insert_if_absent(vars, "MAIL_PASSWORD", String::new());
         insert_if_absent(vars, "MAIL_FROM_ADDRESS", "hello@example.com".to_owned());
-        insert_if_absent(vars, "MAIL_FROM_NAME", "Stackctl".to_owned());
+        insert_if_absent(vars, "MAIL_FROM_NAME", "Berth".to_owned());
     }
 
     if is_app_driver(service, Driver::Rabbitmq) {
