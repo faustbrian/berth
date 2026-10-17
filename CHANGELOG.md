@@ -138,6 +138,16 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- An app that serves TLS itself (container port 443) now drops Docker's
+  default capabilities except port binding and the file capabilities root
+  needs for the checkout, runs with `no-new-privileges`, and its published
+  URL in `up --json` and `url` is `https://`.
+- Rewrote `README.md`, `INSTALLATION.md` (with migration from helm 6 and
+  stackctl 7 and 8) and `USAGE.md` (its command reference is generated from
+  `--help`) for berth 9, and added `docs/v9/agents.md` (the agent contract),
+  `docs/v9/security.md` and `docs/v9/verification.md`.
+- Concurrent first uses of a generated secret inside one berth process no
+  longer collide on their staging file.
 - Project files reject bind mounts that reach a container engine socket (the
   socket, a symlink to it, or a directory above it such as `/var/run`) and
   environment keys that are not portable names (dotted keys such as

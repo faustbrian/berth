@@ -145,3 +145,25 @@ fn an_invalid_project_file_fails_with_125_naming_the_problem() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[test]
+fn a_symlinked_project_file_is_refused() {
+    let scratch = Scratch::new("symlink");
+    let real = scratch.project().join("real.yaml");
+    std::fs::write(&real, VALID).expect("real file");
+    std::os::unix::fs::symlink(&real, scratch.project().join("project/.berth.yaml"))
+        .expect("symlink");
+    let root = scratch.project().join("project");
+    let output = scratch.berth(&[
+        "--project-root",
+        root.to_str().expect("utf8"),
+        "config",
+        "validate",
+    ]);
+    assert_eq!(output.status.code(), Some(125));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.to_lowercase().contains("symlink") || stderr.contains("symbolic link"),
+        "{stderr}"
+    );
+}

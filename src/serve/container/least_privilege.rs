@@ -18,17 +18,57 @@ const HOME_TMPFS_BYTES: u64 = 1024 * 1024 * 1024;
 /// users and keep their image defaults.
 ///
 /// An app that terminates TLS itself (container port 443, the only case where
-/// `trust_container_ca` acts) keeps 7.0.0's container: its Caddy CA must
-/// persist in the image's root-owned `/data` across restarts so host trust
-/// stays valid, which neither a tmpfs nor a non-root user allows. Behind the
-/// gateway (port 80, the presets' default) it never does, and neither do test
-/// leases, which set `localhost_tls` on port 80.
+/// `trust_container_ca` acts) runs as the container's root with a reduced
+/// capability set (see `root_tls_args`): its Caddy CA must persist in the image's root-owned `/data`
+/// across restarts so host trust stays valid, which neither a tmpfs nor a
+/// non-root user allows. Behind the gateway (port 80, the presets' default)
+/// it never does, and neither do test leases, which set `localhost_tls` on
+/// port 80.
 #[must_use]
 pub(crate) fn runs_least_privileged(target: &ServiceConfig) -> bool {
+    is_php_runtime(target) && target.resolved_container_port() != 443
+}
+
+fn is_php_runtime(target: &ServiceConfig) -> bool {
     matches!(
         target.driver,
         Driver::Frankenphp | Driver::Horizon | Driver::Scheduler | Driver::Reverb
-    ) && target.resolved_container_port() != 443
+    )
+}
+
+/// The root-run TLS app keeps, besides `NET_BIND_SERVICE`, only the file
+/// capabilities root needs to write a checkout the host user owns (without
+/// `DAC_OVERRIDE` root obeys the 0755 modes of `storage/` on rootful Linux);
+/// the rest of Docker's default set (raw sockets, `mknod`, `kill`,
+/// `setuid`, …) is dropped, and it cannot gain privileges.
+fn root_tls_args() -> Vec<String> {
+    let mut args = vec!["--cap-drop".to_owned(), "ALL".to_owned()];
+    for capability in [
+        "NET_BIND_SERVICE",
+        "CHOWN",
+        "DAC_OVERRIDE",
+        "FOWNER",
+        "FSETID",
+    ] {
+        args.push("--cap-add".to_owned());
+        args.push(capability.to_owned());
+    }
+    args.push("--security-opt".to_owned());
+    args.push("no-new-privileges".to_owned());
+    args
+}
+
+/// A non-root PHP runtime keeps only `NET_BIND_SERVICE` and cannot gain
+/// privileges.
+fn capability_args() -> [String; 6] {
+    [
+        "--cap-drop".to_owned(),
+        "ALL".to_owned(),
+        "--cap-add".to_owned(),
+        "NET_BIND_SERVICE".to_owned(),
+        "--security-opt".to_owned(),
+        "no-new-privileges".to_owned(),
+    ]
 }
 
 /// The options that run a PHP app container as the invoking user with no
@@ -49,22 +89,18 @@ pub(crate) fn runs_least_privileged(target: &ServiceConfig) -> bool {
 /// Returns an error when the invoking user or the engine's user mode cannot
 /// be determined, or when the checkout holds paths that user cannot write.
 pub(crate) fn least_privilege_run_args(target: &ServiceConfig) -> Result<Vec<String>> {
-    if !runs_least_privileged(target) {
+    if !is_php_runtime(target) {
         return Ok(Vec::new());
+    }
+    if !runs_least_privileged(target) {
+        return Ok(root_tls_args());
     }
     let user = super::container_user::invoking_user()?;
     if let Some(root) = target.runtime.root.as_deref() {
         super::checkout_ownership::ensure_checkout_writable_by(root, user.uid, user.gid)?;
     }
     let mut args = super::container_user::container_user_args()?;
-    args.extend([
-        "--cap-drop".to_owned(),
-        "ALL".to_owned(),
-        "--cap-add".to_owned(),
-        "NET_BIND_SERVICE".to_owned(),
-        "--security-opt".to_owned(),
-        "no-new-privileges".to_owned(),
-    ]);
+    args.extend(capability_args());
     for (target, options, size) in [
         ("/data", "rw,noexec,nosuid", RUNTIME_TMPFS_BYTES),
         ("/config", "rw,noexec,nosuid", RUNTIME_TMPFS_BYTES),
@@ -172,6 +208,15 @@ mod tests {
         let mut inner_tls = service(Driver::Frankenphp);
         inner_tls.container_port = Some(443);
         assert!(!runs_least_privileged(&inner_tls));
+        // Root keeps port binding and the file capabilities it needs to
+        // write the user's checkout, nothing else.
+        assert_eq!(
+            least_privilege_run_args(&inner_tls)
+                .expect("args")
+                .join(" "),
+            "--cap-drop ALL --cap-add NET_BIND_SERVICE --cap-add CHOWN --cap-add DAC_OVERRIDE \
+             --cap-add FOWNER --cap-add FSETID --security-opt no-new-privileges"
+        );
         // The presets ask for CA trust, which acts only on port 443.
         let mut preset = service(Driver::Frankenphp);
         preset.trust_container_ca = true;

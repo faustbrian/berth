@@ -54,19 +54,19 @@ pub(crate) enum Commands {
     Doctor(DoctorArgs),
     /// Manage workspace lockfile for reproducible image resolution
     Lock(LockArgs),
-    /// Manage per-project Berth daemon processes
+    /// Optional file-watching daemon for humans; no command needs it
     Daemon(DaemonArgs),
     /// Prepare service(s)
     Setup(SetupArgs),
     /// Run doctor, start services, bootstrap app runtime, then open app URLs
     Start(StartArgs),
-    /// Start service container(s)
+    /// Create or converge this checkout's instance (`--wait --json` for agents)
     Up(UpArgs),
     /// Converge services and apply configured data seeds
     Apply(ApplyArgs),
     /// Pull latest images and restart selected services
     Update(UpdateArgs),
-    /// Stop and remove service container(s)
+    /// Remove the instance's containers (`--purge` also deletes its data)
     Down(DownArgs),
     /// Stop service container(s)
     Stop(StopArgs),
@@ -91,7 +91,7 @@ pub(crate) enum Commands {
     About(AboutArgs),
     /// Check if service(s) are ready to accept connections
     Health(HealthArgs),
-    /// Update .env with service connection values
+    /// Print the managed environment containers receive (`.env` is never rewritten)
     Env(EnvArgs),
     /// Show container logs
     Logs(LogsArgs),
@@ -162,7 +162,7 @@ pub(crate) enum Commands {
     Swarm(SwarmArgs),
     /// Generate shell completions
     Completions(CompletionsArgs),
-    /// Start an app serve target and expose it via local HTTPS domain
+    /// Start an app serve target and publish its gateway route
     Serve(ServeArgs),
     /// Print/open serve URL and show app/database health summary
     Open(OpenArgs),

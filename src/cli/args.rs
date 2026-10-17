@@ -48,7 +48,11 @@ pub(crate) fn default_parallelism() -> usize {
 }
 
 #[derive(Parser)]
-#[command(name = "berth", about = "Local data service manager", version)]
+#[command(
+    name = "berth",
+    about = "Disposable, isolated Docker environments for every checkout (built for agents)",
+    version
+)]
 #[non_exhaustive]
 pub(crate) struct Cli {
     #[command(subcommand)]

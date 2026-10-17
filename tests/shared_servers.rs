@@ -1341,3 +1341,58 @@ fn a_tenant_that_fails_to_provision_names_its_instance_and_leaves_others_up() {
     );
     assert_eq!(host.servers().len(), 1, "the shared server stays up for a");
 }
+
+#[test]
+fn a_reset_restore_reprovisions_only_the_instance_tenant() {
+    let host = Host::new("reset");
+    let a = host.checkout("a", PROJECT);
+    let b = host.checkout("b", PROJECT);
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    assert!(host.berth(&b, &["up", "--no-wait"]).status.success());
+    let tenant_a = env_json(&host, &a)["environment"]["DB_DATABASE"]
+        .as_str()
+        .expect("tenant a")
+        .to_owned();
+    let tenant_b = env_json(&host, &b)["environment"]["DB_DATABASE"]
+        .as_str()
+        .expect("tenant b")
+        .to_owned();
+    std::fs::write(
+        a.join("dump.sql"),
+        "CREATE TABLE restored_marker (id int);\n",
+    )
+    .expect("dump");
+    host.clear();
+
+    // The fake lists the tenants the server holds from these names.
+    let restore = host.berth_with(
+        &a,
+        &[
+            "restore",
+            "--service",
+            "db",
+            "--reset",
+            "--file",
+            "dump.sql",
+        ],
+        &format!("{tenant_a} {tenant_b}"),
+    );
+    assert!(restore.status.success(), "{}", text(&restore.stderr));
+    let sql = host.sql();
+    let dropped = sql.find(&format!(
+        "DROP DATABASE IF EXISTS \"{tenant_a}\" WITH (FORCE)"
+    ));
+    assert!(dropped.is_some(), "tenant a dropped: {sql}");
+    let dropped = dropped.expect("tenant a dropped");
+    let created = sql[dropped..].find(&format!("'CREATE DATABASE ' || quote_ident('{tenant_a}')"));
+    assert!(created.is_some(), "tenant a provisioned again: {sql}");
+    let created = created.expect("tenant a provisioned again");
+    let restored = sql[dropped + created..].find("restored_marker");
+    assert!(restored.is_some(), "the dump follows the new tenant: {sql}");
+    let restored = restored.expect("the dump follows the new tenant");
+    assert!(restored > 0);
+    assert!(
+        !sql.contains(&tenant_b),
+        "instance b's tenant is untouched: {sql}"
+    );
+}

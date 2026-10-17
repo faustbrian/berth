@@ -262,9 +262,12 @@ nothing on rootless Docker (container root already is the host user),
 Before starting, berth fails if `storage/`, `bootstrap/cache/`, `vendor/` or
 `node_modules/` hold paths that user does not own (root-owned leftovers of
 7.0.0's root containers) and prints the `chown` that fixes them. An app that
-terminates TLS itself (container port 443) keeps 7.0.0's
-container, because its CA must persist in the image's `/data`. The gateway
-runs with the same capability options. Images that bring their own user
+terminates TLS itself (container port 443) runs as the container's root,
+because its CA must persist in the image's `/data`; it keeps only
+`NET_BIND_SERVICE` and the file capabilities root needs to write the checkout
+(`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `FSETID`) and runs with
+`no-new-privileges`. The gateway runs with the non-root app's capability
+options. Images that bring their own user
 (Selenium, Gotenberg, Mailpit, Soketi) keep their defaults.
 
 ## Commands and exit codes

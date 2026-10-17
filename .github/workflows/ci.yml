@@ -106,8 +106,11 @@ jobs:
       - name: Build release binary
         run: cargo build --release --locked --all-features
 
+      # One test thread: many tests write a fake `docker`/`curl` and run it.
+      # On Linux, a fork by another test thread while such a file is open
+      # for writing makes its exec fail with ETXTBSY ("Text file busy").
       - name: Run tests
-        run: cargo test --locked --all-targets --all-features
+        run: cargo test --locked --all-targets --all-features -- --test-threads=1
 
   agent-acceptance:
     name: Agent Acceptance (linux-x86_64, real Docker)

@@ -250,6 +250,14 @@ fn up_starts_the_gateway_and_applies_the_route_through_a_validated_reload() {
         .position(|call| call.starts_with("run") && call.contains("caddy run"));
     let reload = calls.iter().position(|call| call.contains("caddy reload"));
     assert!(app_run < gateway_run && gateway_run < reload, "{calls:#?}");
+    // The gateway publishes on loopback only (FI-40).
+    let gateway_call = &calls[gateway_run.expect("gateway run")];
+    assert!(
+        gateway_call.contains(&format!("-p 127.0.0.1:{}:", fixture.https_port))
+            && !gateway_call.contains("-p 0.0.0.0")
+            && !gateway_call.contains(&format!("-p {}:", fixture.https_port)),
+        "{gateway_call}"
+    );
     assert!(
         calls
             .iter()

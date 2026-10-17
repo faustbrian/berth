@@ -545,3 +545,25 @@ fn service_names_must_be_valid_as_written() {
     ))
     .expect("63 bytes is a valid label");
 }
+
+#[test]
+fn a_float_schema_version_and_a_second_document_are_rejected() {
+    let float = parse("schema_version: 9.0\nproject: api\n").expect_err("float version");
+    assert!(format!("{float:#}").contains("schema_version"), "{float:#}");
+    let two = parse("schema_version: 9\nproject: api\n---\nschema_version: 9\nproject: other\n")
+        .expect_err("two documents");
+    assert!(
+        format!("{two:#}").to_lowercase().contains("document"),
+        "{two:#}"
+    );
+    // Errors point at the offending field and its line.
+    let field = parse(
+        "schema_version: 9\nproject: api\nservices:\n  db:\n    preset: mysql\n    flavour: x\n",
+    )
+    .expect_err("unknown field");
+    let message = format!("{field:#}");
+    assert!(
+        message.contains("flavour") && message.contains("line 6"),
+        "{message}"
+    );
+}
