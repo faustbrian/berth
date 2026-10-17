@@ -13,7 +13,7 @@ pub(super) fn dispatch(
     context: &CliDispatchContext<'_>,
 ) -> Option<Result<()>> {
     match &cli.command {
-        Commands::Ls(args) => Some(handlers::handle_list(
+        Commands::Ls(args) if args.services => Some(handlers::handle_list(
             config,
             &args.format,
             args.kind(),

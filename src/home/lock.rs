@@ -15,6 +15,25 @@ pub(crate) struct HostLock {
 }
 
 impl HostLock {
+    /// Acquires `locks/{name}.lock` without waiting: `None` when another
+    /// process holds it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the lock file cannot be opened or locked.
+    pub(crate) fn try_acquire(name: &str) -> Result<Option<Self>> {
+        let dir = super::private_dir(Path::new("locks"))?;
+        let path = dir.join(format!("{name}.lock"));
+        let file = open_lock_file(&path)?;
+        match file.try_lock() {
+            Ok(()) => Ok(Some(Self { _file: file })),
+            Err(TryLockError::WouldBlock) => Ok(None),
+            Err(TryLockError::Error(error)) => {
+                Err(error).with_context(|| format!("failed to lock {}", path.display()))
+            }
+        }
+    }
+
     /// Acquires `locks/{name}.lock`, waiting at most `timeout`.
     ///
     /// # Errors
@@ -49,6 +68,38 @@ impl HostLock {
                         .with_context(|| format!("failed to lock {}", path.display()));
                 }
             }
+        }
+    }
+}
+
+fn open_lock_file(path: &Path) -> Result<File> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .open(path)
+        .with_context(|| format!("failed to open {}", path.display()))
+}
+
+/// Takes the lock on the existing file `path` without waiting: `None`
+/// while another process holds it. The lock lasts until the file drops.
+///
+/// # Errors
+///
+/// Returns an error when the file cannot be opened or locked.
+pub(crate) fn try_hold_lock(path: &Path) -> Result<Option<File>> {
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .with_context(|| format!("failed to open {}", path.display()))?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(TryLockError::WouldBlock) => Ok(None),
+        Err(TryLockError::Error(error)) => {
+            Err(error).with_context(|| format!("failed to lock {}", path.display()))
         }
     }
 }

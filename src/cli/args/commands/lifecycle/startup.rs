@@ -90,6 +90,17 @@ impl StartArgs {
 pub(crate) struct UpArgs {
     #[arg(long)]
     pub(crate) service: Option<String>,
+    /// Lease the instance for this long (`90m`, `2h`, `1d`): every berth
+    /// command in the checkout renews it, and once it lapses any berth
+    /// command deletes the instance as `down --purge` does. Without it the
+    /// instance is deleted only when its checkout is gone.
+    #[arg(long)]
+    pub(crate) ttl: Option<String>,
+    /// Record this process (usually the agent's shell, `$$`) as the
+    /// instance's owner: once it exits, any berth command deletes the
+    /// instance as `down --purge` does. `BERTH_OWNER_PID` sets it too.
+    #[arg(long, env = "BERTH_OWNER_PID")]
+    pub(crate) owner_pid: Option<u32>,
     #[arg(long, value_enum)]
     pub(crate) kind: Option<config::Kind>,
     /// Start a named service profile (full, infra, data, app, web, api)

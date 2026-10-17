@@ -34,7 +34,7 @@ pub(crate) use lifecycle::{
 pub(crate) use meta::{CompletionsArgs, ConfigArgs, DoctorArgs, LockArgs, PresetArgs, ProfileArgs};
 
 pub(crate) use operations::{
-    AboutArgs, AttachArgs, CpArgs, DumpArgs, EnvArgs, EventsArgs, HealthArgs, InspectArgs,
+    AboutArgs, AttachArgs, CpArgs, DumpArgs, EnvArgs, EventsArgs, GcArgs, HealthArgs, InspectArgs,
     KillArgs, LogsArgs, LsArgs, PauseArgs, PortArgs, PruneArgs, PsArgs, PullArgs, RestoreArgs,
     StatsArgs, SwarmArgs, TopArgs, UnpauseArgs, WaitArgs,
 };
@@ -153,8 +153,11 @@ pub(crate) enum Commands {
     Deno(DenoArgs),
     /// Run opinionated internal task workflows
     Task(TaskArgs),
-    /// List configured services
+    /// List every instance this installation owns, across projects
+    /// (`--services` lists the current project's services)
     Ls(LsArgs),
+    /// Reap expired and orphaned instances, then remove unused shared servers
+    Gc(GcArgs),
     /// Run a berth command across configured swarm targets
     Swarm(SwarmArgs),
     /// Generate shell completions

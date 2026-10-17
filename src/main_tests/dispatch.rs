@@ -183,6 +183,7 @@ fn cli_dispatch_runs_ls_with_json_format() {
                 .to_str()
                 .expect("project root path should be valid UTF-8"),
             "ls",
+            "--services",
             "--format",
             "json",
         ]);

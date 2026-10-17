@@ -1119,15 +1119,35 @@ Notes:
 
 ### `berth ls`
 
-List configured services.
+List every instance this installation owns, across projects: project,
+instance ID, status (`running`, `partial`, `stopped`, `down`), lease expiry
+and owning checkout. Runs outside any project.
 
 Flags:
 
-- `--format <FORMAT>` (default: `table`)
-  - `json`: JSON array of service names
-  - other values/default (`table`): one service name per line
-- `--kind <KIND>`
-- `--driver <DRIVER>`
+- `--json` or `--format json`: one document,
+  `{"instances": [{"project", "instance", "root", "root_exists", "status",
+  "containers", "networks", "running", "ttl_seconds", "expires_at",
+  "expires_in_seconds", "expired", "lease_error", "owner_pid",
+  "owner_alive"}]}`
+- `--services`: list the current project's configured services instead
+  (one name per line, or a JSON array with `--format json`), with optional
+  `--kind <KIND>` and `--driver <DRIVER>` filters
+
+### `berth gc`
+
+Reap now (instances whose lease expired, whose owner process exited or
+whose checkout is gone, and leftover test-slot containers), then remove
+shared servers that no instance
+network uses and that hold no tenant: the container, its data volume and its
+admin secret. A server berth cannot inspect is kept and reported. Runs
+outside any project, so it uses Docker unless `--engine` says otherwise
+(as does `berth ls`). Exits 125 when an instance could not be reaped.
+
+Flags:
+
+- `--json`: one document, `{"reaped_instances", "removed_test_containers",
+  "servers": [{"server", "engine", "removed", "reason"}]}`
 
 ### `berth swarm -- <COMMAND...>`
 

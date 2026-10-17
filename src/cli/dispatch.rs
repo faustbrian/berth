@@ -6,13 +6,15 @@
 
 use anyhow::Result;
 
-use super::args::Cli;
+use super::args::{Cli, Commands};
+use super::handlers;
 use crate::config;
 use crate::docker;
 use crate::output;
 
 mod bootstrap;
 mod context;
+mod lease;
 mod primary;
 mod secondary;
 
@@ -37,6 +39,20 @@ pub(crate) fn run(cli: Cli) -> Result<()> {
         return Ok(());
     }
 
+    // Commands about every instance run outside any project.
+    match &cli.command {
+        Commands::Ls(args) if !args.services => {
+            docker::set_container_engine(cli.engine.unwrap_or_default());
+            lease::reap_in_passing(None);
+            return handlers::handle_list_instances(&args.format, args.json);
+        }
+        Commands::Gc(args) => {
+            docker::set_container_engine(cli.engine.unwrap_or_default());
+            return handlers::handle_gc(args.json);
+        }
+        _ => {}
+    }
+
     let configured_engine = config::load_container_engine_with(
         config::LoadConfigPathOptions::new(
             dispatch_context.config_path(),
@@ -47,10 +63,27 @@ pub(crate) fn run(cli: Cli) -> Result<()> {
     docker::set_container_engine(cli.engine.or(configured_engine).unwrap_or_default());
 
     let mut config = bootstrap::load_config_for_cli(&dispatch_context)?;
-    if let Some(result) = primary::dispatch_primary(&cli, &mut config, &dispatch_context) {
-        return result;
+    let lease = match lease::renew_and_reap(&cli, &config) {
+        Ok(lease) => lease,
+        Err(error) => {
+            // `up --json` promises one document on stdout, failures included
+            // (a bad `--ttl`, an `--owner-pid` that does not run).
+            if let Commands::Up(args) = &cli.command
+                && args.json
+            {
+                lease::print_failure_document(&config, &error)?;
+            }
+            return Err(error);
+        }
+    };
+    let result = match primary::dispatch_primary(&cli, &mut config, &dispatch_context) {
+        Some(result) => result,
+        None => secondary::dispatch_secondary(&cli, &mut config, &dispatch_context),
+    };
+    match lease {
+        Some(lease) => result.and(lease.finish()),
+        None => result,
     }
-    secondary::dispatch_secondary(&cli, &mut config, &dispatch_context)
 }
 
 fn apply_runtime_policy_overrides(cli: &Cli) {
@@ -59,7 +92,7 @@ fn apply_runtime_policy_overrides(cli: &Cli) {
         max_build_ops: cli.docker_max_build_ops,
         retry_budget: cli.docker_retry_budget,
     });
-    super::handlers::set_testing_runtime_pool_size_override(cli.test_runtime_pool_size);
+    handlers::set_testing_runtime_pool_size_override(cli.test_runtime_pool_size);
 }
 
 #[cfg(test)]

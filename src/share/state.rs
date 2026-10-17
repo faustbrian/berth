@@ -36,6 +36,16 @@ fn clear_test_state_home() {
     TEST_STATE_HOME.with(|value| *value.borrow_mut() = None);
 }
 
+/// Runs `body` with share state kept under `home` on this thread instead of
+/// the developer's `~/.config/berth/share`.
+#[cfg(test)]
+pub(crate) fn with_test_state_home<T>(home: &Path, body: impl FnOnce() -> T) -> T {
+    set_test_state_home(home.to_str().expect("temporary home should be valid UTF-8"));
+    let result = body();
+    clear_test_state_home();
+    result
+}
+
 #[cfg(test)]
 fn set_test_provider_binary(provider: ShareProvider, path: &str) {
     TEST_PROVIDER_BINARIES.with(|value| {

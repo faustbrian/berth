@@ -116,22 +116,34 @@ mod tests {
 
     #[test]
     fn dispatch_share_command_forwards_start_status_stop() {
+        // Share state lives under HOME; another test's sessions in the
+        // developer's real home made this test fail intermittently.
+        let home = std::env::temp_dir().join(format!(
+            "berth-share-dispatch-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        drop(std::fs::remove_dir_all(&home));
+        std::fs::create_dir_all(&home).expect("temporary home");
         let config = sample_config();
-        let command = parse_share_command(&[
-            "berth",
-            "share",
-            "start",
-            "--service",
-            "api",
-            "--cloudflare",
-        ]);
-        assert!(super::dispatch_share_command(&config, &command).is_err());
+        crate::share::with_test_state_home(&home, || {
+            let command = parse_share_command(&[
+                "berth",
+                "share",
+                "start",
+                "--service",
+                "api",
+                "--cloudflare",
+            ]);
+            assert!(super::dispatch_share_command(&config, &command).is_err());
 
-        let command = parse_share_command(&["berth", "share", "status"]);
-        assert!(super::dispatch_share_command(&config, &command).is_ok());
+            let command = parse_share_command(&["berth", "share", "status"]);
+            assert!(super::dispatch_share_command(&config, &command).is_ok());
 
-        let command = parse_share_command(&["berth", "share", "stop", "--all"]);
-        assert!(super::dispatch_share_command(&config, &command).is_ok());
+            let command = parse_share_command(&["berth", "share", "stop", "--all"]);
+            assert!(super::dispatch_share_command(&config, &command).is_ok());
+        });
+        std::fs::remove_dir_all(&home).expect("cleanup");
     }
 
     #[test]

@@ -8,7 +8,7 @@ mod docker_ops;
 mod logs_swarm;
 
 pub(crate) use data::{DumpArgs, PullArgs, RestoreArgs};
-pub(crate) use diagnostics::{AboutArgs, EnvArgs, HealthArgs, LsArgs, PsArgs};
+pub(crate) use diagnostics::{AboutArgs, EnvArgs, GcArgs, HealthArgs, LsArgs, PsArgs};
 pub(crate) use docker_ops::{
     AttachArgs, CpArgs, EventsArgs, InspectArgs, KillArgs, PauseArgs, PortArgs, PruneArgs,
     StatsArgs, TopArgs, UnpauseArgs, WaitArgs,

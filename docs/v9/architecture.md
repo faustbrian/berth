@@ -51,27 +51,51 @@ refused) hold only leases, locks, credentials and generated gateway state.
 ## Leases, TTL and reaping
 
 - Each instance has `~/.berth/instances/{project}/{instance}/lease.json` with
-  its root, TTL and expiry. Every berth command that touches the instance
-  renews the expiry. The default TTL is 24 hours; `--ttl` sets it per
-  instance (`0` disables expiry).
-- An instance is not owned by a process: `berth up` exits immediately after
-  the environment is healthy. Instances are reaped only when their lease has
-  expired or their project root no longer exists (an agent deleted its
-  worktree).
-- Every berth invocation runs a throttled reaper. It never touches an
-  instance whose operation lock (`flock` on the instance directory) is held,
-  and never touches another installation's objects.
-- Reaping an instance is `down --purge`.
+  its owning checkout, an optional TTL and expiry, and an optional owner
+  process. `up --ttl 2h` sets the TTL; `up --owner-pid <pid>` (or
+  `BERTH_OWNER_PID`) names the owner, recorded with its start time so a
+  reused PID never counts. Every berth command that touches Docker renews the
+  lease when it starts and again when it ends.
+- There is no default TTL: an instance without `--ttl` is reaped only when its
+  checkout is gone or its owner process exited. (The ledger first planned a
+  24-hour default; reaping is a purge, so a default would delete a human's
+  idle database the first time another project's command ran.)
+- An instance is not owned by a berth process: `berth up` exits once the
+  environment is healthy. While any berth command runs in an instance it holds
+  a shared `flock` on `locks/instance-{project}-{instance}.lock`, and the
+  reaper skips instances whose lock it cannot take, so a test run longer than
+  its TTL is never deleted underneath it.
+- Docker-touching commands run the reaper at most every 30 seconds per
+  installation (`berth ls` too; `berth gc` always), one process at a time. It
+  never reaps the instance the command runs in, and only touches this
+  installation's labeled objects.
+- Reaping an instance is `down --purge`; its lease is deleted last, only
+  after its tenants and Docker objects are gone, so an instance that could not
+  be deleted completely is retried. Ordinary commands report a reaping
+  failure as a warning and carry on (one stuck leftover never blocks other
+  agents); `berth gc` fails with it. Leftover test-slot containers whose slot
+  `flock` is free (their run died) are removed too, holding the slot meanwhile.
+- "Checkout gone" means the recorded root path no longer exists: moving a
+  checkout (`git worktree move`) or unmounting its volume makes berth delete
+  the instance's data. Run `berth down` before moving one.
+- An owner process counts as dead only when the system says the PID is gone
+  or belongs to a process started at another time (Linux start ticks;
+  elsewhere `ps -o lstart` in UTC with the C locale); an unreadable probe
+  keeps the instance.
+- `berth ls` lists every instance across projects from labels and berth
+  state; `berth gc` reaps without waiting, then removes shared servers that no
+  instance network uses and that hold no tenant.
 
 ## Test runs
 
-`berth artisan test` keeps the 7.0.0 lease semantics: a bounded per-instance
-slot pool limits concurrency, and each run is isolated. Each run gets fresh,
-uniquely named logical databases (and a key prefix) in the shared servers,
-created before and dropped after the run. Run databases whose lease lock is no
-longer held are dropped by the reaper, so a killed run never collides with a
-later one. Tenant roles may create and drop their own `{db}_test_*` databases
-so Pest/ParaTest `--parallel` works.
+`berth artisan test` keeps the 7.0.0 lease semantics: a bounded per-workspace
+slot pool (8–32 slots, each an `flock` under `~/.berth/locks/test-slots`)
+limits concurrency, and each run is isolated. Each run's shared services are
+a tenant of the slot's own runtime environment, dropped at the start and end
+of the run (ParaTest's `_test_*` databases included); dedicated services keep
+7.0.0's per-run containers. A killed run frees its slot at once, and the next
+run on that slot resets its tenant. Tenant roles may create their own
+`{db}_test_*` databases so Pest/ParaTest `--parallel` works.
 
 ## Networking
 

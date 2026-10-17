@@ -1,0 +1,211 @@
+//! Crash recovery without a daemon: berth commands delete the instances
+//! nobody can use any more.
+//!
+//! An instance this installation owns is reaped (purged like `down
+//! --purge`) when its lease expired, its named owner process exited, or its
+//! checkout no longer exists. Test
+//! slots whose run died (their `flock` is free) lose their leftover
+//! containers. Reaping runs at most every [`INTERVAL`] unless forced, and
+//! only one process reaps at a time.
+
+use anyhow::{Context, Result};
+use std::time::Duration;
+
+use super::catalog::{InstanceRecord, list_instances};
+use crate::output::{self, LogLevel, Persistence};
+
+/// How often ordinary commands reap. Listing instances costs one `docker
+/// ps`; 30 seconds keeps 30 parallel agents from repeating it constantly.
+const INTERVAL: Duration = Duration::from_secs(30);
+
+/// What a reaping pass deleted.
+#[derive(Debug, Default)]
+pub(crate) struct ReapReport {
+    /// `{project}/{instance}` of every reaped instance.
+    pub(crate) instances: Vec<String>,
+    /// Names of removed leftover test-slot containers.
+    pub(crate) slot_containers: Vec<String>,
+}
+
+/// Reaps unless another process is reaping or, without `force`, a pass ran
+/// within [`INTERVAL`]. `keep` names an instance that must survive (the one
+/// the command runs in).
+///
+/// # Errors
+///
+/// Returns an error when Docker or berth state cannot be read, or a reaped
+/// instance cannot be deleted completely.
+pub(crate) fn reap(force: bool, keep: Option<(&str, &str)>) -> Result<ReapReport> {
+    if crate::docker::is_dry_run() {
+        return Ok(ReapReport::default());
+    }
+    let Some(_lock) = crate::home::HostLock::try_acquire("reap")? else {
+        return Ok(ReapReport::default());
+    };
+    let stamp = crate::home::private_dir(std::path::Path::new("locks"))?.join("reap.stamp");
+    if !force && ran_recently(&stamp) {
+        return Ok(ReapReport::default());
+    }
+    std::fs::write(&stamp, b"").with_context(|| format!("failed to write {}", stamp.display()))?;
+
+    let now = super::lease::now_secs();
+    let mut report = ReapReport::default();
+    let mut failures = Vec::new();
+    for record in list_instances()? {
+        let kept = keep == Some((record.project.as_str(), record.instance.as_str()));
+        if !kept && reap_reason(&record, now).is_some() {
+            // A command running in the instance (a long test run) keeps it.
+            let Some(_reaping) =
+                super::lease::try_lock_for_reaping(&record.project, &record.instance)?
+            else {
+                continue;
+            };
+            // The listing may be stale: a command in the instance can have
+            // renewed it since. Decide again from the lease as it is now,
+            // while holding the lock that keeps commands out.
+            let mut current = record.clone();
+            current.lease = match super::lease::read_lease(&record.project, &record.instance) {
+                Ok(lease) => lease,
+                Err(error) => {
+                    failures.push(format!("{error:#}"));
+                    continue;
+                }
+            };
+            if let Some(lease) = &current.lease {
+                current.root = Some(lease.root.clone());
+            }
+            let Some(why) = reap_reason(&current, super::lease::now_secs()) else {
+                continue;
+            };
+            match purge(&current) {
+                Ok(()) => {
+                    output::event(
+                        "reap",
+                        LogLevel::Info,
+                        &format!(
+                            "Reaped {}/{} because {why}",
+                            current.project, current.instance
+                        ),
+                        Persistence::Persistent,
+                    );
+                    report
+                        .instances
+                        .push(format!("{}/{}", current.project, current.instance));
+                }
+                Err(error) => failures.push(format!("{error:#}")),
+            }
+            continue;
+        }
+        match reap_stale_slots(&record) {
+            Ok(removed) => report.slot_containers.extend(removed),
+            Err(error) => failures.push(format!("{error:#}")),
+        }
+    }
+    match failures.into_iter().next() {
+        None => Ok(report),
+        Some(first) => anyhow::bail!("failed to reap: {first}"),
+    }
+}
+
+/// Why the instance should be reaped at `now`, if it should.
+fn reap_reason(record: &InstanceRecord, now: u64) -> Option<&'static str> {
+    if record.lease_error.is_some() {
+        return None;
+    }
+    let lease = record.lease.as_ref();
+    if lease.is_some_and(|lease| lease.expired(now)) {
+        Some("its lease expired")
+    } else if lease.is_some_and(super::lease::Lease::owner_dead) {
+        Some("its owner process exited")
+    } else if record.owner_gone() {
+        Some("its checkout is gone")
+    } else {
+        None
+    }
+}
+
+fn ran_recently(stamp: &std::path::Path) -> bool {
+    std::fs::metadata(stamp)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|elapsed| elapsed < INTERVAL)
+}
+
+/// Deletes everything of the instance, as `down --purge` does. Its berth
+/// state (the lease) goes last and only once the tenants and Docker objects
+/// are gone, so an instance that could not be deleted completely stays
+/// reapable and the next pass (or `berth gc`) retries it.
+fn purge(record: &InstanceRecord) -> Result<()> {
+    let tenants = crate::shared::drop_instance_tenants(&record.project, &record.instance);
+    let objects = crate::docker::purge_instance_objects(&record.project, &record.instance);
+    tenants.and(objects)?;
+    crate::home::remove_instance_state(&record.project, &record.instance)?;
+    super::lease::remove_in_use_lock(&record.project, &record.instance)
+}
+
+/// Removes containers of test slots (`…-testing-pool-{workspace}-{slot}`)
+/// whose lock nobody holds: the run that made them died. The slot's
+/// tenants are dropped by its next run's reset or the instance's purge.
+fn reap_stale_slots(record: &InstanceRecord) -> Result<Vec<String>> {
+    let mut removed = Vec::new();
+    for container in &record.containers {
+        let Some((workspace, slot)) = slot_of(&container.name) else {
+            continue;
+        };
+        let lock = crate::home::home_path(
+            &std::path::Path::new("locks")
+                .join("test-slots")
+                .join(workspace)
+                .join(format!("slot-{slot}.lock")),
+        )?;
+        if !lock.exists() {
+            continue;
+        }
+        // Hold the slot while removing its containers, so a run that takes
+        // the slot meanwhile never loses the containers it just started.
+        let Some(_slot) = crate::home::try_hold_lock(&lock)? else {
+            continue;
+        };
+        let output = crate::docker::run_docker_output(
+            &["rm", "-f", "-v", &container.name],
+            "failed to remove a stale test container",
+        )?;
+        let stderr = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
+        if !output.status.success() && !stderr.contains("no such container") {
+            anyhow::bail!(
+                "failed to remove stale test container {}: {}",
+                container.name,
+                stderr.trim()
+            );
+        }
+        removed.push(container.name.clone());
+    }
+    Ok(removed)
+}
+
+/// The workspace key and slot of a test-slot container name.
+fn slot_of(name: &str) -> Option<(&str, &str)> {
+    let (_, rest) = name.split_once("-testing-pool-")?;
+    let (workspace, slot) = rest.rsplit_once('-')?;
+    let valid = workspace.len() == 16
+        && workspace.bytes().all(|byte| byte.is_ascii_hexdigit())
+        && !slot.is_empty()
+        && slot.bytes().all(|byte| byte.is_ascii_digit());
+    valid.then_some((workspace, slot))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::slot_of;
+
+    #[test]
+    fn slot_containers_are_recognized_by_name() {
+        assert_eq!(
+            slot_of("berth_shop_a-1_app-testing-pool-72d34fb23814d2bd-3"),
+            Some(("72d34fb23814d2bd", "3"))
+        );
+        assert_eq!(slot_of("berth_shop_a-1_app"), None);
+        assert_eq!(slot_of("berth_shop_a-1_app-testing-pool-xyz-3"), None);
+    }
+}

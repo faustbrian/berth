@@ -107,12 +107,28 @@ impl EnvArgs {
 
 #[derive(Args)]
 pub(crate) struct LsArgs {
+    /// `table` or `json`.
     #[arg(long, default_value = "table")]
     pub(crate) format: String,
-    #[arg(long, value_enum)]
+    /// Print JSON (the same as `--format json`).
+    #[arg(long, default_value_t = false)]
+    pub(crate) json: bool,
+    /// List the current project's configured services instead of instances
+    /// (berth 7's `ls`).
+    #[arg(long, default_value_t = false)]
+    pub(crate) services: bool,
+    #[arg(long, value_enum, requires = "services")]
     pub(crate) kind: Option<config::Kind>,
-    #[arg(long, value_enum)]
+    #[arg(long, value_enum, requires = "services")]
     pub(crate) driver: Option<config::Driver>,
+}
+
+/// `berth gc`: reap now, then remove shared servers nothing uses.
+#[derive(Args)]
+pub(crate) struct GcArgs {
+    /// Print one JSON document describing what was removed.
+    #[arg(long, default_value_t = false)]
+    pub(crate) json: bool,
 }
 
 impl LsArgs {

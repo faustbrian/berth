@@ -6,6 +6,16 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Added instance leases and reaping: `up --ttl 2h` and `up --owner-pid <pid>`
+  (or `BERTH_OWNER_PID`) lease an instance, and berth commands delete
+  (as `down --purge`) instances whose lease lapsed, whose owner process
+  exited or whose checkout is gone, plus leftover containers of dead test
+  runs. An instance a command is running in is never reaped.
+- Added `berth ls`, listing every instance across projects with its status,
+  lease and checkout (`--json` for agents), and `berth gc`, which also removes
+  shared servers nothing uses. 7.0.0's service listing is `berth ls
+  --services`.
+
 - Added shared PostgreSQL, MySQL, MariaDB, Redis and Valkey servers: every
   instance's database or cache service is a tenant (its own database and
   role or user, or an ACL user confined to its key prefix, closed to other
@@ -188,6 +198,9 @@ All notable changes to this project are documented in this file.
   references keep the previous mount so existing data is never hidden.
 - Made test-only container engine overrides thread-local so tests no longer
   observe another test's Podman engine selection intermittently.
+- The share dispatch test keeps its share state in a temporary home instead
+  of the developer's `~/.config/berth/share`, which made it fail
+  intermittently.
 - Fake-Docker integration tests claim their own gateway ports instead of the
   default 8443/8080, so parallel test binaries (or a running gateway) no
   longer fail them intermittently with "gateway port … is in use".

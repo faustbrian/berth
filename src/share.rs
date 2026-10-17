@@ -9,6 +9,8 @@ use crate::config::{Config, ServiceConfig};
 mod provider;
 mod session;
 mod state;
+#[cfg(test)]
+pub(crate) use state::with_test_state_home;
 mod target;
 #[cfg(test)]
 mod tests;

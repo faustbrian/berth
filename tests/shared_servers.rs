@@ -131,7 +131,7 @@ case "$1" in
         installation=$(grep '^dev.berth.installation=' "$S/c/$name" | cut -d= -f2)
         fp=$(grep '^dev.berth.shared.fingerprint=' "$S/c/$name" | cut -d= -f2)
         printf 'running\t%s\t%s' "$installation" "$fp" ;;
-      *--format*) printf running ;;
+      *--format*) if [ -f "$S/stopped-$name" ]; then printf exited; else printf running; fi ;;
       *) printf '[{"State":{"Status":"running"},"NetworkSettings":{"Ports":{}},"HostConfig":{"PortBindings":{}}}]' ;;
     esac
     exit 0 ;;
@@ -1188,5 +1188,108 @@ fn a_killed_test_run_frees_its_slot_for_the_next_run_at_once() {
     assert!(
         second_started.elapsed().as_secs() < 30,
         "the killed run's slot was free at once, not after a timeout"
+    );
+}
+
+fn gc(host: &Host, cwd: &Path, names: &str) -> serde_json::Value {
+    let output = host.berth_with(cwd, &["gc", "--json"], names);
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    serde_json::from_slice(&output.stdout).expect("one gc document")
+}
+
+#[test]
+fn gc_removes_a_shared_server_no_instance_uses_with_its_volume_and_secret() {
+    let host = Host::new("gc");
+    let a = host.checkout("a", PROJECT);
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    let server = host.servers().pop().expect("server");
+    assert!(host.berth(&a, &["down", "--purge"]).status.success());
+    host.clear();
+    let document = gc(&host, &host.base, "");
+    assert_eq!(document["servers"][0]["server"], server.as_str());
+    assert_eq!(document["servers"][0]["removed"], true, "{document}");
+    let calls = host.calls();
+    assert!(
+        calls
+            .lines()
+            .any(|line| line == format!("rm -f -v {server}")),
+        "{calls}"
+    );
+    assert!(
+        calls
+            .lines()
+            .any(|line| line == format!("volume rm {server}-data")),
+        "{calls}"
+    );
+    assert!(
+        !host.base.join("home/shared").join(&server).exists(),
+        "its admin secret is gone"
+    );
+    assert!(host.servers().is_empty());
+}
+
+#[test]
+fn gc_keeps_servers_an_instance_uses_or_that_hold_tenants() {
+    let host = Host::new("gc-keep");
+    let a = host.checkout("a", PROJECT);
+    let b = host.checkout("b", PROJECT);
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    assert!(host.berth(&b, &["up", "--no-wait"]).status.success());
+    let attached = gc(&host, &host.base, "");
+    assert_eq!(attached["servers"][0]["removed"], false);
+    assert!(
+        attached["servers"][0]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.starts_with("attached to")),
+        "{attached}"
+    );
+
+    let tenant = env_json(&host, &a)["environment"]["DB_DATABASE"]
+        .as_str()
+        .expect("tenant")
+        .to_owned();
+    assert!(host.berth(&a, &["down"]).status.success());
+    assert!(host.berth(&b, &["down"]).status.success());
+    let holding = gc(&host, &host.base, &tenant);
+    assert_eq!(
+        holding["servers"][0]["removed"], false,
+        "`down` keeps data: {holding}"
+    );
+    assert!(
+        holding["servers"][0]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains(&tenant)),
+        "{holding}"
+    );
+    assert_eq!(host.servers().len(), 1);
+}
+
+#[test]
+fn gc_keeps_a_stopped_server_it_cannot_inspect_and_never_starts_it() {
+    let host = Host::new("gc-stopped");
+    let a = host.checkout("a", PROJECT);
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    let server = host.servers().pop().expect("server");
+    assert!(host.berth(&a, &["down", "--purge"]).status.success());
+    std::fs::write(
+        host.base.join("state").join(format!("stopped-{server}")),
+        b"",
+    )
+    .expect("stop");
+    host.clear();
+    let document = gc(&host, &host.base, "");
+    assert_eq!(document["servers"][0]["removed"], false, "{document}");
+    assert!(
+        document["servers"][0]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.starts_with("exited")),
+        "{document}"
+    );
+    let calls = host.calls();
+    assert!(
+        !calls
+            .lines()
+            .any(|line| line.starts_with("start ") || line.starts_with("rm ")),
+        "{calls}"
     );
 }

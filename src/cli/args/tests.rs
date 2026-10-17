@@ -453,7 +453,15 @@ fn operations_argument_methods() {
     }
 
     let cli = Cli::parse_from([
-        "berth", "ls", "--kind", "cache", "--driver", "redis", "--format", "json",
+        "berth",
+        "ls",
+        "--services",
+        "--kind",
+        "cache",
+        "--driver",
+        "redis",
+        "--format",
+        "json",
     ]);
     if let commands::Commands::Ls(args) = cli.command {
         assert_eq!(args.kind(), Some(config::Kind::Cache));
@@ -461,6 +469,10 @@ fn operations_argument_methods() {
     } else {
         panic!("expected ls command");
     }
+    assert!(
+        Cli::try_parse_from(["berth", "ls", "--kind", "cache"]).is_err(),
+        "service filters need --services"
+    );
 
     let cli = Cli::parse_from([
         "berth",
