@@ -36,7 +36,6 @@ pub(crate) struct HandleUpOptions<'a> {
     pub(crate) no_publish_all: bool,
     pub(crate) port_strategy: PortStrategyArg,
     pub(crate) port_seed: Option<&'a str>,
-    pub(crate) save_ports: bool,
     pub(crate) env_output: bool,
     pub(crate) include_project_deps: bool,
     pub(crate) seed: bool,
@@ -60,7 +59,6 @@ pub(crate) fn handle_up(config: &mut config::Config, options: HandleUpOptions<'_
         PrepareUpContextOptions {
             repro: options.repro,
             env_output: options.env_output,
-            save_ports: options.save_ports,
             config_path: options.config_path,
             project_root: options.project_root,
             include_project_deps: options.include_project_deps,
@@ -93,7 +91,6 @@ pub(crate) fn handle_up(config: &mut config::Config, options: HandleUpOptions<'_
                 force_random_ports: true,
                 port_strategy: options.port_strategy,
                 port_seed: options.port_seed,
-                save_ports: options.save_ports,
                 env_output: options.env_output,
                 parallel: options.parallel,
                 quiet: options.quiet,

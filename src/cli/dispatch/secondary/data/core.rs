@@ -70,7 +70,6 @@ pub(super) fn dispatch(
                 env_file: &args.env_file,
                 sync: args.sync,
                 purge: args.purge,
-                persist_runtime: args.persist_runtime,
                 create_missing: args.create_missing,
                 quiet: context.quiet(),
                 config_path: context.config_path(),

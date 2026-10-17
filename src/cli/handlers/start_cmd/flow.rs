@@ -80,7 +80,6 @@ fn run_up_from_start(config: &mut config::Config, options: &StartFlowOptions<'_>
             no_publish_all: false,
             port_strategy: PortStrategyArg::Random,
             port_seed: None,
-            save_ports: false,
             env_output: false,
             include_project_deps: options.include_project_deps,
             seed: false,

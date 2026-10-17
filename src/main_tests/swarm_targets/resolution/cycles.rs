@@ -6,9 +6,12 @@ fn resolve_swarm_targets_rejects_dependency_cycles() -> Result<()> {
     let base = std::env::temp_dir().join(format!("berth-swarm-cycle-test-{nonce}"));
     std::fs::create_dir_all(base.join("api"))?;
     std::fs::create_dir_all(base.join("bill"))?;
-    std::fs::write(base.join("api/.berth.toml"), "container_prefix = \"api\"\n")?;
-    std::fs::write(
-        base.join("bill/.berth.toml"),
+    crate::config::project_file::write_test_config_file(
+        base.join("api/.berth.yaml"),
+        "container_prefix = \"api\"\n",
+    )?;
+    crate::config::project_file::write_test_config_file(
+        base.join("bill/.berth.yaml"),
         "container_prefix = \"bill\"\n",
     )?;
 

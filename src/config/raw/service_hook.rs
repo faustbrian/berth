@@ -7,6 +7,7 @@ use serde::Deserialize;
 use super::super::{HookOnError, HookPhase};
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RawServiceHook {
     #[serde(default)]
     pub name: Option<String>,
@@ -21,7 +22,7 @@ pub(crate) struct RawServiceHook {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub(crate) enum RawHookRun {
     Exec { argv: Vec<String> },
     Script { path: String },

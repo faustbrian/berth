@@ -11,17 +11,51 @@ All notable changes to this project are documented in this file.
   `scripts/check-v9-ledger.sh`, which fails when any 8.x source directory or
   commit is left unaccounted for.
 
+- Added `berth config migrate`, which converts helm `.helm.toml`/`.helm.yaml`,
+  stackctl `.stackctl.toml`/`.stackctl.yaml` (including 8.x
+  `schema_version: 8` files) and their runtime-environment overrides into
+  berth 9 files. It runs before any project file is loaded, refuses to
+  overwrite existing files, writes nothing unless every conversion succeeds,
+  keeps service declaration order (which decides default ports and the
+  primary `DB_*` service), and rejects fields that have no exact berth 9
+  equivalent, including `domain_strategy = "random"` and unknown schema
+  versions. 8.x preset-only services are pinned to the exact image the 8.x
+  catalog resolved (for example `postgres:18`), so migration never changes a
+  database major version. Legacy lockfiles are reported for regeneration, not
+  converted.
+- App services without an explicit `domain` now always get a generated
+  directory-based domain; projects that relied on having no generated domain
+  (7.0 configs without `domain_strategy`) see a new `APP_URL`.
+
 ### Changed
 
+- Berth reads only `.berth.yaml` project files using the strict
+  `schema_version: 9` schema: a required `project` name (lowercase DNS label
+  of at most 24 bytes) replaces `container_prefix`, services are a `services`
+  map keyed by name, and unknown fields or duplicate keys are rejected.
+  Runtime overrides are `.berth.<env>.yaml` and the lockfile is
+  `.berth.lock.yaml`. A legacy helm, stackctl or TOML project file fails with
+  an error naming `berth config migrate` instead of being read.
+- `berth init` writes a `schema_version: 9` `.berth.yaml` starter file.
 - Renamed the project from Stackctl to Berth: the crate and binary are now
   `berth`, configuration files use the `.berth.*` prefix, environment
   variables use `BERTH_*`, Docker labels use the `dev.berth.*` namespace, and
   generated service-manager units, domains and state paths use `berth`.
 
+### Removed
+
+- Removed `up --save-ports`, `recreate --save-ports` and
+  `env --sync --persist-runtime`, which wrote runtime ports back into the
+  committed project file and would conflict across parallel worktrees.
+
 ### Fixed
 
 - Isolated the swarm bootstrap test's fixture repository from the developer's
   global Git configuration so global commit hooks no longer fail the test.
+- Official PostgreSQL images tagged with major 18 or later now get their
+  data volume at `/var/lib/postgresql`; mounting `/var/lib/postgresql/data`
+  made their entrypoint refuse to start. Untagged, `latest` and digest-only
+  references keep the previous mount so existing data is never hidden.
 - Made test-only container engine overrides thread-local so tests no longer
   observe another test's Podman engine selection intermittently.
 

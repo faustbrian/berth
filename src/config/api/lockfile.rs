@@ -34,7 +34,7 @@ pub fn build_image_lock(config: &Config) -> Result<Lockfile> {
 /// Loads lockfile with from persisted or external state.
 pub fn load_lockfile_with(options: ProjectRootPathOptions<'_>) -> Result<Lockfile> {
     let path = super::config_io::resolve_lockfile_path(options)?;
-    super::config_io::read_toml_file(&path, "lockfile", "lockfile")
+    super::config_io::read_yaml_file(&path, "lockfile")
 }
 
 /// Saves lockfile with to persisted or external state.
@@ -43,7 +43,7 @@ pub fn save_lockfile_with(
     options: ProjectRootPathOptions<'_>,
 ) -> Result<PathBuf> {
     let path = super::config_io::resolve_lockfile_path(options)?;
-    super::config_io::write_toml_file(&path, lockfile, "lockfile", "lockfile")?;
+    super::config_io::write_yaml_file(&path, lockfile, "lockfile")?;
     Ok(path)
 }
 
@@ -51,7 +51,7 @@ pub fn save_lockfile_with(
 pub fn verify_lockfile_with(config: &Config, options: ProjectRootPathOptions<'_>) -> Result<()> {
     let expected = build_image_lock(config)?;
     let actual = load_lockfile_with(options)
-        .context("failed to load .berth.lock.toml; run `berth lock images` to generate it")?;
+        .context("failed to load .berth.lock.yaml; run `berth lock images` to generate it")?;
     let diff = lockfile_diff(&expected, &actual);
     if diff.missing.is_empty() && diff.changed.is_empty() && diff.extra.is_empty() {
         return Ok(());
@@ -142,7 +142,7 @@ mod tests {
     }
 
     fn config_path(root: &Path) -> std::path::PathBuf {
-        root.join(".berth.toml")
+        root.join(".berth.yaml")
     }
 
     #[test]

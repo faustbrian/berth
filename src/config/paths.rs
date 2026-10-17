@@ -46,11 +46,11 @@ pub(super) fn project_root_with(
 
 pub(super) fn init_config() -> Result<PathBuf> {
     let current_dir = std::env::current_dir().context("failed to get current directory")?;
-    let config_path = current_dir.join(".berth.toml");
+    let config_path = current_dir.join(crate::config::project_file::PROJECT_FILE_NAME);
 
     if config_path_in_dir(&current_dir)?.is_some() {
         anyhow::bail!(
-            "Berth config already exists in {} (.berth.toml or .berth.yaml)",
+            "berth project file already exists in {}",
             current_dir.display()
         );
     }
@@ -98,7 +98,7 @@ pub(super) fn resolve_lockfile_path(
     config_path: Option<&Path>,
     project_root: Option<&Path>,
 ) -> Result<PathBuf> {
-    Ok(project_root_with(config_path, project_root)?.join(".berth.lock.toml"))
+    Ok(project_root_with(config_path, project_root)?.join(".berth.lock.yaml"))
 }
 
 #[cfg(test)]
@@ -114,6 +114,8 @@ mod tests {
     use crate::config::ProjectRootPathOptions;
 
     static TEMP_ROOT_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    const V9_PROJECT: &str = "schema_version: 9\nproject: demo\nproject_type: project\n";
 
     fn temp_root() -> PathBuf {
         let sequence = TEMP_ROOT_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -134,8 +136,8 @@ mod tests {
         let root = temp_root();
         let nested = root.join("nested");
         fs::create_dir_all(&nested).expect("create nested");
-        fs::write(
-            root.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            root.join(".berth.yaml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed config");
@@ -150,8 +152,8 @@ mod tests {
         let root = temp_root();
         let nested = root.join("nested");
         fs::create_dir_all(&nested).expect("create nested");
-        fs::write(
-            root.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            root.join(".berth.yaml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed config");
@@ -166,8 +168,8 @@ mod tests {
         let root = temp_root();
         let nested = root.join("nested");
         fs::create_dir_all(&nested).expect("create nested");
-        fs::write(
-            root.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            root.join(".berth.yaml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed config");
@@ -188,7 +190,7 @@ mod tests {
         let _guard = super::CWD_LOCK.lock().expect("cwd lock");
         let root = temp_root();
         let cwd = std::env::current_dir().expect("current dir");
-        let original = root.join(".berth.toml");
+        let original = root.join(".berth.yaml");
 
         let found = {
             std::env::set_current_dir(&root).expect("set cwd");
@@ -209,7 +211,7 @@ mod tests {
         let _guard = super::CWD_LOCK.lock().expect("cwd lock");
         let root = temp_root();
         let existing = root.join(".berth.yaml");
-        fs::write(&existing, "schema_version: 1\nproject_type: project\n").expect("seed existing");
+        fs::write(&existing, V9_PROJECT).expect("seed existing");
 
         let cwd = std::env::current_dir().expect("current dir");
         std::env::set_current_dir(&root).expect("set cwd");
@@ -237,14 +239,14 @@ mod tests {
     #[test]
     fn resolve_config_path_prefers_env_specific_file_when_present() {
         let root = temp_root();
-        let env_config = root.join(".berth.testing.toml");
-        let default_config = root.join(".berth.toml");
-        fs::write(
+        let env_config = root.join(".berth.testing.yaml");
+        let default_config = root.join(".berth.yaml");
+        crate::config::project_file::write_test_config_file(
             &env_config,
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed env config");
-        fs::write(
+        crate::config::project_file::write_test_config_file(
             &default_config,
             "schema_version = 1\nproject_type = \"project\"\n",
         )
@@ -260,8 +262,8 @@ mod tests {
     #[test]
     fn resolve_config_path_falls_back_to_default_when_env_file_missing() {
         let root = temp_root();
-        let default_config = root.join(".berth.toml");
-        fs::write(
+        let default_config = root.join(".berth.yaml");
+        crate::config::project_file::write_test_config_file(
             &default_config,
             "schema_version = 1\nproject_type = \"project\"\n",
         )
@@ -278,11 +280,7 @@ mod tests {
     fn resolve_config_path_supports_yaml_default_config() {
         let root = temp_root();
         let default_config = root.join(".berth.yaml");
-        fs::write(
-            &default_config,
-            "schema_version: 1\nproject_type: project\nservice: []\nswarm: []\n",
-        )
-        .expect("seed default config");
+        fs::write(&default_config, V9_PROJECT).expect("seed default config");
 
         let resolved = resolve_config_path(None, Some(&root), None).expect("resolve yaml config");
         assert_eq!(resolved, default_config);
@@ -292,13 +290,9 @@ mod tests {
     fn resolve_config_path_supports_yaml_runtime_override() {
         let root = temp_root();
         let env_config = root.join(".berth.testing.yaml");
-        let default_config = root.join(".berth.toml");
-        fs::write(
-            &env_config,
-            "schema_version: 1\nproject_type: project\nservice: []\nswarm: []\n",
-        )
-        .expect("seed env config");
-        fs::write(
+        let default_config = root.join(".berth.yaml");
+        fs::write(&env_config, V9_PROJECT).expect("seed env config");
+        crate::config::project_file::write_test_config_file(
             &default_config,
             "schema_version = 1\nproject_type = \"project\"\n",
         )
@@ -312,36 +306,14 @@ mod tests {
     }
 
     #[test]
-    fn resolve_config_path_rejects_ambiguous_default_formats() {
-        let root = temp_root();
-        fs::write(
-            root.join(".berth.toml"),
-            "schema_version = 1\nproject_type = \"project\"\n",
-        )
-        .expect("seed toml config");
-        fs::write(
-            root.join(".berth.yaml"),
-            "schema_version: 1\nproject_type: project\n",
-        )
-        .expect("seed yaml config");
-
-        let error = resolve_config_path(None, Some(&root), None).expect_err("ambiguous config");
-        assert!(
-            error
-                .to_string()
-                .contains("both .berth.toml and .berth.yaml")
-        );
-    }
-
-    #[test]
     fn resolve_lockfile_path_uses_project_root_context() {
         let root = temp_root();
-        fs::write(
-            root.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            root.join(".berth.yaml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("seed config");
-        let expected = root.join(".berth.lock.toml");
+        let expected = root.join(".berth.lock.yaml");
 
         let resolved = resolve_lockfile_path(None, Some(&root)).expect("resolve lock path");
         assert_eq!(resolved, expected);
@@ -351,7 +323,7 @@ mod tests {
     fn project_root_with_errors_when_no_config_is_found() {
         let root = temp_root();
         let error = project_root_with(None, Some(&root)).unwrap_err();
-        assert!(error.to_string().contains("no Berth config found"));
+        assert!(error.to_string().contains("no berth project file"));
     }
 
     fn resolve_config_path_with_options(

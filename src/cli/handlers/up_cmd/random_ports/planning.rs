@@ -234,9 +234,8 @@ mod tests {
             fs::set_permissions(&docker, perms).expect("chmod fake docker");
         }
 
-        let config_path = root.join(".berth.toml");
-        fs::write(
-            &config_path,
+        let config_path = root.join(".berth.yaml");
+        crate::config::project_file::write_test_config_file(&config_path,
             "schema_version = 1\nproject_type = \"project\"\n[[service]]\nname = \"app\"\n[[service]]\nname = \"db\"\n",
         )
         .expect("write config");

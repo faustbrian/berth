@@ -3,14 +3,13 @@
 //! Contains config api load save logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::super::{Config, ContainerEngine, ProjectType, RawConfig, expansion, validation};
 use super::project::ProjectRootPathOptions;
 
 pub type RawConfigPathOptions<'a> = ProjectRootPathOptions<'a>;
 pub type LoadConfigPathOptions<'a> = ProjectRootPathOptions<'a>;
-pub type SaveConfigPathOptions<'a> = ProjectRootPathOptions<'a>;
 
 /// Loads the configuration file using default discovery.
 ///
@@ -44,8 +43,7 @@ pub fn load_config_with(options: LoadConfigPathOptions<'_>) -> Result<Config> {
 /// Loads raw config with from persisted or external state.
 pub(crate) fn load_raw_config_with(options: RawConfigPathOptions<'_>) -> Result<RawConfig> {
     let config_path = super::config_io::resolve_config_path(options)?;
-    let mut raw: RawConfig =
-        super::config_io::read_config_file(&config_path, "config file", "config file")?;
+    let mut raw = super::config_io::read_project_file(&config_path)?;
     raw.project_type = Some(resolve_project_type(&raw, &config_path)?);
     Ok(raw)
 }
@@ -78,7 +76,7 @@ fn resolve_project_type(raw: &RawConfig, config_path: &Path) -> Result<ProjectTy
         })?;
     if !composer_path.exists() {
         anyhow::bail!(
-            "Unable to resolve project_type: set .berth.toml or .berth.yaml project_type or composer.json type \
+            "Unable to resolve project_type: set project_type in .berth.yaml or composer.json type \
              (\"project\" or \"library\"). composer.json not found at {}",
             composer_path.display()
         );
@@ -102,7 +100,7 @@ fn resolve_project_type(raw: &RawConfig, config_path: &Path) -> Result<ProjectTy
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Unable to resolve project_type: set .berth.toml or .berth.yaml project_type or composer.json \
+                "Unable to resolve project_type: set project_type in .berth.yaml or composer.json \
                  type (\"project\" or \"library\"). composer.json missing \"type\" at {}",
                 composer_path.display()
             )
@@ -112,23 +110,12 @@ fn resolve_project_type(raw: &RawConfig, config_path: &Path) -> Result<ProjectTy
         "project" => Ok(ProjectType::Project),
         "library" => Ok(ProjectType::Library),
         _ => anyhow::bail!(
-            "Unable to resolve project_type: set .berth.toml or .berth.yaml project_type or composer.json type \
+            "Unable to resolve project_type: set project_type in .berth.yaml or composer.json type \
              (\"project\" or \"library\"). composer.json type was \"{}\" at {}",
             composer_type,
             composer_path.display()
         ),
     }
-}
-
-/// Saves configuration back to the detected Berth config format.
-///
-/// # Errors
-///
-/// Returns an error if the config path cannot be resolved or writing fails.
-pub fn save_config_with(config: &Config, options: SaveConfigPathOptions<'_>) -> Result<PathBuf> {
-    let path = super::config_io::resolve_config_path(options)?;
-    super::config_io::write_config_file(&path, config, "config", "config file")?;
-    Ok(path)
 }
 
 #[cfg(test)]
@@ -153,9 +140,8 @@ mod tests {
     #[test]
     fn load_container_engine_prefers_configured_value() {
         let root = temp_root();
-        let config_path = root.join(".berth.toml");
-        fs::write(
-            &config_path,
+        let config_path = root.join(".berth.yaml");
+        crate::config::project_file::write_test_config_file(&config_path,
             "schema_version = 1\nproject_type = \"project\"\ncontainer_engine = \"podman\"\nservice = []\n",
         )
         .expect("write config");
@@ -170,8 +156,8 @@ mod tests {
     #[test]
     fn load_container_engine_detects_project_type_from_composer_type() {
         let root = temp_root();
-        let config_path = root.join(".berth.toml");
-        fs::write(
+        let config_path = root.join(".berth.yaml");
+        crate::config::project_file::write_test_config_file(
             &config_path,
             "schema_version = 1\ncontainer_engine = \"podman\"\nservice = []\n",
         )
@@ -188,8 +174,12 @@ mod tests {
     #[test]
     fn load_container_engine_fails_when_project_type_is_unresolved() {
         let root = temp_root();
-        let config_path = root.join(".berth.toml");
-        fs::write(&config_path, "schema_version = 1\nservice = []\n").expect("write config");
+        let config_path = root.join(".berth.yaml");
+        crate::config::project_file::write_test_config_file(
+            &config_path,
+            "schema_version = 1\nservice = []\n",
+        )
+        .expect("write config");
 
         let error =
             load_container_engine_with(LoadConfigPathOptions::new(Some(&config_path), None))
@@ -203,7 +193,7 @@ mod tests {
         let config_path = root.join(".berth.yaml");
         fs::write(
             &config_path,
-            "schema_version: 1\nproject_type: project\ncontainer_engine: podman\nservice: []\nswarm: []\n",
+            "schema_version: 9\nproject: demo\nproject_type: project\ncontainer_engine: podman\n",
         )
         .expect("write config");
 
@@ -212,31 +202,5 @@ mod tests {
                 .expect("load engine");
 
         assert_eq!(engine, Some(ContainerEngine::Podman));
-    }
-
-    #[test]
-    fn save_config_preserves_yaml_format() {
-        let root = temp_root();
-        let config_path = root.join(".berth.yaml");
-        fs::write(
-            &config_path,
-            "schema_version: 1\nproject_type: project\ncontainer_prefix: demo\nservice: []\nswarm: []\n",
-        )
-        .expect("write config");
-
-        let mut config =
-            super::load_config_with(LoadConfigPathOptions::new(Some(&config_path), None))
-                .expect("load config");
-        config.container_prefix = Some("updated".to_owned());
-
-        let saved_path = super::save_config_with(
-            &config,
-            super::SaveConfigPathOptions::new(Some(&config_path), None),
-        )
-        .expect("save config");
-        let saved_content = fs::read_to_string(saved_path).expect("read saved config");
-
-        assert!(saved_content.contains("container_prefix: updated"));
-        assert!(!saved_content.contains("container_prefix = \"updated\""));
     }
 }

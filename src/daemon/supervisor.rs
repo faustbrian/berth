@@ -111,7 +111,6 @@ fn recover_if_needed(project_root: &Path) -> Result<Vec<String>> {
             no_publish_all: false,
             port_strategy: PortStrategyArg::Random,
             port_seed: None,
-            save_ports: false,
             env_output: false,
             include_project_deps: true,
             seed: false,

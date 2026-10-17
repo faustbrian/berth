@@ -45,7 +45,16 @@ fn discover_dir(
         return Ok(());
     }
 
-    if config::config_path_in_dir(dir)?.is_some() {
+    // A directory whose project file cannot even be located (for example a
+    // legacy-only stackctl project) is reported, never fatal for siblings.
+    let located = match config::config_path_in_dir(dir) {
+        Ok(located) => located,
+        Err(_) => {
+            report.invalid_configs.push(dir.to_path_buf());
+            return Ok(());
+        }
+    };
+    if located.is_some() {
         match config::load_config_with(config::LoadConfigPathOptions::new(None, Some(dir))) {
             Ok(_) => {
                 let project_root = config::project_root_with(config::ProjectRootPathOptions::new(
@@ -130,8 +139,8 @@ mod tests {
 
     fn write_project(root: &PathBuf) {
         fs::create_dir_all(root).expect("create project root");
-        fs::write(
-            root.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            root.join(".berth.yaml"),
             "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
         )
         .expect("write berth config");
@@ -170,12 +179,34 @@ mod tests {
     }
 
     #[test]
+    fn discover_projects_reports_legacy_only_projects_and_keeps_valid_siblings() {
+        let root = temp_root("legacy");
+        let legacy = root.join("legacy");
+        fs::create_dir_all(&legacy).expect("create legacy dir");
+        fs::write(
+            legacy.join(".stackctl.toml"),
+            "container_prefix = \"old\"\n",
+        )
+        .expect("write legacy config");
+        let valid = root.join("valid");
+        write_project(&valid);
+
+        let report = discover_projects(&DiscoveryOptions {
+            watch_dirs: vec![root],
+            ..DiscoveryOptions::default()
+        })
+        .expect("a legacy sibling must not abort discovery");
+        assert_eq!(report.projects, vec![valid]);
+        assert_eq!(report.invalid_configs, vec![legacy]);
+    }
+
+    #[test]
     fn discover_projects_reports_invalid_configs_and_keeps_valid_siblings() {
         let root = temp_root("invalid");
         let invalid = root.join("invalid");
         fs::create_dir_all(&invalid).expect("create invalid dir");
-        fs::write(
-            invalid.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            invalid.join(".berth.yaml"),
             "schema_version = 1\nservice = []\n",
         )
         .expect("write invalid config");
@@ -238,7 +269,7 @@ mod tests {
         fs::create_dir_all(&project).expect("create project root");
         fs::write(
             project.join(".berth.yaml"),
-            "schema_version: 1\nproject_type: project\nservice: []\nswarm: []\n",
+            "schema_version: 9\nproject: demo\nproject_type: project\n",
         )
         .expect("write yaml config");
 

@@ -11,6 +11,7 @@ mod domain_names;
 mod expansion;
 mod paths;
 mod presets;
+pub(crate) mod project_file;
 mod raw;
 mod runtime_env;
 mod service_methods;
@@ -18,19 +19,19 @@ mod services;
 #[cfg(test)]
 mod tests;
 mod types;
+mod unique_map;
 mod validation;
 
-pub(crate) use api::load_raw_config_with;
 pub use api::{
     LoadConfigPathOptions, LockfileDiff, MigrateConfigOptions, ProjectRootPathOptions,
-    RawConfigPathOptions, SaveConfigPathOptions, apply_runtime_env, build_image_lock,
-    config_path_in_dir, default_env_file_name, find_service, init_config, load_config,
-    load_config_with, load_container_engine_with, load_lockfile_with, lockfile_diff,
-    migrate_config_with, preferred_sql_client_flavor, preset_names, preset_preview, project_root,
-    project_root_with, resolve_app_service, resolve_service, save_config_with, save_lockfile_with,
-    update_service_host_port, update_service_port, verify_lockfile_with,
+    RawConfigPathOptions, apply_runtime_env, build_image_lock, config_path_in_dir,
+    default_env_file_name, find_service, init_config, load_config, load_config_with,
+    load_container_engine_with, load_lockfile_with, lockfile_diff, preferred_sql_client_flavor,
+    preset_names, preset_preview, project_root, project_root_with, resolve_app_service,
+    resolve_service, save_lockfile_with, verify_lockfile_with,
 };
-pub(crate) use raw::{RawConfig, RawServiceConfig};
+pub(crate) use api::{load_raw_config_with, migrate_config_with};
+pub(crate) use raw::{RawConfig, RawServiceConfig, RawSwarmTarget};
 pub(crate) use service_methods::network::{
     is_unspecified_port_allocation_host, normalize_host_for_port_allocation,
 };

@@ -42,7 +42,7 @@ pub(crate) use operations::{
 #[derive(Subcommand)]
 #[non_exhaustive]
 pub(crate) enum Commands {
-    /// Initialize a new .berth.toml config file
+    /// Initialize a new .berth.yaml project file
     Init,
     /// Print resolved configuration
     Config(ConfigArgs),

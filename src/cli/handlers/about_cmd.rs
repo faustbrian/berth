@@ -23,7 +23,7 @@ pub(crate) fn handle_about(
         .unwrap_or_else(|| {
             config::config_path_in_dir(&project_root)?.ok_or_else(|| {
                 anyhow::anyhow!(
-                    "missing Berth config (.berth.toml or .berth.yaml) at {}",
+                    "missing Berth config (.berth.yaml) at {}",
                     project_root.display()
                 )
             })

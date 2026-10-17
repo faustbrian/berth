@@ -160,4 +160,38 @@ mod tests {
             assert!(!rendered.contains("--add-host"));
         });
     }
+
+    #[test]
+    fn migrated_8x_postgres_preset_mounts_the_postgres_18_data_directory() {
+        let dir =
+            std::env::temp_dir().join(format!("berth-migrated-postgres-{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&dir));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        std::fs::write(dir.join("composer.json"), "{\"type\":\"project\"}").expect("composer");
+        let converted = crate::config::project_file::convert_legacy_config(
+            "schema_version: 8\nproject: bill\nservices:\n  db:\n    preset: postgres\n",
+            &dir.join(".stackctl.yaml"),
+        )
+        .expect("convert 8.x file");
+        let config_path = dir.join(".berth.yaml");
+        std::fs::write(&config_path, converted.content).expect("write berth 9 file");
+
+        let config = crate::config::load_config_with(crate::config::LoadConfigPathOptions::new(
+            Some(&config_path),
+            None,
+        ))
+        .expect("load migrated config");
+        let db = config
+            .service
+            .iter()
+            .find(|service| service.name == "db")
+            .expect("db service");
+        let args = build_run_args(db, "bill-db");
+
+        assert!(
+            args.iter()
+                .any(|arg| arg == "bill-db-data:/var/lib/postgresql"),
+            "postgres 18 must not mount /var/lib/postgresql/data: {args:?}"
+        );
+    }
 }

@@ -83,8 +83,8 @@ mod tests {
         ));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).expect("create temporary project root");
-        let config_path = dir.join(".berth.toml");
-        fs::write(
+        let config_path = dir.join(".berth.yaml");
+        crate::config::project_file::write_test_config_file(
             &config_path,
             "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
         )
@@ -127,9 +127,8 @@ mod tests {
     #[test]
     fn run_applies_container_engine_from_config() {
         let project_root = minimal_config_dir();
-        let config_path = project_root.join(".berth.toml");
-        fs::write(
-            &config_path,
+        let config_path = project_root.join(".berth.yaml");
+        crate::config::project_file::write_test_config_file(&config_path,
             "schema_version = 1\nproject_type = \"project\"\ncontainer_engine = \"podman\"\nservice = []\nswarm = []\n",
         )
         .expect("write podman config");

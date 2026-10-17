@@ -116,8 +116,12 @@ mod tests {
     }
 
     fn config_path(root: &Path) -> std::path::PathBuf {
-        let path = root.join(".berth.toml");
-        fs::write(&path, "schema_version = 1\nproject_type = \"project\"\n").expect("write config");
+        let path = root.join(".berth.yaml");
+        crate::config::project_file::write_test_config_file(
+            &path,
+            "schema_version = 1\nproject_type = \"project\"\n",
+        )
+        .expect("write config");
         path
     }
 

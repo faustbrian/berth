@@ -6,6 +6,6 @@ use clap::Subcommand;
 
 #[derive(Subcommand)]
 pub(crate) enum ConfigCommands {
-    /// Migrate local .berth.toml or .berth.yaml to the latest supported schema
+    /// Convert helm, stackctl and .berth.toml project files into .berth.yaml
     Migrate,
 }

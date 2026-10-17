@@ -35,28 +35,3 @@ pub fn resolve_app_service<'a>(
 ) -> Result<&'a ServiceConfig> {
     services::resolve_app_service(config, name)
 }
-
-/// Updates a configured service port by name.
-///
-/// # Errors
-///
-/// Returns an error if the service name cannot be found.
-pub fn update_service_port(config: &mut Config, name: &str, port: u16) -> Result<()> {
-    services::update_service_port(config, name, port)
-}
-
-/// Updates a configured service host and port by name.
-///
-/// Returns true when any value changed.
-///
-/// # Errors
-///
-/// Returns an error if the service name cannot be found.
-pub fn update_service_host_port(
-    config: &mut Config,
-    name: &str,
-    host: &str,
-    port: u16,
-) -> Result<bool> {
-    services::update_service_host_port(config, name, host, port)
-}

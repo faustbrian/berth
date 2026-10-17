@@ -139,8 +139,8 @@ mod tests {
                 .as_nanos()
         ));
         fs::create_dir_all(root.join("config")).expect("create temp project");
-        fs::write(
-            root.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            root.join(".berth.yaml"),
             "schema_version = 1\nproject_type = \"project\"\ncontainer_prefix = \"acme\"\n[[service]]\npreset = \"laravel\"\nname = \"app\"\n",
         )
         .expect("write temp config");

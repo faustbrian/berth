@@ -16,7 +16,6 @@ pub(super) struct PreparedUpContext {
 pub(super) struct PrepareUpContextOptions<'a> {
     pub(super) repro: bool,
     pub(super) env_output: bool,
-    pub(super) save_ports: bool,
     pub(super) config_path: Option<&'a Path>,
     pub(super) project_root: Option<&'a Path>,
     pub(super) include_project_deps: bool,
@@ -31,7 +30,7 @@ pub(super) fn prepare_up_context(
     options: PrepareUpContextOptions<'_>,
 ) -> Result<PreparedUpContext> {
     if options.repro {
-        super::options::validate_repro_flags(options.env_output, options.save_ports)?;
+        super::options::validate_repro_flags(options.env_output)?;
         config::verify_lockfile_with(
             config,
             config::ProjectRootPathOptions::new(options.config_path, options.project_root),
@@ -99,8 +98,8 @@ mod tests {
                 .as_nanos()
         ));
         fs::create_dir_all(&root)?;
-        fs::write(
-            root.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            root.join(".berth.yaml"),
             r#"
 project_type = "project"
 [[swarm]]
@@ -120,7 +119,6 @@ value = ":base_url"
             PrepareUpContextOptions {
                 repro: false,
                 env_output: false,
-                save_ports: false,
                 config_path: None,
                 project_root: Some(&root),
                 include_project_deps: false,

@@ -241,8 +241,8 @@ mod tests {
         ));
         drop(fs::remove_dir_all(&root));
         fs::create_dir_all(&root).expect("create project root");
-        fs::write(
-            root.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            root.join(".berth.yaml"),
             "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
         )
         .expect("write berth config");
@@ -327,8 +327,8 @@ mod tests {
         let watch_root = temp_home("watch-root");
         let project_root = watch_root.join("project-a");
         fs::create_dir_all(&project_root).expect("create project root");
-        fs::write(
-            project_root.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            project_root.join(".berth.yaml"),
             "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
         )
         .expect("write berth config");

@@ -117,15 +117,15 @@ fn loads_testing_config_when_present_and_falls_back_to_default() {
     let default_service = service_toml("default");
     let testing_service = service_toml("testing");
 
-    fs::write(
-        root.join(".berth.toml"),
+    config::project_file::write_test_config_file(
+            root.join(".berth.yaml"),
         format!(
             "schema_version = 1\nproject_type = \"project\"\ncontainer_prefix = \"test\"\nservice = [{default_service}]\nswarm = []\n"
         ),
     )
     .expect("write default config");
-    fs::write(
-        root.join(".berth.testing.toml"),
+    config::project_file::write_test_config_file(
+            root.join(".berth.testing.yaml"),
         format!(
             "schema_version = 1\nproject_type = \"project\"\ncontainer_prefix = \"test\"\nservice = [{testing_service}]\nswarm = []\n"
         ),
@@ -135,7 +135,7 @@ fn loads_testing_config_when_present_and_falls_back_to_default() {
     let loaded = load_artisan_test_base_config(None, None, &root).expect("load testing config");
     assert_eq!(loaded.service[0].name, "testing");
 
-    fs::remove_file(root.join(".berth.testing.toml")).expect("remove testing config");
+    fs::remove_file(root.join(".berth.testing.yaml")).expect("remove testing config");
     let fallback = load_artisan_test_base_config(None, None, &root).expect("load fallback config");
     assert_eq!(fallback.service[0].name, "default");
 }

@@ -124,8 +124,8 @@ mod tests {
                 .as_nanos()
         ));
         fs::create_dir_all(&workspace_root).expect("create workspace root");
-        fs::write(
-            workspace_root.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            workspace_root.join(".berth.yaml"),
             "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
         )
         .expect("seed workspace config");
@@ -156,8 +156,12 @@ mod tests {
         ));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).expect("create temp workspace");
-        let path = dir.join(".berth.toml");
-        fs::write(&path, "schema_version = 1\nproject_type = \"project\"\n").expect("write config");
+        let path = dir.join(".berth.yaml");
+        crate::config::project_file::write_test_config_file(
+            &path,
+            "schema_version = 1\nproject_type = \"project\"\n",
+        )
+        .expect("write config");
 
         let cfg = config();
         let context = resolve_app_runtime_context(&cfg, None, Some(&path), None)
@@ -188,8 +192,8 @@ mod tests {
         ));
         let location_root = workspace_root.join("location");
         fs::create_dir_all(&location_root).expect("create dependency workspace");
-        fs::write(
-            workspace_root.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            workspace_root.join(".berth.yaml"),
             r#"
 project_type = "project"
 [[swarm]]
@@ -208,8 +212,8 @@ root = "location"
 "#,
         )
         .expect("write workspace config");
-        fs::write(
-            location_root.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            location_root.join(".berth.yaml"),
             r#"
 project_type = "project"
 container_prefix = "location"

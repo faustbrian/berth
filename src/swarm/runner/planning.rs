@@ -107,8 +107,11 @@ mod tests {
     fn target(name: &str) -> SwarmTarget {
         let root = std::env::temp_dir().join(format!("berth-swarm-target-{name}"));
         std::fs::create_dir_all(&root).expect("create target root");
-        std::fs::write(root.join(".berth.toml"), "container_prefix = \"test\"\n")
-            .expect("write target config");
+        crate::config::project_file::write_test_config_file(
+            root.join(".berth.yaml"),
+            "container_prefix = \"test\"\n",
+        )
+        .expect("write target config");
         SwarmTarget {
             name: name.to_owned(),
             root,

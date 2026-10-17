@@ -143,21 +143,11 @@ fn swarm_cli_parses_env_output_flag() {
 }
 
 #[test]
-fn env_cli_persist_runtime_requires_sync_and_parses_when_enabled() {
-    let invalid = Cli::try_parse_from(["berth", "env", "--persist-runtime"]);
-    assert!(invalid.is_err());
-
-    let valid = Cli::try_parse_from(["berth", "env", "--sync", "--persist-runtime"])
-        .expect("parse env persist-runtime");
-    match valid.command {
-        Commands::Env(args) => {
-            assert!(args.sync);
-            assert!(!args.purge);
-            assert!(args.persist_runtime);
-            assert!(!args.create_missing);
-        }
-        _ => panic!("expected env command"),
-    }
+fn removed_config_rewriting_flags_are_rejected() {
+    // Berth never writes runtime ports back into the committed project file.
+    assert!(Cli::try_parse_from(["berth", "env", "--sync", "--persist-runtime"]).is_err());
+    assert!(Cli::try_parse_from(["berth", "up", "-P", "--save-ports"]).is_err());
+    assert!(Cli::try_parse_from(["berth", "recreate", "-P", "--save-ports"]).is_err());
 }
 
 #[test]

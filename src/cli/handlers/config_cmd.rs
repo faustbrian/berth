@@ -19,12 +19,25 @@ pub(crate) fn handle_config_migrate(
     config_path: Option<&Path>,
     project_root: Option<&Path>,
 ) -> Result<()> {
-    let path = config::migrate_config_with(config::MigrateConfigOptions {
+    let migrated = config::migrate_config_with(config::MigrateConfigOptions {
         config_path,
         project_root,
         runtime_env: None,
     })?;
-    log::info_if_not_quiet(quiet, "config", &format!("Migrated {}", path.display()));
+    for file in migrated {
+        log::info_if_not_quiet(
+            quiet,
+            "config",
+            &format!(
+                "Converted {} to {}",
+                file.source.display(),
+                file.target.display()
+            ),
+        );
+        for note in file.notes {
+            log::info_if_not_quiet(quiet, "config", &format!("  {note}"));
+        }
+    }
     Ok(())
 }
 
@@ -105,12 +118,6 @@ mod tests {
         root
     }
 
-    fn write_config(root: &std::path::Path, content: &str) -> std::path::PathBuf {
-        let path = root.join(".berth.toml");
-        fs::write(&path, content).expect("write config");
-        path
-    }
-
     #[test]
     fn handle_config_renders_supported_formats() -> Result<()> {
         let cfg = base_config();
@@ -126,10 +133,11 @@ mod tests {
     }
 
     #[test]
-    fn handle_config_migrate_writes_file_at_explicit_path() -> Result<()> {
+    fn handle_config_migrate_converts_the_legacy_file_beside_the_config_path() -> Result<()> {
         let root = temp_root();
-        let config_path = write_config(
-            &root,
+        let legacy_path = root.join(".stackctl.toml");
+        fs::write(
+            &legacy_path,
             r#"
 schema_version = 1
 project_type = "project"
@@ -141,10 +149,12 @@ kind = "app"
 driver = "frankenphp"
 image = "nginx:1.29"
 "#,
-        );
+        )?;
 
-        handle_config_migrate(false, Some(&config_path), None)?;
-        assert!(config_path.exists());
+        handle_config_migrate(false, Some(&legacy_path), None)?;
+        let migrated = fs::read_to_string(root.join(".berth.yaml"))?;
+        assert!(migrated.contains("schema_version: 9"), "{migrated}");
+        assert!(migrated.contains("project: berth"), "{migrated}");
         Ok(())
     }
 
@@ -153,5 +163,13 @@ image = "nginx:1.29"
         let root = temp_root();
         let result = handle_config_migrate(false, Some(&root.join("missing.toml")), None);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn handle_config_migrate_rejects_a_config_path_that_is_not_a_legacy_project_file() {
+        let root = temp_root();
+        let error = handle_config_migrate(false, Some(&root.join("ci.toml")), None)
+            .expect_err("arbitrary file names are not migrated");
+        assert!(error.to_string().contains("ci.toml"), "{error}");
     }
 }

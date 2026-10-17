@@ -7,13 +7,16 @@ fn resolve_swarm_targets_includes_dependencies_by_default() -> Result<()> {
     std::fs::create_dir_all(base.join("api"))?;
     std::fs::create_dir_all(base.join("bill"))?;
     std::fs::create_dir_all(base.join("postal"))?;
-    std::fs::write(base.join("api/.berth.toml"), "container_prefix = \"api\"\n")?;
-    std::fs::write(
-        base.join("bill/.berth.toml"),
+    crate::config::project_file::write_test_config_file(
+        base.join("api/.berth.yaml"),
+        "container_prefix = \"api\"\n",
+    )?;
+    crate::config::project_file::write_test_config_file(
+        base.join("bill/.berth.yaml"),
         "container_prefix = \"bill\"\n",
     )?;
-    std::fs::write(
-        base.join("postal/.berth.toml"),
+    crate::config::project_file::write_test_config_file(
+        base.join("postal/.berth.yaml"),
         "container_prefix = \"postal\"\n",
     )?;
 

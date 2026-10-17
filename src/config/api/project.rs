@@ -48,7 +48,7 @@ pub fn project_root_with(options: ProjectRootPathOptions<'_>) -> Result<PathBuf>
     paths::project_root_with(options.config_path, options.project_root)
 }
 
-/// Creates a starter `.berth.toml` in the current directory.
+/// Creates a starter `.berth.yaml` in the current directory.
 ///
 /// # Errors
 ///

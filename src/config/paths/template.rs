@@ -1,72 +1,67 @@
 //! config paths template module.
 //!
-//! Contains config paths template logic used by Berth command workflows.
+//! Contains the starter `.berth.yaml` written by `berth init`.
 
 use crate::config::domain_names::sanitize_project_slug;
+use crate::config::project_file::schema::MAX_PROJECT_NAME_LEN;
 
-/// Builds default `.berth.toml` template content for the given project name.
+/// Builds default `.berth.yaml` template content for the given project name.
 #[must_use]
 pub(super) fn default_config_template(project_name: &str) -> String {
-    let slug = sanitize_project_slug(project_name);
+    let mut slug = sanitize_project_slug(project_name);
+    slug.truncate(MAX_PROJECT_NAME_LEN);
+    let slug = slug.trim_end_matches('-');
     format!(
-        r#"schema_version = 1
-project_type = "project"
-container_engine = "docker"
-container_prefix = "{slug}"
-domain_strategy = "directory"
+        r#"schema_version: 9
+project: {slug}
+project_type: project
+container_engine: docker
 
-[[service]]
-preset = "laravel"
-name = "app"
-# depends_on = ["db", "redis"]
-#
-# Optional lifecycle hooks:
-# [[service.hook]]
-# name = "seed-dev-user"
-# phase = "post_up"
-# on_error = "fail"
-# [service.hook.run]
-# type = "exec"
-# argv = ["php", "artisan", "db:seed", "--class=DevUserSeeder"]
+services:
+  app:
+    preset: laravel
+    # depends_on: [db, redis]
+    #
+    # Optional lifecycle hooks:
+    # hook:
+    #   - name: seed-dev-user
+    #     phase: post_up
+    #     on_error: fail
+    #     run:
+    #       type: exec
+    #       argv: [php, artisan, db:seed, --class=DevUserSeeder]
 
-[[service]]
-preset = "mysql"
-name = "db"
+  db:
+    preset: mysql
 
-[[service]]
-preset = "redis"
+  redis:
+    preset: redis
 
-# Optional services:
-#[[service]]
-# preset = "minio"
-# name = "s3"
-
-#[[service]]
-# preset = "meilisearch"
-# name = "search"
-
-#[[service]]
-# preset = "mailhog"
-# name = "mailhog"
-
-#[[service]]
-# preset = "dusk"
-# name = "dusk"
-# depends_on = ["app"]
-    "#
+  # Optional services:
+  # s3:
+  #   preset: minio
+  # search:
+  #   preset: meilisearch
+  # mailhog:
+  #   preset: mailhog
+  # dusk:
+  #   preset: dusk
+  #   depends_on: [app]
+"#
     )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::default_config_template;
-    use crate::config::{DomainStrategy, RawConfig};
+    use std::path::Path;
 
-    /// Returns the default value for template is valid toml and preset driven.
+    use super::default_config_template;
+    use crate::config::project_file::parse_project_file;
+
     #[test]
-    fn default_template_is_valid_toml_and_preset_driven() {
-        let raw: RawConfig =
-            toml::from_str(&default_config_template("my app")).expect("parse template TOML");
+    fn default_template_is_valid_v9_yaml_and_preset_driven() {
+        let raw = parse_project_file(&default_config_template("my app"), Path::new(".berth.yaml"))
+            .expect("template parses as a berth 9 project file");
         assert_eq!(raw.project_type, Some(crate::config::ProjectType::Project));
         let presets: Vec<_> = raw
             .service
@@ -78,25 +73,21 @@ mod tests {
     }
 
     #[test]
-    fn default_template_uses_sanitized_project_slug_for_prefix_and_domain() {
-        let raw: RawConfig =
-            toml::from_str(&default_config_template("Billing API")).expect("parse template TOML");
-
-        assert_eq!(raw.container_prefix.as_deref(), Some("billing-api"));
-        assert_eq!(raw.domain_strategy, Some(DomainStrategy::Directory));
-
-        let app = raw
-            .service
-            .iter()
-            .find(|service| service.name.as_deref() == Some("app"))
-            .expect("app service present");
-        assert_eq!(app.domain, None);
+    fn default_template_uses_sanitized_bounded_project_slug() {
+        let raw = parse_project_file(
+            &default_config_template("Billing API for the Whole Company Group"),
+            Path::new(".berth.yaml"),
+        )
+        .expect("template parses");
+        let project = raw.container_prefix.as_deref().expect("project name");
+        assert!(project.starts_with("billing-api"), "{project}");
+        assert!(project.len() <= 24, "{project}");
     }
 
     #[test]
     fn default_template_falls_back_when_project_name_has_no_ascii_alnum() {
-        let raw: RawConfig =
-            toml::from_str(&default_config_template("___")).expect("parse template TOML");
+        let raw = parse_project_file(&default_config_template("___"), Path::new(".berth.yaml"))
+            .expect("template parses");
 
         assert_eq!(raw.container_prefix.as_deref(), Some("my-app"));
     }

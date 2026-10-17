@@ -92,9 +92,6 @@ pub(crate) struct EnvArgs {
     /// Remove stale Berth-managed app env vars missing from sync/config
     #[arg(long, default_value_t = false)]
     pub(crate) purge: bool,
-    /// Persist discovered runtime host/port bindings into `.berth.toml`
-    #[arg(long, default_value_t = false, requires = "sync")]
-    pub(crate) persist_runtime: bool,
     #[arg(long, default_value_t = false)]
     pub(crate) create_missing: bool,
 }

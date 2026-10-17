@@ -26,11 +26,9 @@ pub(super) fn dispatch_primary(
     match &cli.command {
         Commands::Init | Commands::Completions(_) => Some(Ok(())),
         Commands::Config(args) => Some(match args.command {
-            Some(ConfigCommands::Migrate) => handlers::handle_config_migrate(
-                context.quiet(),
-                context.config_path(),
-                context.project_root(),
-            ),
+            Some(ConfigCommands::Migrate) => Err(anyhow::anyhow!(
+                "`config migrate` is dispatched before config loading"
+            )),
             None => handlers::handle_config(config, &args.format),
         }),
         Commands::Preset(args) => Some(match &args.command {

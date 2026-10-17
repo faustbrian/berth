@@ -98,12 +98,12 @@ mod tests {
         ));
         drop(std::fs::remove_dir_all(&path));
         std::fs::create_dir_all(&path).expect("create temp workspace");
-        std::fs::write(
-            path.join(".berth.toml"),
+        crate::config::project_file::write_test_config_file(
+            path.join(".berth.yaml"),
             "schema_version = 1\nproject_type = \"project\"\n",
         )
         .expect("write config");
-        path.join(".berth.toml")
+        path.join(".berth.yaml")
     }
 
     #[test]

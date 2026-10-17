@@ -22,7 +22,6 @@ pub(crate) struct HandleEnvOptions<'a> {
     pub(crate) env_file: &'a Option<PathBuf>,
     pub(crate) sync: bool,
     pub(crate) purge: bool,
-    pub(crate) persist_runtime: bool,
     pub(crate) create_missing: bool,
     pub(crate) quiet: bool,
     pub(crate) config_path: Option<&'a Path>,
@@ -42,7 +41,7 @@ pub(crate) fn handle_env(config: &mut config::Config, options: HandleEnvOptions<
         options.runtime_env,
     )?;
 
-    if options.sync || options.purge || options.persist_runtime {
+    if options.sync || options.purge {
         return managed::handle_managed_env_update(
             config,
             ManagedEnvUpdateOptions {
@@ -51,11 +50,8 @@ pub(crate) fn handle_env(config: &mut config::Config, options: HandleEnvOptions<
                 env_path: &env_path,
                 sync: options.sync,
                 purge: options.purge,
-                persist_runtime: options.persist_runtime,
                 create_missing: options.create_missing,
                 quiet: options.quiet,
-                config_path: options.config_path,
-                project_root: options.project_root,
             },
         );
     }

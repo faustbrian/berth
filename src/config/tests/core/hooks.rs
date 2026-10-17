@@ -9,8 +9,8 @@ fn load_config_with_parses_service_hooks() {
     let root = std::env::temp_dir().join(format!("berth-config-hooks-{nonce}"));
     std::fs::create_dir_all(&root).expect("create temp config directory");
 
-    let config_path = root.join(".berth.toml");
-    std::fs::write(
+    let config_path = root.join(".berth.yaml");
+    project_file::write_test_config_file(
         &config_path,
         r#"
                 project_type = "project"

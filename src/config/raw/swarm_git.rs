@@ -5,6 +5,7 @@
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RawSwarmGit {
     pub repo: String,
     #[serde(default)]

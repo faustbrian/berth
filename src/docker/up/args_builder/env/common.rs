@@ -32,10 +32,51 @@ pub(super) fn append_custom_env(args: &mut Vec<String>, service: &ServiceConfig)
     }
 }
 
+/// Returns the data mount for a PostgreSQL image.
+///
+/// Official `postgres` images from major 18 set `PGDATA` below a version
+/// directory and declare `VOLUME /var/lib/postgresql`; their entrypoint refuses
+/// to start when `/var/lib/postgresql/data` is a mount point
+/// (docker-library/postgres `docker-entrypoint.sh`, `OLD_DATABASES` check).
+/// Only a tag that names major 18 or later selects the new path: an untagged,
+/// `latest` or digest-only reference may be a cached pre-18 image whose data
+/// already lives at the classic path, so it keeps the 7.0 mount unchanged.
+/// Older majors and other PostgreSQL distributions keep the classic path.
+fn postgres_data_dir(image: &str) -> &'static str {
+    let (repository, tag) = split_image_reference(image);
+    let official = matches!(
+        repository,
+        "postgres" | "library/postgres" | "docker.io/library/postgres" | "docker.io/postgres"
+    );
+    if !official {
+        return "/var/lib/postgresql/data";
+    }
+    let major = tag
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect::<String>()
+        .parse::<u32>()
+        .ok();
+    match major {
+        Some(18..) => "/var/lib/postgresql",
+        _ => "/var/lib/postgresql/data",
+    }
+}
+
+/// Splits `repository[:tag][@digest]` into repository and tag (`latest` when
+/// absent). A registry port such as `host:5000/x` is not mistaken for a tag.
+fn split_image_reference(image: &str) -> (&str, &str) {
+    let without_digest = image.split('@').next().unwrap_or(image);
+    match without_digest.rsplit_once(':') {
+        Some((repository, tag)) if !tag.contains('/') => (repository, tag),
+        _ => (without_digest, "latest"),
+    }
+}
+
 fn default_persistent_data_dir(service: &ServiceConfig) -> Option<&'static str> {
     match service.driver {
         Driver::Mongodb => Some("/data/db"),
-        Driver::Postgres => Some("/var/lib/postgresql/data"),
+        Driver::Postgres => Some(postgres_data_dir(&service.image)),
         Driver::Mysql => Some("/var/lib/mysql"),
         Driver::Sqlserver => Some("/var/opt/mssql"),
         Driver::Redis | Driver::Valkey | Driver::Dragonfly => Some("/data"),
@@ -56,5 +97,58 @@ fn default_persistent_data_dir(service: &ServiceConfig) -> Option<&'static str> 
         | Driver::Mailhog
         | Driver::Rabbitmq
         | Driver::Soketi => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::postgres_data_dir;
+
+    #[test]
+    fn official_postgres_18_and_later_mount_the_parent_data_directory() {
+        assert_eq!(postgres_data_dir("postgres:18"), "/var/lib/postgresql");
+        assert_eq!(
+            postgres_data_dir("postgres:18.1-alpine"),
+            "/var/lib/postgresql"
+        );
+        assert_eq!(
+            postgres_data_dir("docker.io/library/postgres:19"),
+            "/var/lib/postgresql"
+        );
+        assert_eq!(
+            postgres_data_dir(
+                "postgres:18@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ),
+            "/var/lib/postgresql"
+        );
+    }
+
+    #[test]
+    fn older_majors_and_other_distributions_keep_the_classic_path() {
+        assert_eq!(postgres_data_dir("postgres:17"), "/var/lib/postgresql/data");
+        // Unknown majors keep the 7.0 mount so existing data is never hidden.
+        assert_eq!(postgres_data_dir("postgres"), "/var/lib/postgresql/data");
+        assert_eq!(
+            postgres_data_dir("postgres:latest"),
+            "/var/lib/postgresql/data"
+        );
+        assert_eq!(
+            postgres_data_dir(
+                "postgres@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            ),
+            "/var/lib/postgresql/data"
+        );
+        assert_eq!(
+            postgres_data_dir("postgres:16-alpine"),
+            "/var/lib/postgresql/data"
+        );
+        assert_eq!(
+            postgres_data_dir("timescale/timescaledb-ha:pg18"),
+            "/var/lib/postgresql/data"
+        );
+        assert_eq!(
+            postgres_data_dir("registry.local:5000/postgres"),
+            "/var/lib/postgresql/data"
+        );
     }
 }

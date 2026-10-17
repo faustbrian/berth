@@ -82,7 +82,6 @@ pub(super) fn dispatch(
                 healthy: args.should_wait(),
                 timeout: args.wait_timeout,
                 random_ports: args.publish_all,
-                save_ports: args.save_ports,
                 env_output: args.env_output,
                 parallel: args.parallel,
                 quiet: context.quiet(),

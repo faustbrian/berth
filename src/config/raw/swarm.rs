@@ -9,6 +9,7 @@ use super::super::types::SwarmInjectEnv;
 use super::RawSwarmGit;
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RawSwarmTarget {
     pub name: String,
     pub root: PathBuf,

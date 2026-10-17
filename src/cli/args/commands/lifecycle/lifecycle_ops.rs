@@ -136,9 +136,6 @@ pub(crate) struct RecreateArgs {
     /// Publish all exposed ports to random host ports after start
     #[arg(long, short = 'P', default_value_t = false)]
     pub(crate) publish_all: bool,
-    /// Persist random port assignments into `.berth.toml`
-    #[arg(long, default_value_t = false, requires = "publish_all")]
-    pub(crate) save_ports: bool,
     /// Skip recreating workspace swarm dependencies
     #[arg(long, default_value_t = false)]
     pub(crate) no_deps: bool,
@@ -302,7 +299,6 @@ mod tests {
             no_wait: false,
             wait_timeout: 5,
             publish_all: false,
-            save_ports: false,
             no_deps: false,
             env_output: true,
             parallel: 1,

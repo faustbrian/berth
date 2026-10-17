@@ -25,6 +25,7 @@ pub struct SwarmTarget {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct SwarmInjectEnv {
     /// Environment variable name to inject.
     pub env: String,

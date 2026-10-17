@@ -122,9 +122,6 @@ pub(crate) struct UpArgs {
     /// Seed used by `--port-strategy stable`
     #[arg(long)]
     pub(crate) port_seed: Option<String>,
-    /// Persist random port assignments into `.berth.toml`
-    #[arg(long, default_value_t = false, requires = "publish_all")]
-    pub(crate) save_ports: bool,
     /// Write inferred service vars to local `.env`
     #[arg(long, default_value_t = false)]
     pub(crate) env_output: bool,

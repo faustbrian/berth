@@ -10,6 +10,7 @@ use super::RawServiceHook;
 use crate::javascript::JavaScriptToolchain;
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct RawServiceConfig {
     #[serde(default)]
     pub preset: Option<String>,
@@ -53,7 +54,10 @@ pub(crate) struct RawServiceConfig {
     pub smtp_port: Option<u16>,
     #[serde(default)]
     pub volumes: Option<Vec<String>>,
-    #[serde(default)]
+    #[serde(
+        default,
+        deserialize_with = "crate::config::unique_map::optional_unique_hash_map"
+    )]
     pub env: Option<HashMap<String, String>>,
     #[serde(default)]
     pub command: Option<Vec<String>>,
@@ -81,7 +85,10 @@ pub(crate) struct RawServiceConfig {
     pub php_extensions: Option<Vec<String>>,
     #[serde(default)]
     pub trust_container_ca: Option<bool>,
-    #[serde(default)]
+    #[serde(
+        default,
+        deserialize_with = "crate::config::unique_map::optional_unique_hash_map"
+    )]
     pub env_mapping: Option<HashMap<String, String>>,
     #[serde(default)]
     pub javascript: Option<JavaScriptToolchain>,

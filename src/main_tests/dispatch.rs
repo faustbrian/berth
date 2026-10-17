@@ -19,8 +19,8 @@ fn temporary_project_root() -> PathBuf {
     drop(fs::remove_dir_all(&root));
     fs::create_dir_all(&root).expect("create temporary project root");
 
-    let config_path = root.join(".berth.toml");
-    fs::write(
+    let config_path = root.join(".berth.yaml");
+    crate::config::project_file::write_test_config_file(
         &config_path,
         "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
     )
@@ -36,8 +36,8 @@ fn temporary_project_root() -> PathBuf {
 
 fn temporary_project_config() -> PathBuf {
     let root = temporary_project_root();
-    let config_path = root.join(".berth.toml");
-    fs::write(
+    let config_path = root.join(".berth.yaml");
+    crate::config::project_file::write_test_config_file(
         &config_path,
         r#"
 schema_version = 1

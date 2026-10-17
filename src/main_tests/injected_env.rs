@@ -9,12 +9,12 @@ fn project_dependency_injected_env_resolves_base_url_from_domain() -> Result<()>
     std::fs::create_dir_all(&api_root)?;
     std::fs::create_dir_all(&location_root)?;
 
-    std::fs::write(
-        api_root.join(".berth.toml"),
+    crate::config::project_file::write_test_config_file(
+        api_root.join(".berth.yaml"),
         "project_type = \"project\"\ncontainer_prefix = \"api\"\n",
     )?;
-    std::fs::write(
-        location_root.join(".berth.toml"),
+    crate::config::project_file::write_test_config_file(
+        location_root.join(".berth.yaml"),
         r#"
 project_type = "project"
 container_prefix = "location"
@@ -24,8 +24,8 @@ preset = "laravel"
 domain = "acme-location.grid"
 "#,
     )?;
-    std::fs::write(
-        workspace.join(".berth.toml"),
+    crate::config::project_file::write_test_config_file(
+        workspace.join(".berth.yaml"),
         r#"
 project_type = "project"
 [[swarm]]
@@ -61,8 +61,8 @@ fn project_dependency_injected_env_resolves_when_workspace_config_is_project_roo
     let location_root = api_root.join("location");
     std::fs::create_dir_all(&location_root)?;
 
-    std::fs::write(
-        api_root.join(".berth.toml"),
+    crate::config::project_file::write_test_config_file(
+        api_root.join(".berth.yaml"),
         r#"
 project_type = "project"
 container_prefix = "api"
@@ -82,8 +82,8 @@ name = "location"
 root = "location"
 "#,
     )?;
-    std::fs::write(
-        location_root.join(".berth.toml"),
+    crate::config::project_file::write_test_config_file(
+        location_root.join(".berth.yaml"),
         r#"
 project_type = "project"
 container_prefix = "location"
@@ -178,8 +178,8 @@ fn project_dependency_injected_env_is_empty_outside_swarm_workspace() -> Result<
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let root = std::env::temp_dir().join(format!("berth-project-no-workspace-{nonce}"));
     std::fs::create_dir_all(&root)?;
-    std::fs::write(
-        root.join(".berth.toml"),
+    crate::config::project_file::write_test_config_file(
+        root.join(".berth.yaml"),
         "project_type = \"project\"\ncontainer_prefix = \"solo\"\n",
     )?;
 
@@ -195,8 +195,8 @@ fn project_dependency_runner_is_noop_outside_swarm_workspace() -> Result<()> {
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let root = std::env::temp_dir().join(format!("berth-project-deps-runner-noop-{nonce}"));
     std::fs::create_dir_all(&root)?;
-    std::fs::write(
-        root.join(".berth.toml"),
+    crate::config::project_file::write_test_config_file(
+        root.join(".berth.yaml"),
         "project_type = \"project\"\ncontainer_prefix = \"solo\"\n",
     )?;
 

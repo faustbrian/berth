@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// Service-level JavaScript toolchain preferences.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct JavaScriptToolchain {
     /// Preferred JavaScript runtime for app workflows.
     #[serde(default, skip_serializing_if = "Option::is_none")]

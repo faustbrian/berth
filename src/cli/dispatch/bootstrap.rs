@@ -1,14 +1,14 @@
 //! Bootstrap helpers used before regular command dispatch.
 //!
 //! These helpers handle commands that must run without reading project config
-//! (init and shell completions), then build the effective `Config` for all other
-//! commands.
+//! (init, config migrate and shell completions), then build the effective
+//! `Config` for all other commands.
 
 use anyhow::Result;
 use clap::CommandFactory;
 use clap_complete::generate;
 
-use crate::cli::args::{Cli, Commands};
+use crate::cli::args::{Cli, Commands, ConfigCommands};
 use crate::cli::handlers;
 use crate::config::{self, Config};
 use crate::output::{self, LogLevel, Persistence};
@@ -31,6 +31,19 @@ pub(super) fn handle_setup_commands(
                 Persistence::Persistent,
             );
         }
+        return Ok(true);
+    }
+
+    // `config migrate` exists for directories that only have a legacy project
+    // file, so it must run before the project file is loaded.
+    if let Commands::Config(args) = &cli.command
+        && matches!(args.command, Some(ConfigCommands::Migrate))
+    {
+        handlers::handle_config_migrate(
+            context.quiet(),
+            context.config_path(),
+            context.project_root(),
+        )?;
         return Ok(true);
     }
 
@@ -84,8 +97,8 @@ mod tests {
             std::env::temp_dir().join(format!("berth-dispatch-bootstrap-{}", std::process::id()));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).expect("create temp dir");
-        let config_path = dir.join(".berth.toml");
-        fs::write(
+        let config_path = dir.join(".berth.yaml");
+        crate::config::project_file::write_test_config_file(
             &config_path,
             "schema_version = 1\nproject_type = \"project\"\nservice = []\nswarm = []\n",
         )
@@ -114,5 +127,27 @@ mod tests {
         let config = load_config_for_cli(&cli, &context).expect("load config");
         assert_eq!(config.schema_version, 1);
         assert!(config.service.is_empty());
+    }
+
+    #[test]
+    fn config_migrate_runs_before_loading_a_legacy_only_directory() {
+        let dir =
+            std::env::temp_dir().join(format!("berth-dispatch-migrate-{}", std::process::id()));
+        drop(fs::remove_dir_all(&dir));
+        fs::create_dir_all(&dir).expect("create temp dir");
+        fs::write(dir.join(".helm.toml"), "container_prefix = \"api\"\n").expect("seed legacy");
+
+        let cli = Cli::parse_from([
+            "berth",
+            "--project-root",
+            dir.to_str().expect("dir path"),
+            "config",
+            "migrate",
+        ]);
+        let context = CliDispatchContext::from_cli(&cli);
+        let handled = handle_setup_commands(&cli, &context).expect("migrate legacy directory");
+
+        assert!(handled);
+        assert!(dir.join(".berth.yaml").is_file());
     }
 }

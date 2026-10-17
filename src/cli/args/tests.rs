@@ -439,7 +439,6 @@ fn operations_argument_methods() {
         "/tmp/env-file",
         "--sync",
         "--purge",
-        "--persist-runtime",
         "--create-missing",
         "generate",
         "--output",
@@ -452,7 +451,6 @@ fn operations_argument_methods() {
         assert_eq!(args.env_file, Some(PathBuf::from("/tmp/env-file")));
         assert!(args.sync);
         assert!(args.purge);
-        assert!(args.persist_runtime);
         assert!(args.create_missing);
     } else {
         panic!("expected env command");

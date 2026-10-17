@@ -26,7 +26,6 @@ pub(super) struct RandomPortsRecreateOptions<'a> {
     pub(super) profile: Option<&'a str>,
     pub(super) healthy: bool,
     pub(super) timeout: u64,
-    pub(super) save_ports: bool,
     pub(super) env_output: bool,
     pub(super) quiet: bool,
     pub(super) runtime_env_name: Option<&'a str>,
@@ -64,13 +63,8 @@ pub(super) fn handle_random_ports_recreate(
     );
     run_recreate_flow(
         &planned,
-        config,
         recreate_context,
         env_path.as_deref(),
-        options.save_ports,
-        options.quiet,
-        options.config_path,
-        options.project_root,
         options.parallel,
         recreate_runtime,
     )?;
@@ -127,7 +121,6 @@ mod tests {
                 profile: None,
                 healthy: false,
                 timeout: 30,
-                save_ports: false,
                 env_output: false,
                 quiet: true,
                 runtime_env_name: None,

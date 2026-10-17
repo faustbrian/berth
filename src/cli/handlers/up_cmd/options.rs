@@ -7,12 +7,9 @@ pub(super) struct ExecutionFlags {
     pub(super) use_publish_all: bool,
 }
 
-pub(super) fn validate_repro_flags(env_output: bool, save_ports: bool) -> Result<()> {
+pub(super) fn validate_repro_flags(env_output: bool) -> Result<()> {
     if env_output {
         anyhow::bail!("--repro cannot be combined with --env-output");
-    }
-    if save_ports {
-        anyhow::bail!("--repro cannot persist runtime-discovered ports");
     }
     Ok(())
 }
@@ -56,9 +53,8 @@ mod tests {
 
     #[test]
     fn validate_repro_flags_rejects_conflicting_mode() {
-        assert!(validate_repro_flags(true, false).is_err());
-        assert!(validate_repro_flags(false, true).is_err());
-        assert!(validate_repro_flags(false, false).is_ok());
+        assert!(validate_repro_flags(true).is_err());
+        assert!(validate_repro_flags(false).is_ok());
     }
 
     #[test]

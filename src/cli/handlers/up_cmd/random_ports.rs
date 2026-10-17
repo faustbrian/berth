@@ -31,7 +31,6 @@ pub(super) struct RunRandomPortsUpOptions<'a> {
     pub(super) force_random_ports: bool,
     pub(super) port_strategy: PortStrategyArg,
     pub(super) port_seed: Option<&'a str>,
-    pub(super) save_ports: bool,
     pub(super) env_output: bool,
     pub(super) parallel: usize,
     pub(super) quiet: bool,
@@ -74,13 +73,8 @@ pub(super) fn run_random_ports_up(
 
     run_up_flow(
         &planned,
-        config,
         options.parallel,
         env_path.as_deref(),
-        options.save_ports,
-        options.quiet,
-        options.config_path,
-        options.project_root,
         |runtime, uses_random_port| {
             start_runtime_service(
                 runtime,

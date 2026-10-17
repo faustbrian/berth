@@ -39,7 +39,7 @@ pub(super) fn ensure_target_configs_exist(targets: &[ResolvedSwarmTarget]) -> Re
     for target in targets {
         if crate::config::config_path_in_dir(&target.root)?.is_none() {
             anyhow::bail!(
-                "missing Berth config (.berth.toml or .berth.yaml) for swarm target '{}' at {}",
+                "missing Berth config (.berth.yaml) for swarm target '{}' at {}",
                 target.name,
                 target.root.display()
             );
@@ -73,8 +73,11 @@ mod tests {
         run_git(["init", "--initial-branch=main"], &source)?;
         run_git(["config", "user.email", "tests@example.com"], &source)?;
         run_git(["config", "user.name", "Berth Tests"], &source)?;
-        std::fs::write(source.join(".berth.toml"), "container_prefix = \"rate\"\n")?;
-        run_git(["add", ".berth.toml"], &source)?;
+        crate::config::project_file::write_test_config_file(
+            source.join(".berth.yaml"),
+            "container_prefix = \"rate\"\n",
+        )?;
+        run_git(["add", ".berth.yaml"], &source)?;
         run_git(["commit", "-m", "init"], &source)?;
         run_git(["branch", "develop"], &source)?;
 
@@ -104,7 +107,7 @@ mod tests {
         bootstrap_swarm_targets(&config, &targets, false)?;
 
         assert!(target_root.exists());
-        assert!(target_root.join(".berth.toml").exists());
+        assert!(target_root.join(".berth.yaml").exists());
 
         std::fs::remove_dir_all(base)?;
         Ok(())

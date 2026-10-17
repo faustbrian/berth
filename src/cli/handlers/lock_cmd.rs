@@ -172,8 +172,8 @@ mod tests {
             version: 1,
             images: entries,
         };
-        let path = root.join(".berth.lock.toml");
-        let content = toml::to_string_pretty(&lockfile).expect("serialize lockfile");
+        let path = root.join(".berth.lock.yaml");
+        let content = serde_yaml::to_string(&lockfile).expect("serialize lockfile");
         std::fs::write(&path, content).expect("write lockfile");
     }
 
@@ -227,9 +227,9 @@ fi\n"
     fn handle_lock_images_writes_lockfile() {
         let root = project_root();
         let cfg = config();
-        let lock_path = root.join(".berth.lock.toml");
+        let lock_path = root.join(".berth.lock.yaml");
 
-        let cfg_path = root.join("custom.berth.toml");
+        let cfg_path = root.join("custom.berth.yaml");
         let cfg_path = cfg_path.as_path();
         let result = with_fake_docker(|| {
             handle_lock(
@@ -249,7 +249,7 @@ fi\n"
     fn handle_lock_verify_succeeds_when_in_sync_and_fails_when_out_of_sync() {
         let root = project_root();
         let cfg = config();
-        let cfg_path = root.join("custom.berth.toml");
+        let cfg_path = root.join("custom.berth.yaml");
         let cfg_path = cfg_path.as_path();
         set_lockfile(
             &root,
@@ -302,7 +302,7 @@ fi\n"
     fn handle_lock_diff_prints_missing_and_extra_entries() {
         let root = project_root();
         let cfg = config();
-        let cfg_path = root.join("custom.berth.toml");
+        let cfg_path = root.join("custom.berth.yaml");
         let cfg_path = cfg_path.as_path();
 
         set_lockfile(
