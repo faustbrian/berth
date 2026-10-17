@@ -21,7 +21,7 @@ container_prefix = "location"
 
 [[service]]
 preset = "laravel"
-domain = "acme-location.grid"
+domain = "acme-location.berth.localhost"
 "#,
     )?;
     crate::config::project_file::write_test_config_file(
@@ -45,9 +45,10 @@ root = "location"
     )?;
 
     let injected = resolve_project_dependency_injected_env(&api_root)?;
-    assert_eq!(
-        injected.get("LOCATION_API_BASE_URL").map(String::as_str),
-        Some("https://acme-location.grid")
+    let url = injected.get("LOCATION_API_BASE_URL").expect("injected url");
+    assert!(
+        url.starts_with("https://location-") && url.ends_with("-location.berth.localhost:8443"),
+        "{url}"
     );
 
     std::fs::remove_dir_all(workspace)?;
@@ -90,14 +91,15 @@ container_prefix = "location"
 
 [[service]]
 preset = "laravel"
-domain = "acme-location.grid"
+domain = "acme-location.berth.localhost"
 "#,
     )?;
 
     let injected = resolve_project_dependency_injected_env(&api_root)?;
-    assert_eq!(
-        injected.get("LOCATION_API_BASE_URL").map(String::as_str),
-        Some("https://acme-location.grid")
+    let url = injected.get("LOCATION_API_BASE_URL").expect("injected url");
+    assert!(
+        url.starts_with("https://location-") && url.ends_with("-location.berth.localhost:8443"),
+        "{url}"
     );
 
     std::fs::remove_dir_all(api_root)?;

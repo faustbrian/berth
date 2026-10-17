@@ -221,7 +221,7 @@ container_prefix = "location"
 
 [[service]]
 preset = "laravel"
-domain = "location.berth"
+domain = "location.berth.localhost"
 "#,
         )
         .expect("write location config");
@@ -234,9 +234,15 @@ domain = "location.berth"
         )
         .expect("runtime context");
 
-        assert_eq!(
-            context.app_env.get("LOCATION_API_BASE_URL"),
-            Some(&"https://location.berth".to_owned())
+        // The source's unique instance route, never a domain several
+        // instances could share.
+        let url = context
+            .app_env
+            .get("LOCATION_API_BASE_URL")
+            .expect("injected url");
+        assert!(
+            url.starts_with("https://location-") && url.ends_with("-location.berth.localhost:8443"),
+            "{url}"
         );
 
         fs::remove_dir_all(workspace_root).expect("cleanup workspace");

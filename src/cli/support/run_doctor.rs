@@ -41,12 +41,6 @@ pub(crate) fn run_doctor(config: &config::Config, options: RunDoctorOptions<'_>)
 
     if options.fix {
         has_error |= repair::repair_unhealthy_services(config);
-        if let Err(err) = crate::serve::trust_local_caddy_ca() {
-            report::error(&format!("Caddy trust failed: {err}"));
-            has_error = true;
-        } else {
-            report::success("Caddy local CA trust attempted");
-        }
     }
 
     has_error |= secrets::check_sensitive_env_values(options.config_path, options.project_root)?;

@@ -14,6 +14,19 @@ All notable changes to this project are documented in this file.
   are named `berth_{project}_{instance}_{service}`, and service, app and
   one-off containers carry `dev.berth.*` ownership labels for their project,
   instance and root.
+- Added the berth gateway: one Caddy container per installation serves every
+  instance at `https://{instance}-{project}[-{service}].berth.localhost:8443`
+  (ports via `BERTH_GATEWAY_HTTPS_PORT`/`BERTH_GATEWAY_HTTP_PORT`, bound to
+  `127.0.0.1` only, never replaced by another port). Routes are rebuilt from
+  container labels under a host lock, unknown hosts get a 404, HTTP redirects
+  to HTTPS, the CA persists in `~/.berth/gateway/data` across gateway
+  recreation, and route names resolve to the gateway inside instance networks.
+  Only an instance's default environment is routed (`--env` namespaces and
+  test leases keep direct local URLs), every routed service keeps a unique
+  instance route (also its `APP_URL`) with authored domains as extra routes, a
+  host claimed twice is withheld from both claimants without affecting other
+  routes, the gateway ports are recorded once per installation, and `down`
+  never starts the gateway. `logs --access` shows the gateway's log.
 - Added per-instance Docker networks: every instance (and every `--env`
   runtime namespace in it) gets its own bridge network with an explicit `/24`
   from `10.128.0.0/9`, allocated under a host lock so 30 parallel instances
@@ -97,6 +110,11 @@ All notable changes to this project are documented in this file.
   generated service-manager units, domains and state paths use `berth`.
 
 ### Removed
+
+- Removed the host Caddy integration, `/etc/hosts` editing and
+  `domain_strategy`-generated `.berth` domains; authored `domain`/`domains`
+  must now be one label under `berth.localhost`, and `doctor --fix` no longer
+  installs a host Caddy CA.
 
 - Removed `up --save-ports`, `recreate --save-ports` and
   `env --sync --persist-runtime`, which wrote runtime ports back into the

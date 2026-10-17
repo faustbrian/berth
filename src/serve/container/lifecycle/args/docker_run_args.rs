@@ -17,7 +17,7 @@ pub(super) fn build_base_run_args(target: &ServiceConfig) -> Result<Vec<String>>
         target,
         &container_name,
         crate::docker::ContainerRole::Service,
-    ));
+    )?);
     args.extend(crate::network::network_run_args(target, true));
     args.extend([
         "-p".to_owned(),

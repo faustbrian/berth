@@ -5,9 +5,7 @@ use serde::Deserialize;
 use std::path::Path;
 
 use super::PROJECT_SCHEMA_VERSION;
-use crate::config::{
-    ContainerEngine, DomainStrategy, ProjectType, RawConfig, RawServiceConfig, RawSwarmTarget,
-};
+use crate::config::{ContainerEngine, ProjectType, RawConfig, RawServiceConfig, RawSwarmTarget};
 
 /// Maximum project name length, so `{instance}-{project}-{service}` routes
 /// stay within one 63-byte DNS label.
@@ -78,9 +76,9 @@ pub(crate) fn parse_project_file(content: &str, path: &Path) -> Result<RawConfig
         project_type: file.project_type,
         container_engine: file.container_engine,
         container_prefix: Some(file.project),
-        // Until gateway routes replace generated domains, v9 projects use
-        // the 7.0 `directory` domain strategy.
-        domain_strategy: Some(DomainStrategy::Directory),
+        // Routes are derived from the instance identity, never from a
+        // domain strategy.
+        domain_strategy: None,
         service: services,
         swarm: file.swarm,
     })

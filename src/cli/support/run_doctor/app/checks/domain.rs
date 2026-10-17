@@ -1,31 +1,33 @@
-//! doctor app domain resolution checks.
+//! doctor app route resolution checks.
 
 use crate::cli::support::run_doctor::report;
-use crate::{config, serve};
+use crate::config;
 
-/// Checks domain resolution and reports actionable failures.
+/// Checks that each route resolves to loopback. Berth never edits
+/// `/etc/hosts`; `*.localhost` must resolve on its own, so there is nothing
+/// for `--fix` to repair here.
 pub(in crate::cli::support::run_doctor::app) fn check_domain_resolution(
     target: &config::ServiceConfig,
-    fix: bool,
+    _fix: bool,
 ) -> bool {
-    let domains = target.resolved_domains();
-    if domains.is_empty() || target.localhost_tls {
-        return false;
-    }
+    check_with(target, crate::gateway::resolves_to_loopback)
+}
 
-    if fix {
-        if let Err(err) = serve::ensure_hosts_entry_for_domain(target) {
-            report::error(&format!("Hosts fix failed for '{}': {}", target.name, err));
-            return true;
-        }
-        report::success(&format!("Hosts entry ensured for {}", domains.join(", ")));
+/// The check with an injected resolver, so tests never depend on the host's
+/// DNS setup (8.x FI-25).
+fn check_with(target: &config::ServiceConfig, resolves: impl Fn(&str) -> bool) -> bool {
+    let domains = crate::gateway::route_hosts(target);
+    if domains.is_empty() {
         return false;
     }
 
     let mut has_error = false;
     for domain in domains {
-        if !serve::domain_resolves_to_loopback(domain) {
-            report::error(&format!("{domain} does not resolve to localhost"));
+        if !resolves(&domain) {
+            report::error(&format!(
+                "{domain} does not resolve to loopback; this system's resolver must map \
+                 *.localhost to 127.0.0.1 (RFC 6761)"
+            ));
             has_error = true;
             continue;
         }
@@ -38,9 +40,8 @@ pub(in crate::cli::support::run_doctor::app) fn check_domain_resolution(
 #[cfg(test)]
 mod tests {
     use crate::config::{Driver, Kind, ServiceConfig};
-    use crate::docker;
 
-    use super::check_domain_resolution;
+    use super::{check_domain_resolution, check_with};
 
     fn service(domain: Option<&str>, localhost_tls: bool) -> ServiceConfig {
         ServiceConfig {
@@ -94,22 +95,11 @@ mod tests {
     }
 
     #[test]
-    fn check_domain_resolution_reports_loopback_resolution() {
-        let target = service(Some("127.0.0.1"), false);
-        assert!(!check_domain_resolution(&target, false));
-    }
-
-    #[test]
-    fn check_domain_resolution_flags_unresolved_domain() {
-        let target = service(Some("256.0.0.1"), false);
-        assert!(check_domain_resolution(&target, false));
-    }
-
-    #[test]
-    fn check_domain_resolution_uses_fix_path_when_requested() {
-        docker::with_dry_run_state(true, || {
-            let target = service(Some("256.0.0.1"), false);
-            assert!(!check_domain_resolution(&target, true));
-        });
+    fn routes_pass_when_they_resolve_to_loopback_and_fail_otherwise() {
+        let mut target = service(None, false);
+        target.resolved_domain = Some("a-1-shop.berth.localhost".to_owned());
+        target.runtime.gateway_https_port = Some(8443);
+        assert!(!check_with(&target, |_| true));
+        assert!(check_with(&target, |_| false));
     }
 }

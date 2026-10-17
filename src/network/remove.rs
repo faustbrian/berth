@@ -39,6 +39,7 @@ where
         return Ok(());
     }
     let installation = crate::home::installation_id()?;
+    let gateway = crate::gateway::gateway_name()?;
     // Serialized with creation so two processes never allocate and remove the
     // same network at once. A concurrent `up` of the same instance can still
     // lose its network between ensuring it and running its container; that
@@ -48,9 +49,26 @@ where
         if network_owner(network)?.as_deref() != Some(installation.as_str()) {
             continue;
         }
-        if has_containers(network)? {
+        // The gateway is attached to every routed network; it must not keep
+        // an otherwise unused network alive, and is detached only once
+        // nothing else uses the network.
+        if has_containers(network, &gateway)? {
             continue;
         }
+        // A network the gateway is attached to is detached and removed under
+        // the gateway lock, so a concurrent publish cannot re-attach it in
+        // between (lock order: network, gateway). Route-free networks, such as
+        // every test lease's, never wait for the gateway lock.
+        let _gateway_lock = if crate::gateway::is_attached(network)? {
+            let lock = crate::home::HostLock::acquire("gateway", Duration::from_secs(180))?;
+            if has_containers(network, &gateway)? {
+                continue;
+            }
+            crate::gateway::detach_network(network)?;
+            Some(lock)
+        } else {
+            None
+        };
         let removed = crate::docker::run_docker_output_owned(
             &["network".to_owned(), "rm".to_owned(), network.to_owned()],
             "failed to remove Docker network",
@@ -85,12 +103,13 @@ fn network_owner(network: &str) -> Result<Option<String>> {
     Ok((!owner.is_empty()).then_some(owner))
 }
 
-fn has_containers(network: &str) -> Result<bool> {
+fn has_containers(network: &str, gateway: &str) -> Result<bool> {
     let output = crate::docker::run_docker_output_owned(
         &[
             "ps".to_owned(),
             "-a".to_owned(),
-            "-q".to_owned(),
+            "--format".to_owned(),
+            "{{.Names}}".to_owned(),
             "--filter".to_owned(),
             format!("network={network}"),
         ],
@@ -102,7 +121,10 @@ fn has_containers(network: &str) -> Result<bool> {
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
-    Ok(!String::from_utf8_lossy(&output.stdout).trim().is_empty())
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .any(|name| !name.is_empty() && name != gateway))
 }
 
 /// A network that is already gone, or that a container joined concurrently,

@@ -13,7 +13,10 @@ use env::append_run_options;
 use labels::append_labels;
 
 /// Builds run args for command execution.
-pub(super) fn build_run_args(service: &ServiceConfig, container_name: &str) -> Vec<String> {
+pub(super) fn build_run_args(
+    service: &ServiceConfig,
+    container_name: &str,
+) -> anyhow::Result<Vec<String>> {
     let mut args = vec![
         "run".to_owned(),
         "-d".to_owned(),
@@ -36,10 +39,10 @@ pub(super) fn build_run_args(service: &ServiceConfig, container_name: &str) -> V
     args.extend(crate::network::network_run_args(service, true));
     append_run_options(&mut args, service, container_name);
     append_host_gateway_mapping(&mut args, service);
-    append_labels(&mut args, service, container_name);
+    append_labels(&mut args, service, container_name)?;
     args.push(service.image.clone());
     append_entrypoint_args(&mut args, service);
-    args
+    Ok(args)
 }
 
 fn append_host_gateway_mapping(args: &mut Vec<String>, service: &ServiceConfig) {
@@ -111,7 +114,7 @@ mod tests {
     #[test]
     fn adds_host_gateway_mapping_for_loopback_services() {
         crate::docker::with_container_engine(crate::config::ContainerEngine::Docker, || {
-            let args = build_run_args(&service(), "acme-db");
+            let args = build_run_args(&service(), "acme-db").expect("run args");
             let rendered = args.join(" ");
 
             assert!(rendered.contains("--add-host host.docker.internal:host-gateway"));
@@ -120,7 +123,7 @@ mod tests {
 
     #[test]
     fn includes_default_restart_policy() {
-        let args = build_run_args(&service(), "acme-db");
+        let args = build_run_args(&service(), "acme-db").expect("run args");
         let rendered = args.join(" ");
 
         assert!(rendered.contains("--restart unless-stopped"));
@@ -131,7 +134,7 @@ mod tests {
         let mut service = service();
         service.restart = Some(crate::config::RestartPolicy::No);
 
-        let args = build_run_args(&service, "acme-db");
+        let args = build_run_args(&service, "acme-db").expect("run args");
         let rendered = args.join(" ");
 
         assert!(rendered.contains("--restart no"));
@@ -147,7 +150,7 @@ mod tests {
                 "http://host.docker.internal:3306".to_owned(),
             )]));
 
-            let args = build_run_args(&with_env, "acme-db");
+            let args = build_run_args(&with_env, "acme-db").expect("run args");
             let rendered = args.join(" ");
 
             assert!(rendered.contains("--add-host host.docker.internal:host-gateway"));
@@ -157,7 +160,7 @@ mod tests {
     #[test]
     fn podman_does_not_force_add_host_gateway_mapping() {
         crate::docker::with_container_engine(crate::config::ContainerEngine::Podman, || {
-            let args = build_run_args(&service(), "acme-db");
+            let args = build_run_args(&service(), "acme-db").expect("run args");
             let rendered = args.join(" ");
             assert!(!rendered.contains("--add-host"));
         });
@@ -188,7 +191,7 @@ mod tests {
             .iter()
             .find(|service| service.name == "db")
             .expect("db service");
-        let args = build_run_args(db, "bill-db");
+        let args = build_run_args(db, "bill-db").expect("run args");
 
         assert!(
             args.iter()

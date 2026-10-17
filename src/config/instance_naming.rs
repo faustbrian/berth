@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 
-use crate::config::{Config, Kind};
+use crate::config::{Config, Kind, ServiceConfig};
 use crate::instance::InstanceIdentity;
 
 /// Names every service `berth_{project}_{instance}_{service}`, namespaces the
@@ -41,7 +41,39 @@ pub(crate) fn apply_instance_identity(
         service.runtime.instance = Some(identity.id.clone());
         service.runtime.root = Some(identity.root.clone());
         service.runtime.network = Some(namespace.clone());
+        assign_route(service, &project, &identity.id)?;
     }
+    Ok(())
+}
+
+/// Gives a routable service its gateway route
+/// `{instance}-{project}[-{service}].berth.localhost` and validates its
+/// authored domains, which become additional routes. Other services get no
+/// route.
+fn assign_route(service: &mut ServiceConfig, project: &str, instance: &str) -> Result<()> {
+    service.runtime.gateway_https_port = None;
+    if !crate::gateway::is_routable(service) {
+        service.resolved_domain = None;
+        return Ok(());
+    }
+    let authored: Vec<String> = service
+        .domain
+        .iter()
+        .chain(service.domains.iter().flatten())
+        .filter(|domain| !domain.trim().is_empty())
+        .cloned()
+        .collect();
+    for domain in &authored {
+        crate::gateway::validate_authored_domain(&service.name, domain)?;
+    }
+    // Every instance keeps its own unique route; authored domains are extra
+    // routes, so committed config never needs editing per worktree.
+    service.resolved_domain = Some(crate::gateway::route_host(
+        instance,
+        project,
+        &service.name,
+    )?);
+    service.runtime.gateway_https_port = Some(crate::gateway::GatewayPorts::current()?.https);
     Ok(())
 }
 

@@ -1,6 +1,14 @@
 //! Instance-network lifecycle through the real `berth` binary, with a fake
 //! `docker` first on PATH that records every call.
 
+// Integration tests are their own crate: panicking on setup failures and
+// top-level `#[test]` functions are the idiom here.
+#![allow(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::tests_outside_test_module
+)]
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Command, Output};

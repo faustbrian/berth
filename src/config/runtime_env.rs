@@ -33,6 +33,15 @@ pub(super) fn apply_runtime_env(config: &mut Config, env_name: &str) -> Result<(
         if let Some(network) = &mut service.runtime.network {
             network.push_str(&suffix);
         }
+        // Runtime environments keep the 7.0.0 model: direct, port-offset
+        // local URLs and no gateway routes. Routes belong to the instance's
+        // default environment; a runtime environment's name (for example the
+        // `testing-pool-{hash}-{slot}` test leases) would not fit a 63-byte
+        // DNS label and its authored domains would collide with the default.
+        service.resolved_domain = None;
+        service.domain = None;
+        service.domains = None;
+        service.runtime.gateway_https_port = None;
         service.port = shift_port(service.port, port_offset, &service.name, "port")?;
         if let Some(smtp_port) = service.smtp_port {
             service.smtp_port = Some(shift_port(

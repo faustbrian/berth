@@ -17,6 +17,16 @@ fn berth_home() -> Result<PathBuf> {
     Ok(PathBuf::from(home).join(".berth"))
 }
 
+/// Returns a path below the berth home without creating anything, for reads
+/// that must not create state (dry runs, config loads).
+///
+/// # Errors
+///
+/// Returns an error when neither `BERTH_HOME` nor `HOME` is set.
+pub(crate) fn home_path(relative: &Path) -> Result<PathBuf> {
+    Ok(berth_home()?.join(relative))
+}
+
 /// Creates (if needed) and returns a user-private directory below the berth
 /// home. The home itself and every directory below it must be a real
 /// directory: a symbolic link anywhere from the home down is refused, so

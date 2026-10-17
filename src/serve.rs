@@ -11,12 +11,10 @@ use anyhow::Result;
 
 use crate::config::ServiceConfig;
 
-mod caddy;
 mod container;
 mod exec;
 mod extensions;
 mod health;
-mod hosts;
 mod image_build;
 mod images;
 mod orchestrate;
@@ -26,9 +24,7 @@ mod state;
 mod tests;
 mod trust;
 
-pub use caddy::{caddy_access_log_path, trust_local_caddy_ca};
 pub(crate) use exec::{exec_artisan, exec_or_run_command, runtime_cmdline};
-pub(crate) use hosts::{domain_resolves_to_loopback, ensure_hosts_entry_for_domain};
 pub(crate) use images::enable_browser_test_runtime;
 pub use state::PhpExtensionCheck;
 
@@ -38,15 +34,11 @@ use images::{
     should_inject_frankenphp_server_name,
 };
 
-use caddy::{
-    configure_caddy, domain_for_service as service_domain, domains_for_service as service_domains,
-    remove_caddy_route, resolve_caddy_ports, served_url,
-};
 use container::{ensure_container_running, remove_container};
-use hosts::ensure_hosts_entry;
-pub(super) use state::{CaddyPorts, CaddyState, DerivedImageLock};
+pub(super) use state::DerivedImageLock;
 use trust::trust_inner_container_ca;
 
+pub(crate) use orchestrate::local_url;
 pub use orchestrate::{RunServeOptions, down, public_url, run};
 
 /// Waits until app HTTP endpoint responds with a 2xx status code.

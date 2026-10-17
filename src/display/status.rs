@@ -53,7 +53,7 @@ fn print_service_section(service: &ServiceConfig) {
         AboutRow::colored("Status", raw_status, status_value),
     ];
 
-    let domain_urls = service.resolved_domain_urls();
+    let domain_urls = crate::gateway::route_urls(service);
     if !domain_urls.is_empty() {
         rows.push(AboutRow::plain("Domain", domain_urls.join(", ")));
     }

@@ -224,6 +224,34 @@ pub(crate) fn is_migratable_file_name(file_name: &str) -> bool {
     LEGACY_CONFIG_FILE_NAMES.contains(&file_name) || runtime_env_override_name(file_name).is_some()
 }
 
+/// Removes `domain`/`domains` values berth 9 cannot serve (anything but one
+/// label under `berth.localhost`), returning the dropped values. Copying them
+/// would produce a file that fails to load.
+fn drop_unservable_domains(service_name: &str, service: &mut Map<String, Value>) -> Vec<String> {
+    let servable =
+        |domain: &str| crate::gateway::validate_authored_domain(service_name, domain).is_ok();
+    let mut dropped = Vec::new();
+    if let Some(Value::String(domain)) = service.get("domain")
+        && !servable(domain)
+    {
+        dropped.push(domain.clone());
+        service.remove("domain");
+    }
+    if let Some(Value::Array(domains)) = service.get_mut("domains") {
+        domains.retain(|value| match value {
+            Value::String(domain) if !servable(domain) => {
+                dropped.push(domain.clone());
+                false
+            }
+            _ => true,
+        });
+        if domains.is_empty() {
+            service.remove("domains");
+        }
+    }
+    dropped
+}
+
 /// Test fixture writer with the signature of `std::fs::write`.
 ///
 /// Converts 7.0-style TOML fixture content into a berth 9 project file at
@@ -332,12 +360,12 @@ fn convert_v7(
 
     match root.remove("domain_strategy") {
         None => notes.push(
-            "berth 9 always generates app routes; app services without an explicit `domain` now get one"
+            "berth 9 gives every web app an instance route `{instance}-{project}[-{service}].berth.localhost`"
                 .to_owned(),
         ),
         Some(Value::String(strategy)) if strategy == "directory" => {}
         Some(other) => anyhow::bail!(
-            "`domain_strategy` {other} has no berth 9 equivalent; berth 9 routes always use the directory-based name"
+            "`domain_strategy` {other} has no berth 9 equivalent; berth 9 routes are derived from the instance"
         ),
     }
 
@@ -364,6 +392,14 @@ fn convert_v7(
             };
             if services.contains_key(&name) {
                 anyhow::bail!("service '{name}' is declared more than once");
+            }
+            let dropped = drop_unservable_domains(&name, &mut service);
+            if !dropped.is_empty() {
+                notes.push(format!(
+                    "service '{name}': dropped domain(s) {} — berth 9 serves only one label \
+                     under berth.localhost and otherwise uses the generated instance route",
+                    dropped.join(", ")
+                ));
             }
             services.insert(name, Value::Object(service));
         }

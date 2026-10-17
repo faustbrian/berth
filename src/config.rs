@@ -37,6 +37,8 @@ pub(crate) use raw::{RawConfig, RawServiceConfig, RawSwarmTarget};
 pub(crate) use service_methods::network::{
     is_unspecified_port_allocation_host, normalize_host_for_port_allocation,
 };
+#[cfg(test)]
+pub(crate) use types::ServiceRuntime;
 pub use types::{
     Config, ContainerEngine, DomainStrategy, Driver, HookOnError, HookPhase, HookRun, Kind,
     LockedImage, Lockfile, ProjectType, RestartPolicy, ServiceConfig, ServiceHook, SwarmGit,

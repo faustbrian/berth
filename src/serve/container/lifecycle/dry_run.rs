@@ -10,7 +10,7 @@ pub(super) fn print_dry_run_container_start(
     recreate: bool,
     runtime_image: &str,
     smtp_port: Option<u16>,
-) {
+) -> anyhow::Result<()> {
     if recreate {
         let remove_args = vec!["rm".to_owned(), "-f".to_owned(), container_name.to_owned()];
         output::event(
@@ -44,7 +44,7 @@ pub(super) fn print_dry_run_container_start(
         target,
         container_name,
         crate::docker::ContainerRole::Service,
-    ));
+    )?);
     run_args.extend(crate::network::network_run_args(target, true));
     run_args.extend([mapping, runtime_image.to_owned()]);
     output::event(
@@ -56,4 +56,5 @@ pub(super) fn print_dry_run_container_start(
         ),
         Persistence::Transient,
     );
+    Ok(())
 }

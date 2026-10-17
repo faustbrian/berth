@@ -18,4 +18,7 @@ pub struct ServiceRuntime {
     pub root: Option<PathBuf>,
     /// Docker network of the instance (and runtime environment).
     pub network: Option<String>,
+    /// HTTPS port of the gateway serving this service's routes; set only for
+    /// services that have gateway routes.
+    pub gateway_https_port: Option<u16>,
 }

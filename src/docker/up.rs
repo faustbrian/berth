@@ -33,7 +33,7 @@ pub fn up(service: &ServiceConfig, pull: PullPolicy, recreate: bool) -> Result<(
 
     state::ensure_image_available(service, pull)?;
 
-    let run_args = args_builder::build_run_args(service, &container_name);
+    let run_args = args_builder::build_run_args(service, &container_name)?;
     let output = docker_output_owned(&run_args, &super::runtime_command_error_context("run"))?;
     ensure_success(output, "Failed to start container")?;
     ensure_object_store_bucket_ready(service)?;

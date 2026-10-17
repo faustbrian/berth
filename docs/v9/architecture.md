@@ -110,14 +110,40 @@ private to the owning tenant.
 
 ## Gateway
 
-One Caddy container (`berth-gateway`) terminates TLS with Caddy's internal CA,
+One Caddy container per installation (`berth_gateway_{installation[..12]}`) terminates TLS with Caddy's internal CA,
 whose data directory is bind-mounted from `~/.berth/gateway/data` so the CA
 survives gateway recreation. It publishes on `127.0.0.1` only, on configurable
 ports (default HTTPS `8443`, HTTP `8080`); an occupied port fails with its
 owner named and is never replaced by another port. The complete route set is
 derived from container labels and applied as a whole document under
 `~/.berth/gateway/.publish.lock`, so concurrent `up` and `down` calls cannot
-lose each other's routes.
+lose each other's routes. A document is persisted only after the running
+gateway accepts it. The gateway listens on the same ports inside its container
+as on the host and is attached to each instance network with that network's
+routes as aliases, so an app's own route names resolve to the gateway from
+inside its container. Clients built on libcurl (PHP's curl extension, Guzzle,
+Laravel `Http::`) resolve every `*.localhost` name to loopback themselves and
+cannot use routes from inside containers; cross-project calls get in-network
+endpoints instead (ledger L205, L206).
+
+Only the default runtime environment of an instance has routes. `--env`
+namespaces, including the per-run `artisan test` leases, keep 7.0.0's direct,
+port-offset local URLs. Every routed service always has its unique instance
+route, which is also its `APP_URL`; an authored `domain`/`domains` adds extra
+routes. A host claimed by two running containers (an authored domain committed
+to a project with two worktrees up, say) is withheld from both with a warning
+while every other route keeps being published (8.x FI-53), so committed config
+never needs editing per worktree. When all but one claimant go down, the
+shared domain serves the remaining one again.
+
+The gateway ports are an installation setting: the first gateway records them
+in `~/.berth/gateway/ports` (from `BERTH_GATEWAY_HTTPS_PORT`/`_HTTP_PORT` or the
+defaults), and every later process uses the recorded ports. A variable that
+names a different port fails early instead of moving the gateway. The ports
+are recorded only once a gateway has started on them, so a first start that
+fails on a busy port can be retried on another.
+Routable services are web apps, Mailpit's UI and WebSocket servers; workers,
+schedulers, Horizon, RabbitMQ, Gotenberg and Selenium have no route.
 
 ## Commands and exit codes
 

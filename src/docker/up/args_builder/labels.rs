@@ -5,12 +5,17 @@
 use crate::config::ServiceConfig;
 use crate::docker::{ContainerRole, ownership_label_args};
 
-pub(super) fn append_labels(args: &mut Vec<String>, service: &ServiceConfig, container_name: &str) {
+pub(super) fn append_labels(
+    args: &mut Vec<String>,
+    service: &ServiceConfig,
+    container_name: &str,
+) -> anyhow::Result<()> {
     args.extend(ownership_label_args(
         service,
         container_name,
         ContainerRole::Service,
-    ));
+    )?);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -64,7 +69,7 @@ mod tests {
         };
         let mut args = Vec::new();
 
-        append_labels(&mut args, &service, "acme-db");
+        append_labels(&mut args, &service, "acme-db").expect("labels");
 
         let rendered = args.join(" ");
         assert!(rendered.contains("--label dev.berth.managed=true"));

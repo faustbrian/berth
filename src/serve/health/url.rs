@@ -44,9 +44,8 @@ mod tests {
             api_key: None,
             region: None,
             scheme: Some("https".to_owned()),
-            domain: Some("app.berth".to_owned()),
+            domain: Some("app.berth.localhost".to_owned()),
             domains: None,
-            resolved_domain: None,
             container_port: None,
             smtp_port: None,
             volumes: None,
@@ -68,7 +67,11 @@ mod tests {
             javascript: None,
             container_name: Some("api".to_owned()),
             resolved_container_name: Some("api".to_owned()),
-            runtime: Default::default(),
+            resolved_domain: Some("app.berth.localhost".to_owned()),
+            runtime: crate::config::ServiceRuntime {
+                gateway_https_port: Some(8443),
+                ..Default::default()
+            },
         }
     }
 
@@ -76,7 +79,7 @@ mod tests {
     fn health_url_for_target_normalizes_path_without_leading_slash() {
         let target = make_target();
         let url = health_url_for_target(&target, Some("ready")).expect("url");
-        assert_eq!(url, "https://app.berth/ready");
+        assert_eq!(url, "https://app.berth.localhost:8443/ready");
     }
 
     #[test]
@@ -84,6 +87,6 @@ mod tests {
         let mut target = make_target();
         target.health_path = Some("ready".to_owned());
         let url = health_url_for_target(&target, None).expect("url");
-        assert_eq!(url, "https://app.berth/ready");
+        assert_eq!(url, "https://app.berth.localhost:8443/ready");
     }
 }

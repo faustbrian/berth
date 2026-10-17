@@ -18,7 +18,12 @@ pub(crate) fn resolve_injected_env_value(
 
     match value_spec {
         ":domain" => {
-            let Some(domain) = source_service.primary_domain() else {
+            let routes = crate::gateway::route_hosts(source_service);
+            let Some(domain) = routes
+                .first()
+                .map(String::as_str)
+                .or(source_service.primary_domain())
+            else {
                 anyhow::bail!(
                     "requested ':domain' but source service '{}' has no domain",
                     source_service.name
@@ -30,8 +35,11 @@ pub(crate) fn resolve_injected_env_value(
         ":port" => Ok(effective_port.to_string()),
         ":scheme" => Ok(source_service.scheme().to_owned()),
         ":base_url" | ":url" => {
-            if let Some(domain) = source_service.primary_domain() {
-                return Ok(format!("https://{domain}"));
+            if let Some(url) = crate::gateway::route_urls(source_service)
+                .into_iter()
+                .next()
+            {
+                return Ok(url);
             }
             Ok(format!(
                 "{}://{}:{}",

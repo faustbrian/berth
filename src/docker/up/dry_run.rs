@@ -33,7 +33,7 @@ pub(super) fn describe(
         PullPolicy::Never => {}
     }
 
-    let run_args = args_builder::build_run_args(service, container_name);
+    let run_args = args_builder::build_run_args(service, container_name)?;
     print_docker_command(&run_args);
     output::event(
         &service.name,

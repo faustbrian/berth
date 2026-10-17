@@ -23,7 +23,7 @@ fn write_config(root: &std::path::Path, content: &str) -> PathBuf {
 }
 
 #[test]
-fn load_config_with_directory_strategy_generates_app_domains_from_project_root() {
+fn routable_services_get_instance_routes_and_others_get_none() {
     let root = temp_root("directory-parent").join("my-project");
     fs::create_dir_all(&root).expect("create project root");
     let config_path = write_config(
@@ -64,12 +64,18 @@ preset = "mailhog"
         .find(|service| service.name == "mailhog")
         .expect("mailhog service");
 
-    assert_eq!(app.primary_domain(), Some("my-project.berth"));
+    let instance = app.runtime.instance.clone().expect("instance");
+    let project = app.runtime.project.clone().expect("project");
     assert_eq!(
-        gotenberg.primary_domain(),
-        Some("my-project-gotenberg.berth")
+        app.primary_domain(),
+        Some(format!("{instance}-{project}.berth.localhost").as_str())
     );
-    assert_eq!(mailhog.primary_domain(), Some("my-project-mailhog.berth"));
+    // Gotenberg is reached only inside the instance network.
+    assert_eq!(gotenberg.primary_domain(), None);
+    assert_eq!(
+        mailhog.primary_domain(),
+        Some(format!("{instance}-{project}-mailhog.berth.localhost").as_str())
+    );
     assert_eq!(app.domain, None);
     assert_eq!(gotenberg.domain, None);
     assert_eq!(mailhog.domain, None);

@@ -1,7 +1,7 @@
 //! High-level serve lifecycle orchestration.
 //!
 //! Coordinates runtime image resolution, container startup, optional CA trust,
-//! and Caddy/hosts integration for externally reachable URLs.
+//! and gateway routes for externally reachable URLs.
 
 use anyhow::Result;
 use std::collections::HashMap;
@@ -12,9 +12,7 @@ use crate::config::{is_unspecified_port_allocation_host, normalize_host_for_port
 use crate::output::{self, LogLevel, Persistence};
 
 use super::{
-    configure_caddy, ensure_container_running, ensure_hosts_entry, remove_caddy_route,
-    remove_container, resolve_caddy_ports, resolve_runtime_image, served_url, service_domain,
-    trust_inner_container_ca,
+    ensure_container_running, remove_container, resolve_runtime_image, trust_inner_container_ca,
 };
 
 pub struct RunServeOptions<'a> {
@@ -27,13 +25,21 @@ pub struct RunServeOptions<'a> {
     pub allow_rebuild: bool,
 }
 
-/// Starts a serve target and configures Caddy reverse proxy with local TLS.
+/// Starts a serve target and publishes its gateway route.
 ///
 /// # Errors
 ///
-/// Returns an error if Docker or Caddy orchestration fails.
+/// Returns an error if Docker or gateway orchestration fails.
 pub fn run(options: RunServeOptions<'_>) -> Result<()> {
-    let ports = resolve_caddy_ports()?;
+    let container_name = options.target.container_name()?;
+    let own_route = options
+        .target
+        .resolved_domain
+        .clone()
+        .filter(|_| publishes_routes(options.target));
+    if let Some(route) = &own_route {
+        crate::gateway::ensure_route_unclaimed(&container_name, route)?;
+    }
     let runtime_image = resolve_runtime_image(
         options.target,
         options.allow_rebuild,
@@ -50,13 +56,17 @@ pub fn run(options: RunServeOptions<'_>) -> Result<()> {
     if options.trust_container_ca {
         trust_inner_container_ca(options.target, options.detached)?;
     }
-    let url = if should_use_local_url(options.target) {
-        local_url(options.target)
-    } else {
-        configure_caddy(options.target, ports)?;
-        ensure_hosts_entry(options.target)?;
-        caddy_served_url(options.target, ports.https)?
-    };
+    if let Some(route) = &own_route {
+        let baked_port = options.target.runtime.gateway_https_port.ok_or_else(|| {
+            anyhow::anyhow!("service '{}' has no gateway port", options.target.name)
+        })?;
+        crate::gateway::publish_routes(crate::gateway::PublishMode::Claim(
+            &container_name,
+            route,
+            baked_port,
+        ))?;
+    }
+    let url = public_url(options.target)?;
     output::event(
         &options.target.name,
         LogLevel::Success,
@@ -66,30 +76,33 @@ pub fn run(options: RunServeOptions<'_>) -> Result<()> {
     Ok(())
 }
 
-/// Stops and removes a serve target container and removes its Caddy route.
+/// Stops and removes a serve target container and withdraws its route.
 ///
 /// # Errors
 ///
-/// Returns an error if Docker or Caddy orchestration fails.
+/// Returns an error if Docker or gateway orchestration fails.
 pub fn down(target: &ServiceConfig) -> Result<()> {
     remove_container(target)?;
-    if should_use_caddy(target) {
-        remove_caddy_route(target)?;
+    if publishes_routes(target) {
+        crate::gateway::publish_routes(crate::gateway::PublishMode::Withdraw)?;
     }
     Ok(())
 }
 
-/// Computes the public URL for a serve target based on configured Caddy ports.
+/// Computes the public URL for a serve target: its gateway route, or a
+/// direct `localhost` URL for targets without a route.
 ///
 /// # Errors
 ///
-/// Returns an error if Caddy port env values are invalid.
+/// Returns an error if the gateway port settings are invalid.
 pub fn public_url(target: &ServiceConfig) -> Result<String> {
     if should_use_local_url(target) {
         return Ok(local_url(target));
     }
-    let ports = resolve_caddy_ports()?;
-    caddy_served_url(target, ports.https)
+    crate::gateway::route_urls(target)
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("service '{}' has no route", target.name))
 }
 
 fn localhost_url(target: &ServiceConfig) -> String {
@@ -97,14 +110,16 @@ fn localhost_url(target: &ServiceConfig) -> String {
 }
 
 fn should_use_local_url(target: &ServiceConfig) -> bool {
-    target.localhost_tls || target.primary_domain().is_none()
+    !crate::gateway::has_gateway_routes(target)
 }
 
-fn should_use_caddy(target: &ServiceConfig) -> bool {
-    !should_use_local_url(target)
+fn publishes_routes(target: &ServiceConfig) -> bool {
+    crate::gateway::has_gateway_routes(target)
 }
 
-fn local_url(target: &ServiceConfig) -> String {
+/// The direct URL of a service without gateway routes: its published host
+/// port on loopback (`--env` namespaces keep 7.0.0's port-offset URLs).
+pub(crate) fn local_url(target: &ServiceConfig) -> String {
     if target.localhost_tls {
         return localhost_url(target);
     }
@@ -125,13 +140,9 @@ fn local_bind_host(host: &str) -> String {
     normalize_host_for_port_allocation(host)
 }
 
-fn caddy_served_url(target: &ServiceConfig, https_port: u16) -> Result<String> {
-    Ok(served_url(service_domain(target)?, https_port))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{public_url, should_use_caddy, should_use_local_url};
+    use super::{public_url, publishes_routes, should_use_local_url};
     use crate::config::{Driver, Kind, ServiceConfig};
 
     fn service() -> ServiceConfig {
@@ -198,11 +209,25 @@ mod tests {
     }
 
     #[test]
-    fn domainless_targets_use_local_url_instead_of_caddy() {
+    fn domainless_targets_use_local_url_instead_of_the_gateway() {
         let mut target = service();
         target.domain = None;
 
         assert!(should_use_local_url(&target));
-        assert!(!should_use_caddy(&target));
+        assert!(!publishes_routes(&target));
+    }
+
+    #[test]
+    fn routed_targets_use_their_route_on_the_gateway_https_port() {
+        let mut target = service();
+        target.localhost_tls = false;
+        target.domain = None;
+        target.domains = None;
+        target.resolved_domain = Some("a-1-shop.berth.localhost".to_owned());
+        target.runtime.gateway_https_port = Some(8443);
+        assert_eq!(
+            public_url(&target).expect("url"),
+            "https://a-1-shop.berth.localhost:8443"
+        );
     }
 }

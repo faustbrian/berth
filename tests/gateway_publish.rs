@@ -1,0 +1,432 @@
+//! Gateway route publication through the real `berth` binary, with a fake
+//! `docker` first on PATH that keeps container state and records every call.
+
+// Integration tests are their own crate: panicking on setup failures and
+// top-level `#[test]` functions are the idiom here.
+#![allow(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::tests_outside_test_module
+)]
+
+use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
+use std::process::{Command, Output};
+
+/// Containers are files `state/c/<name>` holding their labels, one per line.
+const FAKE_DOCKER: &str = r#"#!/bin/sh
+S="$FAKE_STATE"
+echo "$*" >> "$S/log"
+label() { grep "^$2=" "$S/c/$1" 2>/dev/null | head -1 | cut -d= -f2-; }
+case "$1 $2" in
+  "network inspect")
+    [ -f "$S/network" ] || exit 1
+    case "$*" in *--format*) cat "$BERTH_HOME/installation-id" ;; esac
+    exit 0 ;;
+  "network create") touch "$S/network"; exit 0 ;;
+  "network rm") rm -f "$S/network"; exit 0 ;;
+  "network connect")
+    net=""; gw=""; for arg in "$@"; do net="$gw"; gw="$arg"; done
+    mkdir -p "$S/attached"; : > "$S/attached/$net"; echo "$gw" > "$S/gateway-name"
+    for arg in "$@"; do case "$arg" in *.berth.localhost) echo "$arg" >> "$S/attached/$net" ;; esac; done
+    exit 0 ;;
+  "network disconnect")
+    net=""; gw=""; for arg in "$@"; do net="$gw"; gw="$arg"; done
+    rm -f "$S/attached/$net"; exit 0 ;;
+  "image inspect") exit 0 ;;
+esac
+case "$1" in
+  run)
+    name=""; prev=""
+    : > "$S/run.labels"
+    for arg in "$@"; do
+      [ "$prev" = "--name" ] && name="$arg"
+      [ "$prev" = "--label" ] && echo "$arg" >> "$S/run.labels"
+      prev="$arg"
+    done
+    mkdir -p "$S/c"; mv "$S/run.labels" "$S/c/$name"; exit 0 ;;
+  rm)
+    for arg in "$@"; do rm -f "$S/c/$arg"; done; exit 0 ;;
+  inspect)
+    name=""; for arg in "$@"; do name="$arg"; done
+    [ -f "$S/c/$name" ] || exit 1
+    case "$*" in
+      *NetworkSettings.Networks*)
+        printf '{'; first=1
+        for f in "$S"/attached/*; do
+          [ -f "$f" ] || continue
+          [ $first = 1 ] || printf ','; first=0
+          printf '"%s":{"Aliases":[' "$(basename "$f")"
+          sep=""; while read -r a; do printf '%s"%s"' "$sep" "$a"; sep=","; done < "$f"
+          printf ']}'
+        done
+        printf '}' ;;
+      *State.Status*dev.berth.gateway.spec*) printf 'running %s' "$(label "$name" dev.berth.gateway.spec)" ;;
+      *) printf running ;;
+    esac
+    exit 0 ;;
+  exec)
+    case "$*" in
+      *"caddy reload"*) [ -n "$FAKE_RELOAD_FAIL" ] && { echo "invalid config" >&2; exit 1; } ;;
+    esac
+    exit 0 ;;
+  ps)
+    case "$*" in
+      *dev.berth.route.hosts*)
+        for f in "$S"/c/*; do
+          [ -f "$f" ] || continue
+          n=$(basename "$f"); h=$(label "$n" dev.berth.route.hosts)
+          [ -n "$h" ] && printf '%s\t%s\t%s\t%s\n' "$n" "$h" "$(label "$n" dev.berth.route.port)" "$(label "$n" dev.berth.network)"
+        done ;;
+      *network=*)
+        net=""; for arg in "$@"; do case "$arg" in network=*) net="${arg#network=}" ;; esac; done
+        for f in "$S"/c/*; do [ -f "$f" ] && grep -q "^dev.berth.network=$net$" "$f" && basename "$f"; done
+        # The gateway is listed while it is attached, as real Docker does.
+        [ -f "$S/attached/$net" ] && cat "$S/gateway-name" ;;
+    esac
+    exit 0 ;;
+esac
+exit 0
+"#;
+
+struct Fixture {
+    base: PathBuf,
+    https_port: u16,
+}
+
+impl Fixture {
+    fn new(label: &str) -> Self {
+        let base = std::env::temp_dir().join(format!("berth-gw-{label}-{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&base));
+        for dir in ["project", "bin", "state/c", "home"] {
+            std::fs::create_dir_all(base.join(dir)).expect("fixture dir");
+        }
+        std::fs::write(
+            base.join("project/.berth.yaml"),
+            "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  app:\n    preset: laravel\n",
+        )
+        .expect("project file");
+        let docker = base.join("bin/docker");
+        std::fs::write(&docker, FAKE_DOCKER).expect("fake docker");
+        std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        // The gateway port preflight binds the port, so concurrently running
+        // tests need distinct, currently free ports.
+        let https_port = free_port();
+        Self { base, https_port }
+    }
+
+    fn berth(&self, args: &[&str], reload_fails: bool) -> Output {
+        let path = format!(
+            "{}:{}",
+            self.base.join("bin").display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        let mut command = Command::new(env!("CARGO_BIN_EXE_berth"));
+        command
+            .current_dir(self.base.join("project"))
+            .args(args)
+            .env("PATH", path)
+            .env("BERTH_HOME", self.base.join("home"))
+            .env("FAKE_STATE", self.base.join("state"))
+            .env("BERTH_GATEWAY_HTTPS_PORT", self.https_port.to_string())
+            .env("BERTH_GATEWAY_HTTP_PORT", (self.https_port - 1).to_string())
+            .env_remove("BERTH_INSTANCE");
+        if reload_fails {
+            command.env("FAKE_RELOAD_FAIL", "1");
+        }
+        command.output().expect("run berth")
+    }
+
+    fn berth_with_port(&self, args: &[&str], https_port: u16) -> Output {
+        Command::new(env!("CARGO_BIN_EXE_berth"))
+            .current_dir(self.base.join("project"))
+            .args(args)
+            .env(
+                "PATH",
+                format!(
+                    "{}:{}",
+                    self.base.join("bin").display(),
+                    std::env::var("PATH").unwrap_or_default()
+                ),
+            )
+            .env("BERTH_HOME", self.base.join("home"))
+            .env("FAKE_STATE", self.base.join("state"))
+            .env("BERTH_GATEWAY_HTTPS_PORT", https_port.to_string())
+            .env_remove("BERTH_GATEWAY_HTTP_PORT")
+            .env_remove("BERTH_INSTANCE")
+            .output()
+            .expect("run berth")
+    }
+
+    fn up_ok(&mut self) {
+        let output = self.first_up();
+        assert!(output.status.success(), "up failed: {}", stderr(&output));
+    }
+
+    /// Runs `up`, moving to another port once if a short-lived host socket
+    /// took the chosen one between selection and the gateway preflight. A
+    /// failed first start records nothing, so this is a fresh start.
+    fn first_up(&mut self) -> Output {
+        let output = self.berth(&["--non-interactive", "up", "--no-wait"], false);
+        if output.status.success()
+            || !stderr(&output).contains("is in use")
+            || self.base.join("home/gateway/ports").exists()
+        {
+            return output;
+        }
+        self.https_port = free_port();
+        self.berth(&["--non-interactive", "up", "--no-wait"], false)
+    }
+
+    fn calls(&self) -> Vec<String> {
+        std::fs::read_to_string(self.base.join("state/log"))
+            .unwrap_or_default()
+            .lines()
+            .map(ToOwned::to_owned)
+            .collect()
+    }
+
+    fn clear_log(&self) {
+        drop(std::fs::remove_file(self.base.join("state/log")));
+    }
+
+    fn document(&self) -> String {
+        std::fs::read_to_string(self.base.join("home/gateway/config/caddy.json"))
+            .unwrap_or_default()
+    }
+
+    fn gateway(&self) -> Option<String> {
+        std::fs::read_dir(self.base.join("state/c"))
+            .expect("containers")
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .find(|name| name.starts_with("berth_gateway_"))
+    }
+}
+
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        drop(std::fs::remove_dir_all(&self.base));
+    }
+}
+
+/// Returns a free port whose predecessor is free too, never one handed out
+/// before in this process (tests run in parallel and each gateway preflight
+/// binds its ports). Ports come from 10000-19999: below the OS ephemeral range
+/// and below berth's seeded host-port range (20000-60000), whose allocator in
+/// a parallel test would otherwise bind them between the check and use.
+fn free_port() -> u16 {
+    static NEXT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
+    let base = u16::try_from(std::process::id() % 4000).expect("offset");
+    loop {
+        let step = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let candidate = 10_001 + ((base + step) % 4995) * 2;
+        let free = |port: u16| std::net::TcpListener::bind(("127.0.0.1", port)).is_ok();
+        if free(candidate) && free(candidate - 1) {
+            return candidate;
+        }
+    }
+}
+
+fn stderr(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
+#[test]
+fn up_starts_the_gateway_and_applies_the_route_through_a_validated_reload() {
+    let mut fixture = Fixture::new("up");
+    let output = fixture.first_up();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let calls = fixture.calls();
+    let app_run = calls
+        .iter()
+        .position(|call| call.starts_with("run") && call.contains("berth_shop_"));
+    let gateway_run = calls
+        .iter()
+        .position(|call| call.starts_with("run") && call.contains("caddy run"));
+    let reload = calls.iter().position(|call| call.contains("caddy reload"));
+    assert!(app_run < gateway_run && gateway_run < reload, "{calls:#?}");
+    assert!(
+        calls
+            .iter()
+            .any(|call| call.starts_with("network connect --alias")
+                && call.contains("-shop.berth.localhost")),
+        "the gateway answers the route inside the instance network: {calls:#?}"
+    );
+    assert!(
+        fixture.document().contains("-shop.berth.localhost"),
+        "{}",
+        fixture.document()
+    );
+    assert!(
+        !fixture
+            .base
+            .join("home/gateway/config/caddy.next.json")
+            .exists()
+    );
+}
+
+#[test]
+fn a_rejected_reload_fails_up_and_keeps_the_last_accepted_document() {
+    let mut fixture = Fixture::new("reload");
+    fixture.up_ok();
+    let accepted = fixture.document();
+    std::fs::remove_file(fixture.base.join("project/.berth.yaml")).expect("config");
+    std::fs::write(
+        fixture.base.join("project/.berth.yaml"),
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  mailpit:\n    preset: mailpit\n  app:\n    preset: laravel\n",
+    )
+    .expect("config");
+
+    // Mailpit starts first, so the rejected document adds its route.
+    let output = fixture.berth(&["--non-interactive", "up", "--no-wait"], true);
+    assert!(!output.status.success(), "a rejected config must fail up");
+    assert!(stderr(&output).contains("rejected"), "{}", stderr(&output));
+    assert_eq!(
+        fixture.document(),
+        accepted,
+        "the accepted document is never replaced"
+    );
+    assert!(
+        !fixture
+            .base
+            .join("home/gateway/config/caddy.next.json")
+            .exists()
+    );
+}
+
+#[test]
+fn down_never_creates_the_gateway_and_detaches_it_before_removing_the_network() {
+    let mut fixture = Fixture::new("down");
+    fixture.up_ok();
+    let gateway = fixture.gateway().expect("gateway running");
+
+    fixture.clear_log();
+    let output = fixture.berth(&["--non-interactive", "down"], false);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let calls = fixture.calls();
+    let detach = calls.iter().position(|call| {
+        call.starts_with("network disconnect --force") && call.ends_with(&gateway)
+    });
+    let remove = calls.iter().position(|call| call.starts_with("network rm"));
+    assert!(detach.is_some() && detach < remove, "{calls:#?}");
+    assert!(
+        !fixture.document().contains("-shop.berth.localhost"),
+        "route withdrawn"
+    );
+
+    // With no gateway at all, down withdraws routes without starting one.
+    fixture.up_ok();
+    std::fs::remove_file(fixture.base.join("state/c").join(&gateway)).expect("drop gateway");
+    fixture.clear_log();
+    let without_gateway = fixture.berth(&["--non-interactive", "down"], false);
+    assert!(
+        without_gateway.status.success(),
+        "{}",
+        stderr(&without_gateway)
+    );
+    assert!(
+        !fixture
+            .calls()
+            .iter()
+            .any(|call| call.starts_with("run") && call.contains("caddy run")),
+        "{:#?}",
+        fixture.calls()
+    );
+}
+
+#[test]
+fn an_authored_domain_never_blocks_a_second_worktree() {
+    let mut fixture = Fixture::new("authored");
+    std::fs::write(
+        fixture.base.join("project/.berth.yaml"),
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    domain: shop.berth.localhost\n",
+    )
+    .expect("config");
+    fixture.up_ok();
+    assert!(fixture.document().contains("\"shop.berth.localhost\""));
+
+    let second = fixture.berth(
+        &[
+            "--non-interactive",
+            "--instance",
+            "agent-2",
+            "up",
+            "--no-wait",
+        ],
+        false,
+    );
+    assert!(second.status.success(), "{}", stderr(&second));
+    assert!(stderr(&second).contains("withheld"), "{}", stderr(&second));
+    let document = fixture.document();
+    assert!(
+        document.contains("agent-2-shop.berth.localhost"),
+        "{document}"
+    );
+    assert!(
+        !document.contains("\"shop.berth.localhost\""),
+        "a shared domain is withheld: {document}"
+    );
+}
+
+#[test]
+fn a_process_without_port_variables_uses_the_recorded_gateway_ports() {
+    let mut fixture = Fixture::new("ports");
+    fixture.up_ok();
+    let listen = format!(":{}", fixture.https_port);
+    assert!(fixture.document().contains(&listen));
+
+    let mut command = Command::new(env!("CARGO_BIN_EXE_berth"));
+    let output = command
+        .current_dir(fixture.base.join("project"))
+        .args(["--non-interactive", "down"])
+        .env(
+            "PATH",
+            format!(
+                "{}:{}",
+                fixture.base.join("bin").display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        )
+        .env("BERTH_HOME", fixture.base.join("home"))
+        .env("FAKE_STATE", fixture.base.join("state"))
+        .env_remove("BERTH_GATEWAY_HTTPS_PORT")
+        .env_remove("BERTH_GATEWAY_HTTP_PORT")
+        .env_remove("BERTH_INSTANCE")
+        .output()
+        .expect("run berth");
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        fixture.document().contains(&listen),
+        "{}",
+        fixture.document()
+    );
+
+    let conflicting = fixture.berth_with_port(&["--non-interactive", "up", "--no-wait"], 8443);
+    assert!(!conflicting.status.success());
+    assert!(
+        stderr(&conflicting).contains("8443"),
+        "{}",
+        stderr(&conflicting)
+    );
+}
+
+#[test]
+fn a_failed_first_gateway_start_does_not_pin_its_ports() {
+    // Hold an OS-assigned port first, so nothing can race for it.
+    let busy = std::net::TcpListener::bind("127.0.0.1:0").expect("hold port");
+    let mut fixture = Fixture::new("busy");
+    fixture.https_port = busy.local_addr().expect("addr").port();
+    let blocked = fixture.berth(&["--non-interactive", "up", "--no-wait"], false);
+    assert!(!blocked.status.success(), "a held port must fail up");
+    assert!(stderr(&blocked).contains("in use"), "{}", stderr(&blocked));
+    assert!(
+        !fixture.base.join("home/gateway/ports").exists(),
+        "nothing was served on that port"
+    );
+    drop(busy);
+
+    let moved = fixture.berth_with_port(&["--non-interactive", "up", "--no-wait"], free_port());
+    assert!(moved.status.success(), "{}", stderr(&moved));
+    assert!(fixture.base.join("home/gateway/ports").exists());
+}

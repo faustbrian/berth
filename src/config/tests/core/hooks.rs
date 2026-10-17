@@ -23,7 +23,7 @@ fn load_config_with_parses_service_hooks() {
                 image = "dunglas/frankenphp:php8.5"
                 host = "127.0.0.1"
                 port = 8000
-                domain = "app.localhost"
+                domain = "app.berth.localhost"
 
                 [[service.hook]]
                 name = "seed-dev-user"

@@ -9,4 +9,4 @@ mod paths;
 
 pub(crate) use installation::installation_id;
 pub(crate) use lock::HostLock;
-pub(crate) use paths::private_dir;
+pub(crate) use paths::{home_path, private_dir};

@@ -189,3 +189,28 @@ fn runtime_environments_get_their_own_network() {
     );
     std::fs::remove_dir_all(&base).expect("cleanup");
 }
+
+#[test]
+fn runtime_environments_have_no_gateway_routes_even_with_long_test_pool_names() {
+    let base = base("env-routes");
+    let root = worktree(&base, "checkout");
+    let mut config = load(&root, Some("abcdefghijklmnop-1a2b3c"));
+    let routed: Vec<_> = config
+        .service
+        .iter()
+        .filter(|service| service.resolved_domain.is_some())
+        .map(|service| service.name.clone())
+        .collect();
+    apply_runtime_env(&mut config, "testing-pool-0123456789abcdef-12")
+        .expect("a pooled test runtime never fails on route length");
+    for service in &config.service {
+        assert_eq!(service.resolved_domain, None, "{}", service.name);
+        assert!(
+            !crate::gateway::has_gateway_routes(service),
+            "{}",
+            service.name
+        );
+    }
+    assert_eq!(routed, ["app"], "the default environment is routed");
+    std::fs::remove_dir_all(&base).expect("cleanup");
+}

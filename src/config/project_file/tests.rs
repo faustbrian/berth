@@ -295,7 +295,7 @@ fn converter_reports_generated_routes_when_no_strategy_was_set() -> anyhow::Resu
         converted
             .notes
             .iter()
-            .any(|note| note.contains("always generates app routes")),
+            .any(|note| note.contains("instance route")),
         "{:?}",
         converted.notes
     );
@@ -397,6 +397,31 @@ fn migration_drops_container_names_once_and_warns_about_data_volumes() -> anyhow
             .notes
             .iter()
             .any(|note| note.contains("data volumes are not reused")),
+        "{:?}",
+        converted.notes
+    );
+    Ok(())
+}
+
+#[test]
+fn migrate_drops_v7_domains_berth_9_cannot_serve_and_keeps_servable_ones() -> anyhow::Result<()> {
+    let dir = temp_dir("v7-domains");
+    let converted = convert_legacy_config(
+        "schema_version = 1\ncontainer_prefix = \"shop\"\ndomain_strategy = \"directory\"\n\n[[service]]\npreset = \"laravel\"\nname = \"app\"\ndomain = \"acme.berth\"\ndomains = [\"shop.berth.localhost\", \"a.b.test\"]\n",
+        &dir.join(".stackctl.toml"),
+    )?;
+    let raw = parse(&converted.content)?;
+    let app = raw.service.first().expect("app");
+    assert_eq!(app.domain, None, "{}", converted.content);
+    assert_eq!(
+        app.domains.as_deref(),
+        Some(&["shop.berth.localhost".to_owned()][..])
+    );
+    assert!(
+        converted
+            .notes
+            .iter()
+            .any(|note| note.contains("acme.berth") && note.contains("a.b.test")),
         "{:?}",
         converted.notes
     );

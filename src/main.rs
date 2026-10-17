@@ -47,6 +47,7 @@ mod dependency_order;
 mod display;
 mod docker;
 mod env;
+mod gateway;
 mod home;
 mod instance;
 mod javascript;

@@ -296,7 +296,8 @@ mod tests {
 
     #[test]
     fn health_check_prefers_tcp_for_tcp_style_services() {
-        with_http_server("HTTP/1.1 204 No Content\r\n\r\n", 1, |port| {
+        // Two TCP probes connect, so the server must accept two connections.
+        with_http_server("HTTP/1.1 204 No Content\r\n\r\n", 2, |port| {
             let service_sql = service(Driver::Sqlserver, port);
             assert!(check_service_health(&service_sql, "app-container").expect("sql health"));
 

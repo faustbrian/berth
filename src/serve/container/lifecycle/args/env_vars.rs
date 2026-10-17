@@ -89,12 +89,13 @@ fn append_domain_host_gateway_mappings(
     let mut local_domains = BTreeSet::new();
     let mut local_suffixes = BTreeSet::new();
 
+    // The instance's own routes resolve to the gateway through its network
+    // aliases; only other instances' routes need the host gateway.
     for domain in target.resolved_domains() {
         if let Some(host) = normalize_hostname(domain) {
             if let Some(suffix) = hostname_suffix(&host) {
                 local_suffixes.insert(suffix.to_owned());
             }
-            local_domains.insert(host);
         }
     }
 
@@ -103,6 +104,8 @@ fn append_domain_host_gateway_mappings(
             let allow_from_env =
                 hostname_suffix(&host).is_some_and(|suffix| local_suffixes.contains(suffix));
             if allow_from_env
+                && !crate::gateway::is_instance_route(target, &host)
+                && !crate::gateway::route_hosts(target).contains(&host)
                 && host != host_gateway_alias
                 && !is_literal_ip(&host)
                 && host != "localhost"
@@ -219,8 +222,8 @@ mod tests {
             api_key: None,
             region: None,
             scheme: None,
-            domain: Some("shipit-api.berth".to_owned()),
-            domains: Some(vec!["alt-api.berth".to_owned()]),
+            domain: Some("shipit-api.berth.localhost".to_owned()),
+            domains: Some(vec!["alt-api.berth.localhost".to_owned()]),
             resolved_domain: None,
             container_port: Some(80),
             smtp_port: None,
@@ -253,16 +256,20 @@ mod tests {
         let service = app_service();
         let injected = HashMap::from([(
             "POSTAL_API_BASE_URL".to_owned(),
-            "https://postal-api.berth".to_owned(),
+            "https://postal-api.berth.localhost".to_owned(),
         )]);
 
         append_host_gateway_mapping(&mut run_args, &service, &injected);
         let rendered = run_args.join(" ");
 
         assert!(rendered.contains("--add-host host.docker.internal:host-gateway"));
-        assert!(rendered.contains("--add-host shipit-api.berth:host-gateway"));
-        assert!(rendered.contains("--add-host alt-api.berth:host-gateway"));
-        assert!(rendered.contains("--add-host postal-api.berth:host-gateway"));
+        // Own routes resolve to the gateway through network aliases.
+        assert!(
+            !rendered.contains("shipit-api.berth.localhost:"),
+            "{rendered}"
+        );
+        assert!(!rendered.contains("alt-api.berth.localhost:"), "{rendered}");
+        assert!(rendered.contains("--add-host postal-api.berth.localhost:host-gateway"));
     }
 
     #[test]

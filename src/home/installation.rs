@@ -18,6 +18,11 @@ const FILE_NAME: &str = "installation-id";
 /// Returns an error when the ID file cannot be read or created, or holds an
 /// invalid value.
 pub(crate) fn installation_id() -> Result<String> {
+    // Unit tests never touch the real berth home; the binary's integration
+    // tests set `BERTH_HOME` instead.
+    if cfg!(test) {
+        return Ok("0".repeat(32));
+    }
     let dir = super::private_dir(Path::new(""))?;
     create_or_read(&dir.join(FILE_NAME))
 }

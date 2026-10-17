@@ -99,9 +99,15 @@ pub(super) fn inferred_app_public_url(service: &ServiceConfig) -> Option<String>
         return Some(format!("https://localhost:{}", service.port));
     }
 
-    service
-        .primary_domain()
-        .map(|domain| format!("https://{domain}"))
+    // Only web apps give the project its URL; a worker (the `queue-worker`
+    // preset) listed first must never set `APP_URL`.
+    if !crate::gateway::is_routable(service) {
+        return None;
+    }
+    crate::gateway::route_urls(service)
+        .into_iter()
+        .next()
+        .or_else(|| Some(crate::serve::local_url(service)))
 }
 
 /// Builds a canonical `scheme://host:port` endpoint for a service.

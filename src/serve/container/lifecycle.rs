@@ -43,7 +43,7 @@ pub(super) fn ensure_container_running(
             recreate,
             runtime_image,
             mailhog_smtp_port(target),
-        );
+        )?;
         return Ok(());
     }
 

@@ -25,7 +25,7 @@ pub(super) fn run_command_one_off(
         target,
         &format!("{}-one-off", target.container_name()?),
         crate::docker::ContainerRole::OneOff,
-    ));
+    )?);
     crate::network::ensure_service_network(target)?;
     args.extend(crate::network::network_run_args(target, false));
     args.push(if tty { "-it" } else { "-i" }.to_owned());

@@ -1,6 +1,14 @@
 //! Exit-code and stdin passthrough through the real `berth` binary, with a
 //! fake `docker` placed first on PATH.
 
+// Integration tests are their own crate: panicking on setup failures and
+// top-level `#[test]` functions are the idiom here.
+#![allow(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::tests_outside_test_module
+)]
+
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;

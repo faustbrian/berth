@@ -1,5 +1,13 @@
 //! End-to-end checks of instance selection through the real `berth` binary.
 
+// Integration tests are their own crate: panicking on setup failures and
+// top-level `#[test]` functions are the idiom here.
+#![allow(
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::tests_outside_test_module
+)]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
