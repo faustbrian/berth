@@ -59,11 +59,11 @@ pub(super) fn append_host_gateway_mapping(
             .any(|value| value.contains(host_gateway_alias))
     });
 
-    if target.uses_host_gateway_alias() || injected_requests_gateway || explicit_requests_gateway {
-        if let Some(mapping) = crate::docker::host_gateway_mapping() {
-            run_args.push("--add-host".to_owned());
-            run_args.push(mapping.to_owned());
-        }
+    if (target.uses_host_gateway_alias() || injected_requests_gateway || explicit_requests_gateway)
+        && let Some(mapping) = crate::docker::host_gateway_mapping()
+    {
+        run_args.push("--add-host".to_owned());
+        run_args.push(mapping.to_owned());
     }
 
     append_domain_host_gateway_mappings(run_args, target, injected_env);
@@ -106,10 +106,10 @@ fn append_domain_host_gateway_mappings(
     // The instance's own routes resolve to the gateway through its network
     // aliases; only other instances' routes need the host gateway.
     for domain in target.resolved_domains() {
-        if let Some(host) = normalize_hostname(domain) {
-            if let Some(suffix) = hostname_suffix(&host) {
-                local_suffixes.insert(suffix.to_owned());
-            }
+        if let Some(host) = normalize_hostname(domain)
+            && let Some(suffix) = hostname_suffix(&host)
+        {
+            local_suffixes.insert(suffix.to_owned());
         }
     }
 

@@ -1,2 +1,5 @@
 /target
 /.berth/cache/
+
+# A local build artifact once committed by mistake (ledger L158).
+/repro

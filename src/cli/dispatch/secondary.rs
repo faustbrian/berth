@@ -50,9 +50,8 @@ mod tests {
         let cli = Cli::parse_from(["berth", "doctor"]);
         let context = CliDispatchContext::from_cli(&cli);
         let mut config = sample_config();
-        let result = super::dispatch_secondary(&cli, &mut config, &context)
+        super::dispatch_secondary(&cli, &mut config, &context)
             .expect("dispatch_secondary should complete");
-        assert_eq!(result, ());
     }
 
     #[test]

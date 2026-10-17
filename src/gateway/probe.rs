@@ -157,7 +157,7 @@ fn parse_status(stderr: &str) -> Option<u16> {
                 .and_then(|rest| rest.split_whitespace().nth(1))
                 .and_then(|code| code.parse().ok())
         })
-        .last()
+        .next_back()
 }
 
 /// Ensures the gateway runs and is attached to the service's network, and

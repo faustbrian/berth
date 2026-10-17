@@ -27,14 +27,14 @@ pub(super) fn check_service_ports<'a>(
     }
 
     for (host, port) in cli::support::service_host_ports(service) {
-        if let Some(existing) = used_ports.insert((host.clone(), port), service.name.as_str()) {
-            if existing != service.name {
-                has_error = true;
-                emit_doctor_error(&format!(
-                    "Port conflict: {}:{} used by '{}' and '{}'",
-                    host, port, existing, service.name
-                ));
-            }
+        if let Some(existing) = used_ports.insert((host.clone(), port), service.name.as_str())
+            && existing != service.name
+        {
+            has_error = true;
+            emit_doctor_error(&format!(
+                "Port conflict: {}:{} used by '{}' and '{}'",
+                host, port, existing, service.name
+            ));
         }
         if !running && !cli::support::is_port_available_strict(&host, port) {
             has_error = true;

@@ -14,21 +14,37 @@ fi
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
+# A private berth home: its own installation ID labels everything this run
+# creates, so cleanup removes exactly that, even after a failure.
+export BERTH_HOME="$TMP_DIR/berth-home"
 cleanup() {
+  local id
+  id="$(cat "$BERTH_HOME/installation-id" 2>/dev/null || true)"
+  if [[ -n "$id" ]]; then
+    "$ENGINE" ps -aq --filter "label=dev.berth.installation=$id" | xargs -r "$ENGINE" rm -f -v >/dev/null 2>&1 || true
+    "$ENGINE" network ls -q --filter "label=dev.berth.installation=$id" | xargs -r "$ENGINE" network rm >/dev/null 2>&1 || true
+    "$ENGINE" volume ls -q --filter "label=dev.berth.installation=$id" | xargs -r "$ENGINE" volume rm >/dev/null 2>&1 || true
+  fi
   if [[ -d "$TMP_DIR" ]]; then
     rm -rf "$TMP_DIR"
   fi
 }
 trap cleanup EXIT
 
-cat >"$TMP_DIR/.berth.toml" <<EOF_CONF
-schema_version = 1
-container_engine = "$ENGINE"
-container_prefix = "parity"
-
-[[service]]
-preset = "redis"
-name = "cache"
+# A dedicated container: the container commands below need one (a shared
+# Redis tenant has none).
+cat >"$TMP_DIR/.berth.yaml" <<EOF_CONF
+schema_version: 9
+project: parity
+project_type: project
+container_engine: $ENGINE
+services:
+  cache:
+    preset: redis
+    isolation: dedicated
+    # Host ports are opt-in in 9.x; `url`, `port` and `connect` need one.
+    publish: true
+    port: 46379
 EOF_CONF
 
 run_berth() {

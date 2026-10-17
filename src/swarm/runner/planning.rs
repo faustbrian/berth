@@ -11,10 +11,7 @@ use crate::swarm::targets::{
     ensure_swarm_target_configs_exist, resolve_swarm_targets,
 };
 
-pub(super) fn validate_swarm_invocation<'a>(
-    command: &'a [String],
-    parallel: usize,
-) -> Result<&'a str> {
+pub(super) fn validate_swarm_invocation(command: &[String], parallel: usize) -> Result<&str> {
     crate::parallel::validate_parallelism(parallel)?;
 
     let Some(subcommand) = command.first() else {
@@ -52,6 +49,10 @@ pub(super) fn handle_ls_command(
 /// Important ordering rule:
 /// - `swarm down` with dependencies reverses target order so dependents are
 ///   stopped before the services they rely on.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "7.0.0 signature kept as is; it predates the 9.x lint baseline (L154)"
+)]
 pub(super) fn resolve_execution_targets(
     config: &crate::config::Config,
     workspace_root: &Path,
@@ -203,7 +204,7 @@ mod tests {
     fn handle_ls_command_emits_when_requested() -> anyhow::Result<()> {
         let cfg = config();
         let workspace = temp_workspace();
-        let command = vec!["ls".to_owned()];
+        let command = ["ls".to_owned()];
         assert!(handle_ls_command(
             &cfg,
             &workspace,

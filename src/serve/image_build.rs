@@ -35,6 +35,10 @@ pub(super) fn should_include_js_tooling(target: &ServiceConfig) -> bool {
 }
 
 /// Renders the Dockerfile used to build a derived serve runtime image.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "7.0.0 signature kept as is; it predates the 9.x lint baseline (L154)"
+)]
 pub(super) fn render_derived_dockerfile(
     base_image: &str,
     extensions: &[String],

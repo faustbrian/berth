@@ -575,10 +575,10 @@ fn convert_v8_service(name: &str, mut entry: Map<String, Value>) -> Result<Map<S
         }
     };
     if !converted.contains_key("image") {
-        if let Some(Value::String(preset)) = converted.get("preset") {
-            if let Some(image) = v8_catalog_image(preset, version.as_deref())? {
-                converted.insert("image".to_owned(), Value::String(image));
-            }
+        if let Some(Value::String(preset)) = converted.get("preset")
+            && let Some(image) = v8_catalog_image(preset, version.as_deref())?
+        {
+            converted.insert("image".to_owned(), Value::String(image));
         }
     } else if version.is_some() {
         anyhow::bail!("8.x service '{name}' sets both `image` and `version`; keep one");

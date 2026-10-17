@@ -7,6 +7,10 @@ use anyhow::Result;
 use super::service_scope::for_each_service_in_scope_with_info;
 use crate::{config, docker};
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "7.0.0 signature kept as is; it predates the 9.x lint baseline (L154)"
+)]
 pub(crate) fn handle_stop(
     config: &config::Config,
     service: Option<&str>,

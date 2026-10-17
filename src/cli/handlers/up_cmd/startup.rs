@@ -47,6 +47,10 @@ pub(super) fn run_standard_up(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "7.0.0 signature kept as is; it predates the 9.x lint baseline (L154)"
+)]
 fn start_runtime_service(
     service: &config::ServiceConfig,
     start_context: &cli::support::ServiceStartContext<'_>,

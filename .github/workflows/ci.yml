@@ -10,16 +10,37 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only token: no job publishes anything.
+permissions:
+  contents: read
+
+# Every action is pinned to a full commit (scripts/audit-workflow-actions.sh).
 jobs:
+  policy:
+    name: Policy Audits
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          fetch-depth: 0
+
+      - name: Prove the policy audits can fail, then run them
+        run: ./scripts/test-policy-audits.sh
+
+      # Full history with tags: the check walks 7.0.0..8.0.0.
+      - name: Check ledger coverage of 8.x
+        run: ./scripts/check-v9-ledger.sh
+
   fmt:
     name: Format Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
 
       - name: Install nightly toolchain with rustfmt
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@efcb852328a9f50117170cc43094fb6f09eaf1ae
         with:
           components: rustfmt
 
@@ -31,25 +52,87 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
 
       - name: Install stable toolchain with clippy
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
         with:
           components: clippy
 
+      # The lint levels live in Cargo.toml; the policy audit keeps them on.
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-  test:
-    name: Tests
+  supply-chain:
+    name: Dependency Security and Policy
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
 
       - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+
+      - name: Install pinned audit tools
+        run: |
+          cargo install cargo-audit --locked --version 0.22.2
+          cargo install cargo-deny --locked --version 0.20.2
+
+      - name: Audit advisories, licenses, duplicates and sources
+        run: ./scripts/audit-supply-chain.sh
+
+  test:
+    name: Tests (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-latest
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+          - platform: macos-x86_64
+            runner: macos-15-intel
+          - platform: macos-arm64
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+
+      - name: Build release binary
+        run: cargo build --release --locked --all-features
 
       - name: Run tests
-        run: cargo test --all-targets --all-features
+        run: cargo test --locked --all-targets --all-features
+
+  agent-acceptance:
+    name: Agent Acceptance (linux-x86_64, real Docker)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      # A hosted runner is far smaller than a workstation: four parallel
+      # agents exercise every step; the 30-agent run is recorded in
+      # docs/v9/benchmarks.md.
+      - name: Run parallel agents against Docker
+        run: ./scripts/accept-v9-agents.sh target/release/berth target/agent-acceptance 4
+
+      - name: Publish the acceptance record
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: agent-acceptance-linux-x86_64
+          path: target/agent-acceptance
+          if-no-files-found: error
+          retention-days: 30

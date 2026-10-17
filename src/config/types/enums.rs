@@ -94,8 +94,10 @@ pub enum Driver {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 #[non_exhaustive]
+#[derive(Default)]
 pub enum ContainerEngine {
     /// Docker engine.
+    #[default]
     Docker,
     /// Podman engine.
     Podman,
@@ -125,12 +127,6 @@ pub enum RestartPolicy {
     Always,
     /// Restart unless manually stopped.
     UnlessStopped,
-}
-
-impl Default for ContainerEngine {
-    fn default() -> Self {
-        Self::Docker
-    }
 }
 
 impl RestartPolicy {

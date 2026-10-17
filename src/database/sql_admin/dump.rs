@@ -19,7 +19,7 @@ pub(super) fn run_dump_command(service: &ServiceConfig) -> Result<std::process::
         Driver::Postgres => run_postgres_exec(
             &ctx,
             "pg_dump",
-            &[ctx.db_name.clone()],
+            std::slice::from_ref(&ctx.db_name),
             "Failed to execute pg_dump",
         ),
         // `--no-tablespaces`: dumping tablespaces needs the global PROCESS

@@ -1,11 +1,11 @@
 run: fmt
-    RUSTFLAGS="-Awarnings" cargo run --release
+    cargo run --release
 
 run-dev: fmt
-    RUSTFLAGS="-Awarnings" cargo run
+    cargo run
 
 install:
-    cargo install --path .
+    cargo install --path . --locked
 
 build: fmt
     cargo build --release
@@ -14,7 +14,9 @@ build-dev: fmt
     cargo build
 
 lint:
+    ./scripts/test-policy-audits.sh
     rustup run nightly cargo fmt --check
+    cargo clippy --all-targets --all-features
 
 fmt:
     rustup run nightly cargo fmt

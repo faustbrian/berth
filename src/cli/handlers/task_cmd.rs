@@ -255,6 +255,10 @@ fn run_composer_workflow(
     Ok(())
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "7.0.0 signature kept as is; it predates the 9.x lint baseline (L154)"
+)]
 fn run_node_workflow(
     workspace_root: &Path,
     target: &config::ServiceConfig,

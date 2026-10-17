@@ -784,7 +784,7 @@ fn command_variants_parse() {
     let env = Cli::parse_from(["berth", "env", "generate", "--output", "/tmp/env-out"]);
     if let commands::Commands::Env(commands::EnvArgs { command, .. }) = env.command {
         assert!(
-            matches!(command, Some(EnvCommands::Generate { output, .. }) if output == PathBuf::from("/tmp/env-out"))
+            matches!(command, Some(EnvCommands::Generate { output, .. }) if output == *"/tmp/env-out")
         );
     } else {
         panic!("expected env command");

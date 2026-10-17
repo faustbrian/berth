@@ -49,9 +49,13 @@ where
     F: Fn(&config::ServiceConfig) -> Result<()> + Send + Sync,
 {
     let selected = selected_services_in_scope(config, service, services, kind, profile)?;
-    cli::support::run_selected_services(&selected, parallel, |svc| callback(*svc))
+    cli::support::run_selected_services(&selected, parallel, |svc| callback(svc))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "7.0.0 signature kept as is; it predates the 9.x lint baseline (L154)"
+)]
 pub(super) fn for_each_service_in_scope_with_info<F>(
     config: &config::Config,
     service: Option<&str>,

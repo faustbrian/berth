@@ -136,6 +136,17 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- The crate now builds under 8.x's lint baseline: `clippy::all`, the
+  no-panic lints and `unused` are denied, the blanket `allow` of every
+  Clippy group is gone, and no recipe disables warnings. `just lint` runs
+  the policy audits, rustfmt and Clippy; `just install` installs from
+  `Cargo.lock`.
+- CI pins every action to a commit and adds policy, supply-chain
+  (cargo-audit, cargo-deny), four-platform test and real-Docker agent
+  acceptance jobs.
+- `scripts/runtime-parity-*.sh` use `.berth.yaml` and a private berth home,
+  and remove everything they create.
+
 - Presets that defaulted to a mutable `latest` tag (OpenSearch,
   Meilisearch, MinIO, RustFS, LocalStack, Dragonfly, Soketi, Selenium,
   MailHog, Mailpit) now pin a version tag, so parallel instances and clean

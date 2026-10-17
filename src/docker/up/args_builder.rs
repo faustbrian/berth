@@ -54,11 +54,11 @@ fn append_host_gateway_mapping(args: &mut Vec<String>, service: &ServiceConfig) 
             .values()
             .any(|value| value.contains(host_gateway_alias))
     });
-    if service.uses_host_gateway_alias() || env_requests_gateway {
-        if let Some(mapping) = crate::docker::host_gateway_mapping() {
-            args.push("--add-host".to_owned());
-            args.push(mapping.to_owned());
-        }
+    if (service.uses_host_gateway_alias() || env_requests_gateway)
+        && let Some(mapping) = crate::docker::host_gateway_mapping()
+    {
+        args.push("--add-host".to_owned());
+        args.push(mapping.to_owned());
     }
 }
 

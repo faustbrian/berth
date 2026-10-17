@@ -20,15 +20,15 @@ pub(super) fn explicit_port_service_names(
     let mut explicit_smtp_services = HashSet::new();
 
     for raw_service in &raw_config.service {
-        if let Some(name) = &raw_service.name {
-            if raw_service.port.is_some() {
-                explicit_port_services.insert(name.clone());
-            }
+        if let Some(name) = &raw_service.name
+            && raw_service.port.is_some()
+        {
+            explicit_port_services.insert(name.clone());
         }
-        if raw_service.smtp_port.is_some() {
-            if let Some(name) = &raw_service.name {
-                explicit_smtp_services.insert(name.clone());
-            }
+        if raw_service.smtp_port.is_some()
+            && let Some(name) = &raw_service.name
+        {
+            explicit_smtp_services.insert(name.clone());
         }
     }
 

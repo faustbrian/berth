@@ -21,7 +21,7 @@ pub(crate) fn for_each_service(
 
     let selected = selected_services(config, service, kind, driver)?;
 
-    run_selected_services(&selected, parallel, |svc| f(*svc))
+    run_selected_services(&selected, parallel, |svc| f(svc))
 }
 
 pub(crate) fn run_services_with_app_last<S, IsApp, Run>(
@@ -87,9 +87,7 @@ where
         return Ok(());
     }
 
-    install_in_pool(parallel, || {
-        selected.par_iter().try_for_each(|item| run(item))
-    })
+    install_in_pool(parallel, || selected.par_iter().try_for_each(run))
 }
 
 #[cfg(test)]

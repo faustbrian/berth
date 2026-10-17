@@ -6,6 +6,10 @@ use crate::cli::args::PortStrategyArg;
 ///
 /// This function injects project-root scoping and selected runtime flags, then
 /// appends child command modifiers when not already present.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "7.0.0 signature kept as is; it predates the 9.x lint baseline (L154)"
+)]
 pub(super) fn swarm_child_args(
     target: &super::super::targets::ResolvedSwarmTarget,
     command: &[String],

@@ -99,7 +99,7 @@ mod tests {
         }
 
         let command = binary.to_string_lossy().to_string();
-        let result = docker::with_docker_command(&command, || test());
+        let result = docker::with_docker_command(&command, test);
         fs::remove_dir_all(bin_dir).ok();
         result
     }

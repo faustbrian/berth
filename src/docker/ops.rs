@@ -302,7 +302,7 @@ mod tests {
     fn top_appends_user_args() {
         let db = service("db", Kind::Database, Driver::Postgres);
         with_fake_docker("exit 0", || {
-            super::top(&db, &vec!["aux".to_owned()]).expect("top");
+            super::top(&db, &["aux".to_owned()]).expect("top");
         });
     }
 

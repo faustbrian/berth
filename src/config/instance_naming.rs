@@ -30,11 +30,11 @@ pub(crate) fn apply_instance_identity(
         // Application mounts are resolved relative to the project root
         // (`storage:/app/storage` is a bind of `{root}/storage`), so only
         // other services' mounts can name Docker volumes.
-        if service.kind != Kind::App {
-            if let Some(volumes) = &mut service.volumes {
-                for volume in volumes.iter_mut() {
-                    *volume = namespace_named_volume(volume, &namespace);
-                }
+        if service.kind != Kind::App
+            && let Some(volumes) = &mut service.volumes
+        {
+            for volume in volumes.iter_mut() {
+                *volume = namespace_named_volume(volume, &namespace);
             }
         }
         service.runtime.project = Some(project.clone());

@@ -9,6 +9,10 @@ use crate::serve::sql_client_flavor::SqlClientFlavor;
 /// - missing PHP extensions
 /// - optional JavaScript/package-manager tooling
 /// - MySQL client wrapper compatibility scripts
+#[expect(
+    clippy::too_many_arguments,
+    reason = "7.0.0 signature kept as is; it predates the 9.x lint baseline (L154)"
+)]
 pub(super) fn render_derived_dockerfile(
     base_image: &str,
     extensions: &[String],

@@ -52,7 +52,7 @@ fn handle_daemon_watch(args: &DaemonWatchArgs) -> Result<()> {
 }
 
 fn start_daemon_for_project_root(project_root: &Path, log_existing: bool) -> Result<bool> {
-    if let Some(existing) = daemon::load_session(&project_root)?
+    if let Some(existing) = daemon::load_session(project_root)?
         && daemon::pid_is_running(existing.pid)
     {
         if log_existing {
@@ -70,10 +70,10 @@ fn start_daemon_for_project_root(project_root: &Path, log_existing: bool) -> Res
         return Ok(false);
     }
 
-    let log_path = daemon::daemon_log_path(&project_root)?;
-    let pid = daemon::spawn_detached(&project_root, &log_path)?;
+    let log_path = daemon::daemon_log_path(project_root)?;
+    let pid = daemon::spawn_detached(project_root, &log_path)?;
     daemon::save_session(
-        &project_root,
+        project_root,
         &DaemonSession {
             project_root: project_root.to_string_lossy().into_owned(),
             pid,
@@ -223,7 +223,7 @@ fn resolve_daemon_project_root(path: &Path) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::cli::args::{
@@ -262,7 +262,7 @@ mod tests {
         home
     }
 
-    fn mock_daemon_binary(home: &PathBuf) -> String {
+    fn mock_daemon_binary(home: &Path) -> String {
         let script = home.join("berth-daemon-mock");
         fs::write(&script, "#!/usr/bin/env sh\nexec sleep 60\n").expect("write mock daemon");
         #[cfg(unix)]

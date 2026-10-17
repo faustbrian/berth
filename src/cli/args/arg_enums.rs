@@ -39,7 +39,7 @@ mod tests {
         );
 
         let names = PackageManager::value_variants()
-            .into_iter()
+            .iter()
             .filter_map(|value| value.to_possible_value())
             .map(|value| value.get_name().to_owned())
             .collect::<Vec<_>>();
@@ -65,7 +65,7 @@ mod tests {
     #[test]
     fn share_provider_arg_has_known_values() {
         let values = ShareProviderArg::value_variants()
-            .into_iter()
+            .iter()
             .filter_map(|value| value.to_possible_value())
             .map(|value| value.get_name().to_owned())
             .collect::<Vec<_>>();

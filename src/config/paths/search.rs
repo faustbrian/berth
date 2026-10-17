@@ -46,10 +46,10 @@ fn find_config_in_path_internal(
     let mut current = start_path;
 
     loop {
-        if let Some(runtime_env_file) = runtime_env_file {
-            if let Some(runtime_path) = resolve_config_file(current, runtime_env_file)? {
-                return Ok(runtime_path);
-            }
+        if let Some(runtime_env_file) = runtime_env_file
+            && let Some(runtime_path) = resolve_config_file(current, runtime_env_file)?
+        {
+            return Ok(runtime_path);
         }
 
         if let Some(config_path) = config_path_in_dir(current)? {

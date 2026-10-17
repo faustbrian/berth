@@ -219,7 +219,7 @@ fi\n"
         }
 
         let path = binary.to_string_lossy().to_string();
-        let result = docker::with_docker_command(&path, || test());
+        let result = docker::with_docker_command(&path, test);
         std::fs::remove_dir_all(&bin_dir).ok();
         result
     }
@@ -241,8 +241,7 @@ fi\n"
                 Some(&root),
             )
         });
-        let result = result.expect("write lockfile");
-        assert_eq!(result, ());
+        result.expect("write lockfile");
         assert!(lock_path.exists());
     }
 

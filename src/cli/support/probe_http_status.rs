@@ -6,7 +6,7 @@ use std::process::Command;
 
 #[cfg(test)]
 thread_local! {
-    static FAKE_CURL_COMMAND: std::cell::RefCell<Option<String>> = std::cell::RefCell::new(None);
+    static FAKE_CURL_COMMAND: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
 fn curl_command() -> String {

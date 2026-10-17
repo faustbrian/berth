@@ -9,6 +9,10 @@ use super::planning::plan_randomized_runtimes;
 
 pub(super) type PreparedRecreateRuntime = cli::support::PreparedRandomPorts<config::ServiceConfig>;
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "7.0.0 signature kept as is; it predates the 9.x lint baseline (L154)"
+)]
 pub(super) fn prepare_recreate_runtime(
     config: &config::Config,
     service: Option<&str>,

@@ -45,12 +45,11 @@ pub(crate) fn find_sensitive_env_values(env_path: &Path) -> Result<Vec<String>> 
 #[cfg(test)]
 mod tests {
     use super::find_sensitive_env_values;
-    use std::path::PathBuf;
 
     #[test]
     fn find_sensitive_env_values_detects_known_keys_and_filters_values()
     -> Result<(), std::io::Error> {
-        let mut env_path = PathBuf::from(std::env::temp_dir());
+        let mut env_path = std::env::temp_dir();
         env_path.push("berth-sensitive-env-test");
         let mut file = std::fs::File::create(&env_path)?;
         use std::io::Write;

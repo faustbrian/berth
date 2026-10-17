@@ -23,9 +23,8 @@ pub(super) fn build_artisan_test_command(
 
     let mut exports: Vec<String> = app_env
         .iter()
-        .filter_map(|(key, value)| {
-            is_valid_env_key(key).then(|| format!("export {key}={}", shell_single_quote(value)))
-        })
+        .filter(|&(key, _value)| is_valid_env_key(key))
+        .map(|(key, value)| format!("export {key}={}", shell_single_quote(value)))
         .collect();
     exports.sort();
     exports.push("export APP_ENV='testing'".to_owned());

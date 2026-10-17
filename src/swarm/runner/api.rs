@@ -14,6 +14,10 @@ pub(crate) use run::run_swarm;
 ///
 /// This is exported for tests and for modules that need deterministic child
 /// process invocation behavior.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "7.0.0 signature kept as is; it predates the 9.x lint baseline (L154)"
+)]
 pub(crate) fn swarm_child_args(
     target: &super::super::targets::ResolvedSwarmTarget,
     command: &[String],

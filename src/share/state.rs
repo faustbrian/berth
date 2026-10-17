@@ -359,6 +359,10 @@ fn ensure_provider_available(provider: ShareProvider) -> Result<()> {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "7.0.0 signature kept as is; it predates the 9.x lint baseline (L154)"
+)]
 fn start_tailscale_bg_session(
     target: &ServiceConfig,
     provider: ShareProvider,
@@ -694,7 +698,7 @@ mod tests {
     fn reset_share_test_context(home: &Path) -> PathBuf {
         clear_test_state_home();
         clear_test_provider_binaries();
-        set_test_state_home(&home.to_str().expect("temporary home should be valid UTF-8"));
+        set_test_state_home(home.to_str().expect("temporary home should be valid UTF-8"));
         home.to_path_buf()
     }
 

@@ -171,7 +171,7 @@ mod tests {
 
         let binary = docker_bin.to_string_lossy().to_string();
         let result =
-            docker::with_dry_run_state(false, || docker::with_docker_command(&binary, || test()));
+            docker::with_dry_run_state(false, || docker::with_docker_command(&binary, test));
         std::fs::remove_dir_all(&bin_dir).ok();
         result
     }
@@ -208,7 +208,7 @@ mod tests {
         }
 
         let command = curl.to_string_lossy().to_string();
-        let result = with_curl_command(&command, || test());
+        let result = with_curl_command(&command, test);
         std::fs::remove_dir_all(&bin_dir).ok();
         result
     }

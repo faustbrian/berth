@@ -52,6 +52,32 @@ pub(super) fn summarize_results(
     Ok(())
 }
 
+fn emit_summary(output_mode: OutputMode, succeeded: usize, failed: usize, skipped: usize) {
+    let level = if failed == 0 {
+        LogLevel::Success
+    } else {
+        LogLevel::Error
+    };
+    let message = match output_mode {
+        OutputMode::Logged => {
+            format!("Summary: {succeeded} succeeded, {failed} failed, {skipped} skipped")
+        }
+        OutputMode::Passthrough => {
+            format!("Swarm summary: {succeeded} succeeded, {failed} failed, {skipped} skipped")
+        }
+    };
+    super::output::emit_swarm(output_mode, level, &message);
+}
+
+fn emit_failure(output_mode: OutputMode, failure: &SwarmRunResult) {
+    let message = format!(
+        "Failed target '{}' at {}",
+        failure.name,
+        failure.root.display()
+    );
+    super::output::emit_swarm(output_mode, LogLevel::Error, &message);
+}
+
 #[cfg(test)]
 mod tests {
     use super::summarize_results;
@@ -99,30 +125,4 @@ mod tests {
         assert_eq!(code, Some(3));
         assert!(error.to_string().contains("beta"), "{error}");
     }
-}
-
-fn emit_summary(output_mode: OutputMode, succeeded: usize, failed: usize, skipped: usize) {
-    let level = if failed == 0 {
-        LogLevel::Success
-    } else {
-        LogLevel::Error
-    };
-    let message = match output_mode {
-        OutputMode::Logged => {
-            format!("Summary: {succeeded} succeeded, {failed} failed, {skipped} skipped")
-        }
-        OutputMode::Passthrough => {
-            format!("Swarm summary: {succeeded} succeeded, {failed} failed, {skipped} skipped")
-        }
-    };
-    super::output::emit_swarm(output_mode, level, &message);
-}
-
-fn emit_failure(output_mode: OutputMode, failure: &SwarmRunResult) {
-    let message = format!(
-        "Failed target '{}' at {}",
-        failure.name,
-        failure.root.display()
-    );
-    super::output::emit_swarm(output_mode, LogLevel::Error, &message);
 }

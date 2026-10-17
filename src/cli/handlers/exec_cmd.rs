@@ -134,7 +134,7 @@ mod tests {
             ),
         ]);
 
-        let result = docker::with_dry_run_lock(|| {
+        docker::with_dry_run_lock(|| {
             super::handle_exec(
                 &config,
                 HandleExecOptions {
@@ -147,8 +147,7 @@ mod tests {
                     command: &[],
                 },
             )
-        });
-        result
+        })
     }
 
     #[test]
