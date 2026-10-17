@@ -64,6 +64,7 @@ pub(super) fn dispatch(
                 force: args.force,
                 timeout: args.timeout,
                 parallel: args.parallel,
+                purge: args.purge,
                 quiet: context.quiet(),
                 no_color: context.no_color(),
                 dry_run: context.dry_run(),

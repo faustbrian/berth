@@ -254,6 +254,12 @@ pub(crate) fn docker_command() -> String {
     active_engine_adapter().command_binary().to_owned()
 }
 
+mod instance_purge;
+pub(crate) use instance_purge::purge_instance_objects;
+mod volume_targets;
+pub(crate) use volume_targets::{
+    collect_named_volume_targets, remove_container_with_volumes, remove_service_volumes,
+};
 mod child_exit;
 mod cmd;
 mod engine;

@@ -28,6 +28,23 @@ pub(super) fn apply_runtime_env(config: &mut Config, env_name: &str) -> Result<(
             )
         })?;
         service.resolved_container_name = Some(format!("{base_name}{suffix}"));
+        // Named volumes in the instance namespace get the namespace's suffix,
+        // so a runtime environment never mounts (or purges) the default
+        // environment's data.
+        if let (Some(project), Some(instance), Some(volumes)) = (
+            service.runtime.project.clone(),
+            service.runtime.instance.clone(),
+            service.volumes.as_mut(),
+        ) {
+            let namespace = format!("berth_{project}_{instance}_");
+            for volume in volumes.iter_mut() {
+                if let Some((source, rest)) = volume.split_once(':')
+                    && source.starts_with(&namespace)
+                {
+                    *volume = format!("{source}{suffix}:{rest}");
+                }
+            }
+        }
         // A runtime environment gets its own network so its services never
         // share DNS aliases with the instance's default services.
         if let Some(network) = &mut service.runtime.network {
@@ -85,4 +102,11 @@ pub(super) fn default_env_file_name(runtime_env: Option<&str>) -> Result<String>
     }
 
     Ok(format!(".env.{normalized}"))
+}
+
+/// Whether `env_name` (after normalization) is the default runtime env.
+pub(super) fn is_default_runtime_env_name(env_name: &str) -> Result<bool> {
+    Ok(is_default_runtime_env(&normalize_runtime_env_name(
+        env_name,
+    )?))
 }

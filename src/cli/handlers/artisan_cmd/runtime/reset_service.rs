@@ -6,9 +6,8 @@ use crate::config::ServiceConfig;
 use crate::output::{self, LogLevel, Persistence};
 
 mod docker_cmd;
-mod volume_targets;
+use crate::docker::collect_named_volume_targets;
 use docker_cmd::{remove_named_volume_output, try_remove_container_with_volumes};
-use volume_targets::collect_named_volume_targets;
 
 /// Resets a service runtime so test runs start from a clean container state.
 pub(super) fn reset_service_runtime(service: &ServiceConfig) -> Result<()> {
@@ -63,8 +62,8 @@ fn remove_named_volume(service: &ServiceConfig, volume_name: &str) -> Result<()>
 
 #[cfg(test)]
 mod tests {
-    use super::volume_targets::collect_named_volume_targets;
     use crate::config::{Driver, Kind, ServiceConfig};
+    use crate::docker::collect_named_volume_targets;
 
     #[test]
     fn includes_default_data_volume_for_stateful_service_without_explicit_volumes() {
@@ -77,16 +76,26 @@ mod tests {
     #[test]
     fn includes_only_named_explicit_volumes_and_skips_bind_mounts() {
         let mut service = service("db", Driver::Mysql);
+        service.runtime.project = Some("shop".to_owned());
+        service.runtime.instance = Some("a-1".to_owned());
         service.volumes = Some(vec![
-            "dbdata:/var/lib/mysql".to_owned(),
-            "cache:/data:rw".to_owned(),
+            "berth_shop_a-1_dbdata:/var/lib/mysql".to_owned(),
+            "berth_shop_a-1_cache:/data:rw".to_owned(),
+            "someone-elses:/data".to_owned(),
             "./src:/app".to_owned(),
             "/tmp/cache:/cache".to_owned(),
             "/cache".to_owned(),
         ]);
 
         let volumes = collect_named_volume_targets(&service).expect("collect volumes");
-        assert_eq!(volumes, vec!["cache".to_owned(), "dbdata".to_owned()]);
+        assert_eq!(
+            volumes,
+            vec![
+                "berth_shop_a-1_cache".to_owned(),
+                "berth_shop_a-1_dbdata".to_owned()
+            ],
+            "only volumes in the instance namespace, never binds or foreign volumes"
+        );
     }
 
     fn service(name: &str, driver: Driver) -> ServiceConfig {

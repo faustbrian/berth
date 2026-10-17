@@ -27,6 +27,26 @@ pub(crate) fn home_path(relative: &Path) -> Result<PathBuf> {
     Ok(berth_home()?.join(relative))
 }
 
+/// Deletes `~/.berth/instances/{project}/{instance}` (managed credentials and
+/// keys). A missing directory is not an error.
+///
+/// # Errors
+///
+/// Returns an error when the directory exists but cannot be removed, or is a
+/// symbolic link.
+pub(crate) fn remove_instance_state(project: &str, instance: &str) -> Result<()> {
+    let dir = home_path(&Path::new("instances").join(project).join(instance))?;
+    match std::fs::symlink_metadata(&dir) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            anyhow::bail!("{} must not be a symbolic link", dir.display())
+        }
+        Ok(_) => std::fs::remove_dir_all(&dir)
+            .with_context(|| format!("failed to delete {}", dir.display())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).with_context(|| format!("failed to inspect {}", dir.display())),
+    }
+}
+
 /// Creates (if needed) and returns a user-private directory below the berth
 /// home. The home itself and every directory below it must be a real
 /// directory: a symbolic link anywhere from the home down is refused, so

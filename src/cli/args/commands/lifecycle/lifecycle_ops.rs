@@ -27,6 +27,10 @@ pub(crate) struct DownArgs {
     pub(crate) timeout: u64,
     #[arg(long, default_value_t = default_parallelism())]
     pub(crate) parallel: usize,
+    /// Also delete the instance's data: database volumes, logical databases
+    /// and credentials. No confirmation; nothing is retained.
+    #[arg(long, default_value_t = false)]
+    pub(crate) purge: bool,
 }
 
 impl DownArgs {
@@ -258,6 +262,7 @@ mod tests {
             force: false,
             timeout: 30,
             parallel: 1,
+            purge: false,
         };
 
         assert_eq!(args.service(), Some("api"));

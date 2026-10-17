@@ -390,12 +390,20 @@ fn default_credentials_never_mangle_names_routes_or_errors() {
     fixture.write_project(
         "schema_version: 9\nproject: laravel-shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n  app:\n    preset: laravel\n",
     );
-    let up = fixture.berth(&["up", "--json", "--wait-timeout", "5"], &[("FAKE_BOOT", "fatal")]);
+    let up = fixture.berth(
+        &["up", "--json", "--wait-timeout", "5"],
+        &[("FAKE_BOOT", "fatal")],
+    );
     assert_eq!(up.status.code(), Some(125));
     let stderr = text(&up.stderr);
     assert!(!stderr.contains("<redacted>-shop"), "{stderr}");
     assert!(stderr.contains("laravel-shop"), "{stderr}");
     let document = one_document(&up.stdout);
     assert_eq!(document["project"], "laravel-shop");
-    assert!(!document["error"].as_str().unwrap_or_default().contains("<redacted>"));
+    assert!(
+        !document["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("<redacted>")
+    );
 }

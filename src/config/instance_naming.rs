@@ -47,7 +47,8 @@ pub(crate) fn apply_instance_identity(
             .into_iter()
             .flatten()
             .filter(|secret| {
-                service.username.as_ref() != Some(*secret) && service.database.as_ref() != Some(*secret)
+                service.username.as_ref() != Some(*secret)
+                    && service.database.as_ref() != Some(*secret)
             })
         {
             crate::docker::register_secret(secret);

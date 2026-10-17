@@ -14,6 +14,10 @@ All notable changes to this project are documented in this file.
   are named `berth_{project}_{instance}_{service}`, and service, app and
   one-off containers carry `dev.berth.*` ownership labels for their project,
   instance and root.
+- Added `down --purge`: also deletes the instance's data volumes and, when
+  the whole instance is purged, its berth state under `~/.berth` (managed
+  credentials and `APP_KEY`), in one call without confirmation. Running it
+  again is a no-op; `down` alone keeps data.
 - Added `up --json`: exactly one JSON document on stdout (`status`, `project`,
   `instance`, `urls`, per-service `state`/`health`/`endpoint`/`url`,
   `credentials`, `environment`, `host_environment`), and a `status: failed`

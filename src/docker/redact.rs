@@ -41,7 +41,10 @@ pub(crate) fn redact_known_secrets(text: &str) -> String {
             .find(|c: char| c == '/' || c.is_whitespace() || c == '"' || c == '\'')
             .unwrap_or(rest.len());
         let authority = &rest[..authority_end];
-        match authority.rfind('@').and_then(|at| authority[..at].find(':').map(|colon| (colon, at))) {
+        match authority
+            .rfind('@')
+            .and_then(|at| authority[..at].find(':').map(|colon| (colon, at)))
+        {
             Some((colon, at)) => {
                 out.push_str(&authority[..=colon]);
                 out.push_str(REDACTED);
@@ -88,7 +91,11 @@ pub(crate) fn redact_args(args: &[String]) -> Vec<String> {
             arg.clone()
         };
         previous = arg;
-        let value = if is_known_secret(&value) { REDACTED.to_owned() } else { value };
+        let value = if is_known_secret(&value) {
+            REDACTED.to_owned()
+        } else {
+            value
+        };
         redacted.push(redact_known_secrets(&value));
     }
     redacted
@@ -96,7 +103,9 @@ pub(crate) fn redact_args(args: &[String]) -> Vec<String> {
 
 fn redact_assignment(assignment: &str) -> String {
     match assignment.split_once('=') {
-        Some((name, value)) if !value.is_empty() && (is_secret_name(name) || is_known_secret(value)) => {
+        Some((name, value))
+            if !value.is_empty() && (is_secret_name(name) || is_known_secret(value)) =>
+        {
             format!("{name}={REDACTED}")
         }
         _ => assignment.to_owned(),

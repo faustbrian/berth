@@ -17,6 +17,15 @@ pub fn apply_runtime_env(config: &mut Config, env_name: &str) -> Result<()> {
     runtime_env::apply_runtime_env(config, env_name)
 }
 
+/// Whether `env_name` names the instance's default runtime environment.
+///
+/// # Errors
+///
+/// Returns an error if the env label is invalid.
+pub fn is_default_runtime_env_name(env_name: &str) -> Result<bool> {
+    runtime_env::is_default_runtime_env_name(env_name)
+}
+
 /// Returns the default env file name for an optional runtime environment.
 ///
 /// # Errors
