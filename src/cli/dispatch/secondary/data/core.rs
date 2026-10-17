@@ -92,6 +92,7 @@ pub(super) fn dispatch(
                 timestamps: args.timestamps,
                 prefix: args.prefix,
                 access: args.access,
+                json: args.json,
             },
         )),
         Commands::Pull(args) => Some(handlers::handle_pull(

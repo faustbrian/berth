@@ -84,7 +84,10 @@ pub(crate) use resolve_profile_targets::resolve_profile_targets;
 pub(crate) use resolve_tty::effective_tty;
 pub(crate) use resolve_up_services::resolve_up_services;
 pub(crate) use resolve_workspace_path::resolve_workspace_path;
-pub(crate) use run_doctor::{RunDoctorOptions, run_doctor};
+pub(crate) use run_doctor::{
+    DoctorCheck, RunDoctorOptions, run_doctor, start_recording as start_doctor_recording,
+    take_recording as take_doctor_recording,
+};
 pub(crate) use run_random_ports_flow::{RandomPortsPersistenceOptions, run_random_ports_flow};
 pub(crate) use run_service_command::{run_service_command_with_tty, run_service_commands};
 pub(crate) use runtime_app_env::runtime_app_env;

@@ -25,7 +25,8 @@ mod secondary;
 /// 2. Handle setup commands that can run without config.
 /// 3. Load and optionally runtime-patch config.
 /// 4. Attempt primary dispatch, then fall through to secondary.
-pub(crate) fn run(cli: Cli) -> Result<()> {
+pub(crate) fn run(mut cli: Cli) -> Result<()> {
+    apply_json_flags(&mut cli);
     if cli.no_color {
         colored::control::set_override(false);
     }
@@ -84,6 +85,33 @@ pub(crate) fn run(cli: Cli) -> Result<()> {
         Some(lease) => result.and(lease.finish()),
         None => result,
     }
+}
+
+/// `--json` on the inspection commands means `--format json`. Every
+/// machine-readable mode reserves stdout for its output, so image pulls and
+/// builds a repair runs (`doctor --fix`) go to stderr.
+fn apply_json_flags(cli: &mut Cli) {
+    let machine_readable = match &cli.command {
+        Commands::Ps(args) => args.json || args.format.eq_ignore_ascii_case("json"),
+        Commands::Url(args) => args.json || args.format.eq_ignore_ascii_case("json"),
+        Commands::About(args) => args.json || args.format.eq_ignore_ascii_case("json"),
+        Commands::Health(args) => args.json || args.format.eq_ignore_ascii_case("json"),
+        Commands::Doctor(args) => args.json || args.format.eq_ignore_ascii_case("json"),
+        Commands::Logs(args) => args.json,
+        _ => false,
+    };
+    if machine_readable {
+        output::reserve_stdout();
+    }
+    let format = match &mut cli.command {
+        Commands::Ps(args) if args.json => &mut args.format,
+        Commands::Url(args) if args.json => &mut args.format,
+        Commands::About(args) if args.json => &mut args.format,
+        Commands::Health(args) if args.json => &mut args.format,
+        Commands::Doctor(args) if args.json => &mut args.format,
+        _ => return,
+    };
+    "json".clone_into(format);
 }
 
 fn apply_runtime_policy_overrides(cli: &Cli) {

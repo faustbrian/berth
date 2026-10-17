@@ -22,12 +22,18 @@ pub(crate) struct HandleDoctorOptions<'a> {
 struct DoctorResult {
     ok: bool,
     error: Option<String>,
+    /// Every check, in the order it ran.
+    checks: Vec<cli::support::DoctorCheck>,
 }
 
 pub(crate) fn handle_doctor(
     config: &config::Config,
     options: HandleDoctorOptions<'_>,
 ) -> Result<()> {
+    let json = options.format.eq_ignore_ascii_case("json");
+    if json {
+        cli::support::start_doctor_recording();
+    }
     let result = cli::support::run_doctor(
         config,
         cli::support::RunDoctorOptions {
@@ -40,15 +46,18 @@ pub(crate) fn handle_doctor(
         },
     );
 
-    if options.format.eq_ignore_ascii_case("json") {
+    if json {
+        let checks = cli::support::take_doctor_recording();
         match &result {
             Ok(()) => serialize::print_json_pretty(&DoctorResult {
                 ok: true,
                 error: None,
+                checks,
             })?,
             Err(err) => serialize::print_json_pretty(&DoctorResult {
                 ok: false,
                 error: Some(err.to_string()),
+                checks,
             })?,
         }
     }

@@ -12,6 +12,7 @@ mod docker;
 mod ports;
 mod repair;
 mod report;
+pub(crate) use report::{DoctorCheck, start_recording, take_recording};
 mod repro;
 mod secrets;
 

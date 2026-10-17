@@ -36,6 +36,9 @@ pub(crate) struct LockArgs {
 pub(crate) struct DoctorArgs {
     #[arg(long, default_value = "table")]
     pub(crate) format: String,
+    /// Print JSON (the same as `--format json`)
+    #[arg(long, default_value_t = false)]
+    pub(crate) json: bool,
     /// Attempt to fix detected issues where possible
     #[arg(long, default_value_t = false)]
     pub(crate) fix: bool,

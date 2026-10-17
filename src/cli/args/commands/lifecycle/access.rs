@@ -12,6 +12,9 @@ pub(crate) struct UrlArgs {
     pub(crate) service: Option<String>,
     #[arg(long, default_value = "table")]
     pub(crate) format: String,
+    /// Print JSON (the same as `--format json`)
+    #[arg(long, default_value_t = false)]
+    pub(crate) json: bool,
     #[arg(long, value_enum)]
     pub(crate) kind: Option<config::Kind>,
     #[arg(long, value_enum)]

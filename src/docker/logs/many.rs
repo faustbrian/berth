@@ -15,7 +15,7 @@ pub(super) fn logs_many(services: &[ServiceConfig], options: LogsOptions) -> Res
 
     if !options.follow {
         for service in services {
-            if options.prefix {
+            if options.prefix || options.json {
                 logs_prefixed(
                     service,
                     LogsOptions {

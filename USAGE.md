@@ -282,6 +282,13 @@ Validate local setup and configuration health.
 - `--repro`: run reproducibility checks.
 - `--reachability`: probe app URLs and health endpoints.
 - `--format <FORMAT>` (`table` default, `json` supported)
+- `--json`: the same as `--format json`; on success stdout holds exactly one
+  JSON document (progress always goes to stderr), and an error exits non-zero
+  with its message on stderr
+  (a failing check still prints the document, then exits non-zero)
+
+With `--json` the document is `{"ok", "error", "checks": [{"status":
+"ok" | "info" | "error", "message"}]}`.
 
 ### `berth lock <SUBCOMMAND>`
 
@@ -526,6 +533,9 @@ Flags:
 
 - `--service <NAME>`
 - `--format <FORMAT>` (default: `table`)
+- `--json`: the same as `--format json`; on success stdout holds exactly one
+  JSON document (progress always goes to stderr), and an error exits non-zero
+  with its message on stderr
   - `json`: structured JSON
   - other values/default (`table`): plain text URL output
 - `--kind <KIND>`
@@ -562,6 +572,9 @@ Show runtime status for services.
 Flags:
 
 - `--format <FORMAT>` (default: `table`)
+- `--json`: the same as `--format json`; on success stdout holds exactly one
+  JSON document (progress always goes to stderr), and an error exits non-zero
+  with its message on stderr
   - `json`: structured JSON
   - other values/default (`table`): human status view
 - `--kind <KIND>`
@@ -574,6 +587,9 @@ Show runtime project overview.
 Flags:
 
 - `--format <FORMAT>` (`table` default, `json` supported)
+- `--json`: the same as `--format json`; on success stdout holds exactly one
+  JSON document (progress always goes to stderr), and an error exits non-zero
+  with its message on stderr
 
 ### `berth health`
 
@@ -586,6 +602,10 @@ Flags:
 - `--kind <KIND>`
 - `--profile <NAME>` (conflicts with `--service` and `--kind`)
 - `--format <FORMAT>` (`table` default, `json` supported)
+- `--json`: the same as `--format json`; on success stdout holds exactly one
+  JSON document (progress always goes to stderr), and an error exits non-zero
+  with its message on stderr
+  (a failing check still prints the document, then exits non-zero)
 - `--timeout <SECONDS>` (default: `30`)
 - `--interval <SECONDS>` (default: `2`)
 - `--retries <N>`
@@ -628,6 +648,10 @@ Flags:
 - `--until <VALUE>`
 - `-t, --timestamps`
 - `--access` (tail local Caddy access logs instead)
+- `--json`: one JSON object per log line,
+  `{"service": "db", "stream": "stdout", "line": "..."}` (works with
+  `--follow` and several services; bytes that are not UTF-8 become U+FFFD;
+  not with `--access` or `--dry-run`)
 
 ### `berth top [ARGS...]`
 

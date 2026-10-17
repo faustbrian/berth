@@ -19,10 +19,19 @@ pub(crate) struct HandleLogsOptions<'a> {
     pub(crate) timestamps: bool,
     pub(crate) prefix: bool,
     pub(crate) access: bool,
+    pub(crate) json: bool,
 }
 
 pub(crate) fn handle_logs(config: &config::Config, options: HandleLogsOptions<'_>) -> Result<()> {
+    if options.json && docker::is_dry_run() {
+        anyhow::bail!(
+            "`logs --json` streams container output and cannot be combined with --dry-run"
+        );
+    }
     if options.access {
+        if options.json {
+            anyhow::bail!("`logs --access --json` is not supported; drop one of them");
+        }
         return cli::support::tail_access_logs(options.follow, options.tail);
     }
 
@@ -44,6 +53,7 @@ pub(crate) fn handle_logs(config: &config::Config, options: HandleLogsOptions<'_
                 options.until,
                 options.timestamps,
                 options.prefix,
+                options.json,
             ),
         );
     }
@@ -59,6 +69,7 @@ pub(crate) fn handle_logs(config: &config::Config, options: HandleLogsOptions<'_
                 options.until,
                 options.timestamps,
                 options.prefix,
+                options.json,
             ),
         );
     } else if let Some(first) = selected.first() {
@@ -68,26 +79,23 @@ pub(crate) fn handle_logs(config: &config::Config, options: HandleLogsOptions<'_
     };
     run_single_service_logs(
         svc,
-        options.follow,
-        options.tail,
-        options.since,
-        options.until,
-        options.timestamps,
-        options.prefix,
+        docker_logs_options(
+            options.follow,
+            options.tail,
+            options.since,
+            options.until,
+            options.timestamps,
+            options.prefix,
+            options.json,
+        ),
     )
 }
 
 fn run_single_service_logs(
     service: &config::ServiceConfig,
-    follow: bool,
-    tail: Option<u64>,
-    since: Option<&str>,
-    until: Option<&str>,
-    timestamps: bool,
-    prefix: bool,
+    log_options: docker::LogsOptions,
 ) -> Result<()> {
-    let log_options = docker_logs_options(follow, tail, since, until, timestamps, prefix);
-    if prefix {
+    if log_options.prefix {
         docker::logs_prefixed(service, log_options)
     } else {
         docker::logs(service, log_options)
@@ -101,6 +109,7 @@ fn docker_logs_options(
     until: Option<&str>,
     timestamps: bool,
     prefix: bool,
+    json: bool,
 ) -> docker::LogsOptions {
     docker::LogsOptions {
         follow,
@@ -109,5 +118,6 @@ fn docker_logs_options(
         until: until.map(ToOwned::to_owned),
         timestamps,
         prefix,
+        json,
     }
 }

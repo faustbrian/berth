@@ -35,6 +35,9 @@ pub(crate) struct LogsArgs {
     /// Tail local Caddy access logs instead of container logs
     #[arg(long, default_value_t = false)]
     pub(crate) access: bool,
+    /// Print one JSON object per line: `{"service", "stream", "line"}`
+    #[arg(long, default_value_t = false)]
+    pub(crate) json: bool,
 }
 
 impl LogsArgs {

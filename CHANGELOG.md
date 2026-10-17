@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Added `--json` to `ps`, `url`, `about`, `health`, `logs` and `doctor`:
+  each prints one JSON document (`logs` one object per line), and `doctor
+  --json` lists every check.
+
 - Added instance leases and reaping: `up --ttl 2h` and `up --owner-pid <pid>`
   (or `BERTH_OWNER_PID`) lease an instance, and berth commands delete
   (as `down --purge`) instances whose lease lapsed, whose owner process

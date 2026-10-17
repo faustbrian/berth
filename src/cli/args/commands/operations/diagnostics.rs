@@ -12,12 +12,18 @@ use crate::config;
 pub(crate) struct AboutArgs {
     #[arg(long, default_value = "table")]
     pub(crate) format: String,
+    /// Print JSON (the same as `--format json`)
+    #[arg(long, default_value_t = false)]
+    pub(crate) json: bool,
 }
 
 #[derive(Args)]
 pub(crate) struct PsArgs {
     #[arg(long, default_value = "table")]
     pub(crate) format: String,
+    /// Print JSON (the same as `--format json`)
+    #[arg(long, default_value_t = false)]
+    pub(crate) json: bool,
     #[arg(long, value_enum)]
     pub(crate) kind: Option<config::Kind>,
     #[arg(long, value_enum)]
@@ -45,6 +51,9 @@ pub(crate) struct HealthArgs {
     pub(crate) profile: Option<String>,
     #[arg(long, default_value = "table")]
     pub(crate) format: String,
+    /// Print JSON (the same as `--format json`)
+    #[arg(long, default_value_t = false)]
+    pub(crate) json: bool,
     /// Timeout in seconds
     #[arg(long, default_value_t = 30)]
     pub(crate) timeout: u64,

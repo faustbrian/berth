@@ -36,6 +36,7 @@ case "$1" in
     case "$name" in *_db) [ "$FAKE_DB_RUN" = busy ] && { echo "port is already allocated" >&2; exit 125; } ;; esac
     mkdir -p "$S/c"; echo running > "$S/c/$name"; exit 0 ;;
   rm) for arg in "$@"; do rm -f "$S/c/$arg"; done; exit 0 ;;
+  logs) printf 'ready to accept connections\n\377bad\nafter\n'; echo "a warning" >&2; exit 0 ;;
   inspect)
     name=""; for arg in "$@"; do name="$arg"; done
     [ -f "$S/c/$name" ] || exit 1
@@ -443,4 +444,114 @@ fn default_credentials_never_mangle_names_routes_or_errors() {
             .unwrap_or_default()
             .contains("<redacted>")
     );
+}
+
+#[test]
+fn inspection_commands_print_exactly_one_json_document() {
+    let fixture = Fixture::new("inspect-json");
+    assert!(
+        fixture
+            .berth(&["up", "--json", "--no-wait"], &[])
+            .status
+            .success()
+    );
+    for (args, succeeds) in [
+        (&["ps", "--json"][..], true),
+        (&["url", "--json"][..], true),
+        (&["about", "--json"][..], true),
+        (&["ls", "--json"][..], true),
+        // Health and doctor fail against the fake gateway; their document
+        // reports it.
+        (&["health", "--json"][..], false),
+        (&["doctor", "--json"][..], false),
+    ] {
+        let output = fixture.berth(args, &[]);
+        if succeeds {
+            assert!(
+                output.status.success(),
+                "{args:?}: {}",
+                text(&output.stderr)
+            );
+        }
+        let document = one_document(&output.stdout);
+        assert!(
+            document.is_object() || document.is_array(),
+            "{args:?}: {document}"
+        );
+    }
+    let doctor = one_document(&fixture.berth(&["doctor", "--json"], &[]).stdout);
+    assert!(
+        doctor["checks"]
+            .as_array()
+            .is_some_and(|checks| checks.iter().any(|check| check["status"] == "ok")),
+        "doctor --json lists its checks: {doctor}"
+    );
+}
+
+/// Every stdout line of `logs --json` as an object.
+fn log_lines(output: &Output) -> Vec<serde_json::Value> {
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    text(&output.stdout)
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("one JSON object per line"))
+        .collect()
+}
+
+#[test]
+fn logs_json_prints_one_object_per_line_for_every_selection() {
+    let fixture = Fixture::new("logs-json");
+    assert!(
+        fixture
+            .berth(&["up", "--json", "--no-wait"], &[])
+            .status
+            .success()
+    );
+    let single = log_lines(&fixture.berth(&["logs", "--json", "--service", "db"], &[]));
+    assert!(
+        single.iter().any(|line| line["service"] == "db"
+            && line["stream"] == "stdout"
+            && line["line"] == "ready to accept connections"),
+        "{single:?}"
+    );
+    assert!(
+        single.iter().any(|line| line["stream"] == "stderr"),
+        "{single:?}"
+    );
+    assert!(
+        single.iter().any(|line| line["line"] == "after"),
+        "a line that is not UTF-8 never ends the stream: {single:?}"
+    );
+    assert!(
+        single.iter().any(|line| line["line"] == "\u{fffd}bad"),
+        "{single:?}"
+    );
+    for args in [
+        &["logs", "--json"][..],
+        &[
+            "logs",
+            "--json",
+            "--follow",
+            "--service",
+            "db",
+            "--service",
+            "app",
+        ][..],
+    ] {
+        let lines = log_lines(&fixture.berth(args, &[]));
+        let services: std::collections::BTreeSet<&str> = lines
+            .iter()
+            .filter_map(|line| line["service"].as_str())
+            .collect();
+        assert!(services.len() > 1, "{args:?}: {lines:?}");
+    }
+    let access = fixture.berth(&["logs", "--json", "--access"], &[]);
+    assert_eq!(access.status.code(), Some(125));
+    assert!(
+        text(&access.stderr).contains("not supported"),
+        "{}",
+        text(&access.stderr)
+    );
+    let dry = fixture.berth(&["--dry-run", "logs", "--json"], &[]);
+    assert_eq!(dry.status.code(), Some(125));
+    assert!(dry.stdout.is_empty());
 }

@@ -24,9 +24,15 @@ pub struct LogsOptions {
     pub until: Option<String>,
     pub timestamps: bool,
     pub prefix: bool,
+    /// One JSON object per line (`{"service", "stream", "line"}`) instead
+    /// of raw lines.
+    pub json: bool,
 }
 
 pub fn logs(service: &ServiceConfig, options: LogsOptions) -> Result<()> {
+    if options.json {
+        return logs_prefixed(service, options);
+    }
     let container_name = service.container_name()?;
     let args = build_logs_args(&container_name, options);
 
@@ -46,6 +52,7 @@ pub fn logs(service: &ServiceConfig, options: LogsOptions) -> Result<()> {
 
 pub fn logs_prefixed(service: &ServiceConfig, options: LogsOptions) -> Result<()> {
     let container_name = service.container_name()?;
+    let json = options.json;
     let args = build_logs_args(&container_name, options);
 
     if is_dry_run() {
@@ -53,7 +60,7 @@ pub fn logs_prefixed(service: &ServiceConfig, options: LogsOptions) -> Result<()
         return Ok(());
     }
 
-    stream_logs_with_prefix(&args, &service.name, &container_name)
+    stream_logs_with_prefix(&args, &service.name, &container_name, json)
 }
 
 pub fn logs_many(services: &[ServiceConfig], options: LogsOptions) -> Result<()> {
