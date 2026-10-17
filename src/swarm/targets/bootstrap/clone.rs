@@ -68,7 +68,7 @@ fn build_clone_command(git: &crate::config::SwarmGit) -> Command {
     }
     command
         .stdin(Stdio::null())
-        .stdout(Stdio::inherit())
+        .stdout(output::child_stdout())
         .stderr(Stdio::inherit());
     command
 }

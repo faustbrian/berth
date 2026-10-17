@@ -77,7 +77,7 @@ fn emit_stream_line(
             output::stream(target_name, channel, rendered, Persistence::Persistent)
         }
         OutputMode::Passthrough => {
-            if passthrough_stderr {
+            if passthrough_stderr || output::stdout_reserved() {
                 eprintln!("{rendered}");
             } else {
                 println!("{rendered}");

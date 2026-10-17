@@ -1,7 +1,8 @@
 //! Persistent file sink internals for logger state.
 
-use std::fs::{File, OpenOptions, create_dir_all};
+use std::fs::{File, OpenOptions};
 use std::io::Write;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -41,11 +42,23 @@ fn ensure_log_file_for_day(state: &mut FileState, directory: &PathBuf, day: &str
         return;
     }
 
-    if create_dir_all(directory).is_err() {
+    // Logs carry service names, routes and error output: private to the
+    // user, like everything else berth keeps.
+    if std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(directory)
+        .is_err()
+    {
         return;
     }
     let file_path = directory.join(format!("{day}.log"));
-    let Ok(file) = OpenOptions::new().create(true).append(true).open(file_path) else {
+    let Ok(file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o600)
+        .open(file_path)
+    else {
         return;
     };
     state.file = Some(file);

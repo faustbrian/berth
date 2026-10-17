@@ -10,9 +10,11 @@ use crate::config::ServiceConfig;
 use crate::output::{self, LogLevel, Persistence};
 
 mod body;
+mod framework_boot;
 mod observation;
 mod url;
 
+pub(crate) use framework_boot::wait_until_laravel_boots;
 use observation::HealthProbeObservation;
 use url::health_url_for_target;
 

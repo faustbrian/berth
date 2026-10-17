@@ -8,12 +8,14 @@ use std::path::Path;
 use crate::cli::args::PortStrategyArg;
 use crate::config;
 use crate::docker;
+pub(crate) use report::{UpReportOptions, failed_report, ready_report};
 
 mod data_seed;
 mod options;
 mod post_actions;
 mod preflight;
 mod random_ports;
+mod report;
 mod startup;
 
 use data_seed::apply_data_seeds;

@@ -14,6 +14,18 @@ All notable changes to this project are documented in this file.
   are named `berth_{project}_{instance}_{service}`, and service, app and
   one-off containers carry `dev.berth.*` ownership labels for their project,
   instance and root.
+- Added `up --json`: exactly one JSON document on stdout (`status`, `project`,
+  `instance`, `urls`, per-service `state`/`health`/`endpoint`/`url`,
+  `credentials`, `environment`, `host_environment`), and a `status: failed`
+  document with the error when `up` fails. Laravel web apps are ready only
+  once `php artisan about` boots the framework (a fatal boot fails with the
+  fatal line; a container that stops fails at once, and readiness never
+  replaces a container; Laravel before 9.21 boots through `artisan
+  --version`). `--wait-timeout` defaults to 120s. While `up --json` runs,
+  image pulls, builds, seed restores and swarm dependency output go to stderr.
+  Hook output now goes to stderr, configured secrets are redacted from printed
+  docker commands, errors and logs (including inside URLs), and log files are
+  private (0600).
 - Changed berth to never write `.env`: the environment is injected into every
   container. `berth env` prints it (`--json` gives `environment`, exactly what
   app containers receive, and `host`, endpoints a host tool can reach), and

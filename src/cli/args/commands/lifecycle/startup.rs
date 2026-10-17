@@ -101,9 +101,14 @@ pub(crate) struct UpArgs {
     /// Skip health waits during startup
     #[arg(long, default_value_t = false, conflicts_with = "wait")]
     pub(crate) no_wait: bool,
-    /// Timeout in seconds for --wait
-    #[arg(long, default_value_t = 30)]
+    /// Timeout in seconds for --wait. A cold start of many parallel
+    /// instances (image pulls, first framework boot) needs more than 30s.
+    #[arg(long, default_value_t = 120)]
     pub(crate) wait_timeout: u64,
+    /// Print one JSON document on stdout: URLs, per-service status,
+    /// credentials and the managed environment (or the error on failure)
+    #[arg(long, default_value_t = false)]
+    pub(crate) json: bool,
     /// Pull image before start
     #[arg(long, value_enum, default_value_t = PullPolicyArg::Missing)]
     pub(crate) pull: PullPolicyArg,
@@ -123,8 +128,8 @@ pub(crate) struct UpArgs {
     /// Seed used by `--port-strategy stable`
     #[arg(long)]
     pub(crate) port_seed: Option<String>,
-    /// Write inferred service vars to local `.env`
-    #[arg(long, default_value_t = false)]
+    /// Removed in berth 9 (fails naming `berth env`); kept hidden.
+    #[arg(long, hide = true, default_value_t = false)]
     pub(crate) env_output: bool,
     /// Skip starting workspace swarm dependencies
     #[arg(long, default_value_t = false)]

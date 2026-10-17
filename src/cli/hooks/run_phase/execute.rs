@@ -26,7 +26,7 @@ fn run_exec_hook(service: &ServiceConfig, argv: &[String], phase: HookPhase) -> 
     if argv.is_empty() {
         anyhow::bail!("`run.argv` must include at least one command token");
     }
-    crate::docker::exec_command(service, argv, false)
+    crate::docker::exec_command_to_stderr(service, argv)
 }
 
 pub(super) const fn hook_phase_label(phase: HookPhase) -> &'static str {

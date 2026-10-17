@@ -42,6 +42,15 @@ fn wait_strategy_for_service(service: &config::ServiceConfig) -> WaitStrategy {
     }
 }
 
+/// Whether waiting for the service checks its health. App services
+/// without a health path or framework-boot probe are only started.
+#[must_use]
+pub(crate) fn is_health_checked(service: &config::ServiceConfig) -> bool {
+    service.kind != config::Kind::App
+        || wait_strategy_for_service(service) != WaitStrategy::Skip
+        || (crate::env::is_laravel_app(service) && crate::gateway::is_routable(service))
+}
+
 /// Starts a service and optionally waits for health.
 pub(crate) fn start_service(
     service: &config::ServiceConfig,
@@ -71,6 +80,11 @@ pub(crate) fn start_service(
                     docker::wait_until_healthy(service, health_timeout_secs, 2, None)?;
                 }
                 WaitStrategy::Skip => {}
+            }
+            // A Laravel web app is ready only once the framework boots
+            // (8.x FI-06); workers run `artisan` commands that fail loudly.
+            if crate::env::is_laravel_app(service) && crate::gateway::is_routable(service) {
+                serve::wait_until_laravel_boots(service, health_timeout_secs)?;
             }
         }
     } else {

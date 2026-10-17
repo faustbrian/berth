@@ -41,6 +41,17 @@ pub(crate) fn apply_instance_identity(
         service.runtime.instance = Some(identity.id.clone());
         service.runtime.root = Some(identity.root.clone());
         service.runtime.network = Some(namespace.clone());
+        // A value that is also the service's username or database (the
+        // presets' `laravel`) names things and is printed as such.
+        for secret in [&service.password, &service.secret_key, &service.api_key]
+            .into_iter()
+            .flatten()
+            .filter(|secret| {
+                service.username.as_ref() != Some(*secret) && service.database.as_ref() != Some(*secret)
+            })
+        {
+            crate::docker::register_secret(secret);
+        }
         assign_route(service, &project, &identity.id)?;
     }
     Ok(())

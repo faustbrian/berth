@@ -26,6 +26,7 @@ pub(crate) fn run_docker_output_owned(args: &[String], context: &str) -> Result<
 pub(crate) fn run_docker_status(args: &[&str], context: &str) -> Result<ExitStatus> {
     Command::new(crate::docker::docker_command())
         .args(args)
+        .stdout(crate::output::child_stdout())
         .status()
         .with_context(|| context.to_owned())
 }
@@ -41,6 +42,7 @@ pub(crate) fn spawn_docker_stdin_stderr_piped(args: &[&str], context: &str) -> R
     Command::new(crate::docker::docker_command())
         .args(args)
         .stdin(Stdio::piped())
+        .stdout(crate::output::child_stdout())
         .stderr(Stdio::piped())
         .spawn()
         .with_context(|| context.to_owned())

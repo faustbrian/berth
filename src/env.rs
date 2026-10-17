@@ -22,7 +22,7 @@ pub fn update_env(service: &ServiceConfig, env_path: &Path, create_missing: bool
 }
 
 pub(crate) use dotenv_view::{host_env, render_dotenv};
-pub(crate) use managed_runtime::apply_managed_runtime_env;
+pub(crate) use managed_runtime::{apply_managed_runtime_env, is_laravel_app};
 
 #[must_use]
 pub fn inferred_app_env(config: &Config) -> HashMap<String, String> {

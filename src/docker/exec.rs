@@ -71,6 +71,33 @@ pub fn exec_piped(service: &ServiceConfig, tty: bool) -> Result<Child> {
     spawn_docker_piped(&args)
 }
 
+/// Runs `command` in the service container with its stdout sent to berth's
+/// stderr: for berth's own steps (hooks), whose output must never mix into
+/// a command's machine-readable stdout.
+pub fn exec_command_to_stderr(service: &ServiceConfig, command: &[String]) -> Result<()> {
+    let container_name = service.container_name()?;
+    let args = build_exec_args(&container_name, command, false);
+
+    if is_dry_run() {
+        print_docker_command(&args);
+        return Ok(());
+    }
+
+    ensure_container_running(service, &container_name)?;
+    let status = std::process::Command::new(crate::docker::docker_command())
+        .args(&args)
+        .stdout(std::io::stderr())
+        .status()
+        .map_err(|error| anyhow::anyhow!("Failed to execute command in container: {error}"))?;
+    if !status.success() {
+        return Err(super::command_failed_error(
+            status,
+            command_failed_in_container(&container_name, status.code()),
+        ));
+    }
+    Ok(())
+}
+
 /// Execs command as part of the docker exec workflow.
 pub fn exec_command(service: &ServiceConfig, command: &[String], tty: bool) -> Result<()> {
     let container_name = service.container_name()?;

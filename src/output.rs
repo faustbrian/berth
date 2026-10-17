@@ -8,6 +8,7 @@ use std::sync::atomic::AtomicBool;
 use emit::{emit_entry, emit_entry_direct, now_local_timestamp};
 use init::{install_logger, tracing_fallback_warning};
 use normalize::normalize_log_message;
+pub(crate) use reserved_stdout::{child_stdout, reserve_stdout, stdout_reserved};
 use serde_json::Value;
 use state::LoggerState;
 use stream::prepare_stream_message;
@@ -35,7 +36,7 @@ pub(crate) fn event_with_context(
     context: Option<Value>,
     persistence: Persistence,
 ) {
-    let normalized = normalize_log_message(level, message);
+    let normalized = normalize_log_message(level, &crate::docker::redact_known_secrets(message));
     emit_entry(
         level,
         prefixed_scope_message(scope, &normalized),
@@ -70,6 +71,7 @@ mod entry;
 mod init;
 mod layer;
 mod normalize;
+mod reserved_stdout;
 mod state;
 mod stream;
 mod terminal_line;

@@ -79,7 +79,10 @@ fn main() -> ExitCode {
     match cli::dispatch::run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("Error: {error:#}");
+            eprintln!(
+                "Error: {}",
+                docker::redact_known_secrets(&format!("{error:#}"))
+            );
             let child_code = error
                 .chain()
                 .find_map(|cause| cause.downcast_ref::<docker::ChildExitError>())

@@ -95,7 +95,7 @@ pub(crate) use selected_services::{selected_services, selected_services_with_fil
 pub(crate) use serve_health::{build_health_url, health_status_accepted};
 pub(crate) use service_labels::{driver_name, kind_name};
 pub(crate) use service_scope::ServiceScope;
-pub(crate) use start_service::{ServiceStartContext, start_service};
+pub(crate) use start_service::{ServiceStartContext, is_health_checked, start_service};
 pub(crate) use tail_access_logs::tail_access_logs;
 pub(crate) use workspace_root::workspace_root;
 pub(crate) use workspace_with_project_deps::{

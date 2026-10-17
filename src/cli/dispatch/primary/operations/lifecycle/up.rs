@@ -29,12 +29,79 @@ pub(super) struct DispatchUpOptions<'a> {
     pub(super) include_project_deps: bool,
     pub(super) seed: bool,
     pub(super) parallel: usize,
+    pub(super) json: bool,
 }
 
 pub(super) fn dispatch_up(
     config: &mut Config,
     context: &CliDispatchContext<'_>,
     options: DispatchUpOptions<'_>,
+) -> Result<()> {
+    if !options.json {
+        return run_up(config, context, &options);
+    }
+    if context.dry_run() {
+        anyhow::bail!(
+            "`up --json` reports a running instance and cannot be combined with --dry-run"
+        );
+    }
+    let waited = !options.no_wait;
+    crate::output::reserve_stdout();
+    match run_up(config, context, &options) {
+        Ok(()) => {
+            let selected = crate::cli::support::selected_services_with_filters(
+                config,
+                options.service,
+                &[],
+                options.kind,
+                None,
+                options.profile,
+            )
+            .map(|services| services.iter().map(|svc| svc.name.clone()).collect())
+            .unwrap_or_default();
+            let report = handlers::ready_report(
+                config,
+                &handlers::UpReportOptions {
+                    waited,
+                    selected,
+                    service: options.service,
+                    config_path: context.config_path(),
+                    project_root: context.project_root(),
+                },
+            );
+            match report {
+                Ok(report) => print_document(&report),
+                // A converged instance whose report cannot be built still
+                // prints one document: the failure.
+                Err(error) => {
+                    print_document(&handlers::failed_report(config, &error))?;
+                    Err(error)
+                }
+            }
+        }
+        Err(error) => {
+            // The failure document goes to stdout; the error itself is still
+            // returned, so it is printed on stderr and sets the exit code.
+            print_document(&handlers::failed_report(config, &error))?;
+            Err(error)
+        }
+    }
+}
+
+#[allow(clippy::print_stdout)] // `--json` prints its one document on stdout
+fn print_document(document: &serde_json::Value) -> Result<()> {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(document)
+            .map_err(|error| anyhow::anyhow!("failed to render the up report: {error}"))?
+    );
+    Ok(())
+}
+
+fn run_up(
+    config: &mut Config,
+    context: &CliDispatchContext<'_>,
+    options: &DispatchUpOptions<'_>,
 ) -> Result<()> {
     handlers::handle_up(
         config,

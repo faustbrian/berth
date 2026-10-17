@@ -67,6 +67,7 @@ pub(crate) fn apply_managed_runtime_env(
     } else {
         crate::home::app_key(project, instance)?
     };
+    crate::docker::register_secret(&key);
     vars.insert("APP_KEY".to_owned(), key);
     Ok(())
 }

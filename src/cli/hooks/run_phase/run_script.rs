@@ -25,9 +25,12 @@ pub(super) fn run_script_hook(
         return Ok(());
     }
 
+    // A hook is berth's own work, not the command's output: its stdout goes
+    // to stderr so stdout stays machine-readable (`up --json`).
     let mut child = Command::new("sh")
         .arg(&resolved)
         .current_dir(workspace_root)
+        .stdout(std::io::stderr())
         .spawn()
         .with_context(|| format!("failed to execute hook script at {}", resolved.display()))?;
 

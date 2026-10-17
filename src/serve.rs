@@ -38,6 +38,7 @@ use container::{ensure_container_running, remove_container};
 pub(super) use state::DerivedImageLock;
 use trust::trust_inner_container_ca;
 
+pub(crate) use health::wait_until_laravel_boots;
 pub(crate) use orchestrate::local_url;
 pub use orchestrate::{RunServeOptions, down, public_url, run};
 

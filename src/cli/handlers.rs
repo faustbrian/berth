@@ -11,7 +11,7 @@ mod docker_ops;
 mod doctor_cmd;
 mod down_cmd;
 mod dump_cmd;
-mod env_cmd;
+pub(crate) mod env_cmd;
 mod env_scrub_cmd;
 mod exec_cmd;
 mod health_cmd;
@@ -89,6 +89,6 @@ pub(crate) use swarm_cmd::{HandleSwarmOptions, handle_swarm};
 pub(crate) use task_cmd::{
     HandleTaskDepsWorkflowOptions, TaskDependencyAction, handle_task_deps_workflow,
 };
-pub(crate) use up_cmd::{HandleUpOptions, handle_up};
+pub(crate) use up_cmd::{HandleUpOptions, UpReportOptions, failed_report, handle_up, ready_report};
 pub(crate) use update_cmd::{HandleUpdateOptions, handle_update};
 pub(crate) use url_cmd::handle_url;
