@@ -6,6 +6,7 @@
 mod legacy;
 mod migrate;
 pub(crate) mod schema;
+mod service_policy;
 
 pub(crate) use legacy::{LEGACY_CONFIG_FILE_NAMES, legacy_config_error};
 #[cfg(test)]

@@ -29,6 +29,9 @@ pub(super) fn dispatch_primary(
             Some(ConfigCommands::Migrate) => Err(anyhow::anyhow!(
                 "`config migrate` is dispatched before config loading"
             )),
+            Some(ConfigCommands::Validate { json }) => {
+                handlers::handle_config_validate(config, json)
+            }
             None => handlers::handle_config(config, &args.format),
         }),
         Commands::Preset(args) => Some(match &args.command {

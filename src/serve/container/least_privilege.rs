@@ -17,19 +17,18 @@ const HOME_TMPFS_BYTES: u64 = 1024 * 1024 * 1024;
 /// app-kind images (Selenium, Gotenberg, Mailpit, Soketi) bring their own
 /// users and keep their image defaults.
 ///
-/// An app that terminates TLS itself (7.0.0's `localhost_tls`, or container
-/// port 443, the only case where `trust_container_ca` acts) keeps 7.0.0's
-/// container: its Caddy CA must persist in the image's root-owned `/data`
-/// across restarts so host trust stays valid, which neither a tmpfs nor a
-/// non-root user allows. Behind the gateway (port 80, the presets' default)
-/// it never does.
+/// An app that terminates TLS itself (container port 443, the only case where
+/// `trust_container_ca` acts) keeps 7.0.0's container: its Caddy CA must
+/// persist in the image's root-owned `/data` across restarts so host trust
+/// stays valid, which neither a tmpfs nor a non-root user allows. Behind the
+/// gateway (port 80, the presets' default) it never does, and neither do test
+/// leases, which set `localhost_tls` on port 80.
 #[must_use]
 pub(crate) fn runs_least_privileged(target: &ServiceConfig) -> bool {
     matches!(
         target.driver,
         Driver::Frankenphp | Driver::Horizon | Driver::Scheduler | Driver::Reverb
-    ) && !target.localhost_tls
-        && target.resolved_container_port() != 443
+    ) && target.resolved_container_port() != 443
 }
 
 /// The options that run a PHP app container as the invoking user with no
@@ -166,9 +165,10 @@ mod tests {
 
     #[test]
     fn in_container_tls_keeps_the_7_0_0_container() {
-        let mut tls = service(Driver::Frankenphp);
-        tls.localhost_tls = true;
-        assert!(!runs_least_privileged(&tls));
+        // Test leases set `localhost_tls` on port 80: still least-privileged.
+        let mut lease = service(Driver::Frankenphp);
+        lease.localhost_tls = true;
+        assert!(runs_least_privileged(&lease));
         let mut inner_tls = service(Driver::Frankenphp);
         inner_tls.container_port = Some(443);
         assert!(!runs_least_privileged(&inner_tls));

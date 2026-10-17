@@ -97,7 +97,8 @@ case "$1" in
     exit 0 ;;
   exec)
     case "$*" in *"'php' 'artisan' 'test'"*) [ -n "$FAKE_TEST_SLEEP" ] && sleep "$FAKE_TEST_SLEEP"; exit 0 ;; esac
-    cat >> "$S/sql"
+    cat > "$S/last-sql"; cat "$S/last-sql" >> "$S/sql"
+    [ -f "$S/tenant-fails" ] && grep -q 'CREATE ROLE' "$S/last-sql" && { echo 'ERROR:  permission denied to create role' >&2; exit 1; }
     case "$*" in *psql*|*" mysql "*|*" mariadb "*|*redis-cli*) ;; *) exit 0 ;; esac
     case "$*" in
       *"-n 0 --scan"*) for k in $FAKE_KEYS; do echo "$k"; done; exit 0 ;;
@@ -1311,4 +1312,32 @@ fn gc_keeps_a_stopped_server_it_cannot_inspect_and_never_starts_it() {
         ),
         "{calls}"
     );
+}
+
+#[test]
+fn a_tenant_that_fails_to_provision_names_its_instance_and_leaves_others_up() {
+    let host = Host::new("tenant-fails");
+    let a = host.checkout("a", PROJECT);
+    let b = host.checkout("b", PROJECT);
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    let instance_b = env_json(&host, &b)["environment"]["DB_DATABASE"]
+        .as_str()
+        .expect("tenant of b")
+        .to_owned();
+    std::fs::write(host.base.join("state").join("tenant-fails"), b"").expect("break tenants");
+
+    let failed = host.berth(&b, &["up", "--no-wait"]);
+    assert_eq!(failed.status.code(), Some(125));
+    let stderr = text(&failed.stderr);
+    assert!(
+        stderr.contains(&format!(
+            "failed to provision tenant {instance_b} of instance shop/b-"
+        )),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("permission denied to create role"),
+        "{stderr}"
+    );
+    assert_eq!(host.servers().len(), 1, "the shared server stays up for a");
 }

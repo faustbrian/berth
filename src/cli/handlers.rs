@@ -49,7 +49,7 @@ pub(crate) use app_create_cmd::{HandleAppCreateOptions, handle_app_create};
 pub(crate) use artisan_cmd::{
     HandleArtisanOptions, handle_artisan, set_testing_runtime_pool_size_override,
 };
-pub(crate) use config_cmd::{handle_config, handle_config_migrate};
+pub(crate) use config_cmd::{handle_config, handle_config_migrate, handle_config_validate};
 pub(crate) use daemon_cmd::handle_daemon;
 pub(crate) use docker_ops::{
     HandleAttachOptions, HandleCpOptions, HandleEventsOptions, HandleInspectOptions,

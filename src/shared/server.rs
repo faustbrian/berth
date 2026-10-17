@@ -308,11 +308,11 @@ fn ensure_image(image: &str) -> Result<()> {
     if present.status.success() {
         return Ok(());
     }
-    let status = crate::docker::run_docker_status(&["pull", image], "failed to pull image")?;
-    if !status.success() {
-        anyhow::bail!("failed to pull {image}");
-    }
-    Ok(())
+    crate::docker::docker_pull(
+        image,
+        "failed to pull image",
+        &format!("failed to pull {image}"),
+    )
 }
 
 struct State {

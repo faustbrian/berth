@@ -22,6 +22,8 @@ pub(crate) enum ContainerRole {
     Service,
     /// A `--rm` container running one command for a service.
     OneOff,
+    /// A named data volume of a dedicated service.
+    Volume,
 }
 
 impl ContainerRole {
@@ -29,6 +31,7 @@ impl ContainerRole {
         match self {
             Self::Service => "service",
             Self::OneOff => "one-off",
+            Self::Volume => "volume",
         }
     }
 }

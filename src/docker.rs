@@ -314,6 +314,20 @@ pub(crate) use policy::{DockerPolicyOverrides, set_policy_overrides};
 pub(crate) use scheduler::{DockerOpClass, with_scheduled_docker_op};
 pub use up::up;
 
+/// `path` made unique to this test run: the process ID and a per-process
+/// counter, so concurrently running tests never share a scratch directory.
+#[cfg(test)]
+pub(crate) fn unique_test_path(path: std::path::PathBuf) -> std::path::PathBuf {
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let mut unique = path.into_os_string();
+    unique.push(format!(
+        "-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::path::PathBuf::from(unique)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::config::ContainerEngine;

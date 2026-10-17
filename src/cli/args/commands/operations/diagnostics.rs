@@ -10,7 +10,7 @@ use crate::config;
 
 #[derive(Args)]
 pub(crate) struct AboutArgs {
-    #[arg(long, default_value = "table")]
+    #[arg(long, default_value = "table", value_parser = ["table", "json"], ignore_case = true)]
     pub(crate) format: String,
     /// Print JSON (the same as `--format json`)
     #[arg(long, default_value_t = false)]
@@ -19,7 +19,7 @@ pub(crate) struct AboutArgs {
 
 #[derive(Args)]
 pub(crate) struct PsArgs {
-    #[arg(long, default_value = "table")]
+    #[arg(long, default_value = "table", value_parser = ["table", "json"], ignore_case = true)]
     pub(crate) format: String,
     /// Print JSON (the same as `--format json`)
     #[arg(long, default_value_t = false)]
@@ -49,7 +49,7 @@ pub(crate) struct HealthArgs {
     /// Check a named service profile (full, infra, data, app, web, api)
     #[arg(long, conflicts_with_all = ["service", "kind"])]
     pub(crate) profile: Option<String>,
-    #[arg(long, default_value = "table")]
+    #[arg(long, default_value = "table", value_parser = ["table", "json"], ignore_case = true)]
     pub(crate) format: String,
     /// Print JSON (the same as `--format json`)
     #[arg(long, default_value_t = false)]
@@ -117,7 +117,7 @@ impl EnvArgs {
 #[derive(Args)]
 pub(crate) struct LsArgs {
     /// `table` or `json`.
-    #[arg(long, default_value = "table")]
+    #[arg(long, default_value = "table", value_parser = ["table", "json"], ignore_case = true)]
     pub(crate) format: String,
     /// Print JSON (the same as `--format json`).
     #[arg(long, default_value_t = false)]

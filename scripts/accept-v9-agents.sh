@@ -477,6 +477,10 @@ for _ in $(seq 1 900); do
   sleep 1
 done
 [[ -e "$KILLED_MARKER" ]] || fail "the agent to kill never started its slow test (see killed-agent.out)"
+# Its test-lease app container, as Docker runs it, while the test runs.
+lease="$(docker ps --filter "label=dev.berth.installation=$(installation)" --format '{{.Names}}' | grep 'agent-killed' | grep '_app-testing-pool' | head -n 1)"
+docker inspect --format '{{.Config.User}} {{json .HostConfig.CapDrop}} {{json .HostConfig.CapAdd}}' "$lease" \
+  2>&1 | sed 's/CAP_//g' > "$OUTPUT/lease-security.txt"
 log "SIGKILLing the agent mid-test"
 abrupt_kill "$killed_pid"
 wait "$killed_pid" 2>/dev/null || true
@@ -538,6 +542,9 @@ for index in $(seq 1 "$AGENTS"); do
     "$(plain "$out/failing.out" | grep -q 'deliberate failure' && echo yes)" yes
   check "$name down --purge" "$(cat "$out/down.status")" 0
 done
+
+check "test-lease app runs least-privileged" "$(cat "$OUTPUT/lease-security.txt")" \
+  "$(id -u):$(id -g) [\"ALL\"] [\"NET_BIND_SERVICE\"]"
 
 log "checking that the killed agent is reaped"
 # Reaping runs at most every 30 seconds per installation.

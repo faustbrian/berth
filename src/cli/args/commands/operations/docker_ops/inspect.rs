@@ -17,7 +17,7 @@ pub(crate) struct InspectArgs {
     pub(crate) profile: Option<String>,
     #[arg(long, conflicts_with = "json")]
     pub(crate) format: Option<String>,
-    #[arg(long, default_value = "table")]
+    #[arg(long, default_value = "table", value_parser = ["table", "json"], ignore_case = true)]
     pub(crate) output: String,
     /// Emit structured JSON array output
     #[arg(long, default_value_t = false)]

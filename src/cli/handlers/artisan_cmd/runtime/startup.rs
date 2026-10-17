@@ -35,7 +35,7 @@ pub(super) fn resolve_testing_startup_services<'a>(
             };
             Ok(service.depends_on.clone().unwrap_or_default())
         },
-        |current| format!("circular dependency detected at service '{current}'"),
+        |path| format!("circular service dependency: {path}"),
     )?;
 
     ordered_names

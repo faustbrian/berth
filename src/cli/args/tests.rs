@@ -893,3 +893,17 @@ fn instance_is_read_from_the_flag() {
     let cli = Cli::parse_from(["berth", "--instance", "agent-3", "ps"]);
     assert_eq!(cli.instance(), Some("agent-3"));
 }
+
+#[test]
+fn inspection_formats_are_table_or_json_only() {
+    for command in ["ps", "url", "about", "health", "doctor", "ls", "port"] {
+        Cli::try_parse_from(["berth", command, "--format", "json"])
+            .unwrap_or_else(|error| panic!("{command} --format json: {error}"));
+        Cli::try_parse_from(["berth", command, "--format", "JSON"])
+            .unwrap_or_else(|error| panic!("{command} --format JSON: {error}"));
+        let error = Cli::try_parse_from(["berth", command, "--format", "yaml"])
+            .err()
+            .unwrap_or_else(|| panic!("{command} accepted --format yaml"));
+        assert!(error.to_string().contains("yaml"), "{command}: {error}");
+    }
+}

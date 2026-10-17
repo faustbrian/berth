@@ -22,6 +22,27 @@ pub(super) fn append_volumes(
     }
 }
 
+/// The named Docker volumes `append_volumes` mounts: the default data volume
+/// or the authored entries whose source is a name rather than a host path.
+pub(crate) fn named_volumes(service: &ServiceConfig, container_name: &str) -> Vec<String> {
+    if let Some(volumes) = &service.volumes {
+        return volumes
+            .iter()
+            .filter_map(|volume| volume.split(':').next())
+            .filter(|source| {
+                !source.is_empty()
+                    && !source.contains('/')
+                    && !source.starts_with('.')
+                    && !source.starts_with('~')
+            })
+            .map(ToOwned::to_owned)
+            .collect();
+    }
+    default_persistent_data_dir(service)
+        .map(|_| vec![format!("{container_name}-data")])
+        .unwrap_or_default()
+}
+
 /// Appends custom env to the caller-provided command or collection.
 pub(super) fn append_custom_env(args: &mut Vec<String>, service: &ServiceConfig) {
     if let Some(custom_env) = &service.env {

@@ -262,7 +262,7 @@ nothing on rootless Docker (container root already is the host user),
 Before starting, berth fails if `storage/`, `bootstrap/cache/`, `vendor/` or
 `node_modules/` hold paths that user does not own (root-owned leftovers of
 7.0.0's root containers) and prints the `chown` that fixes them. An app that
-terminates TLS itself (`localhost_tls` or container port 443) keeps 7.0.0's
+terminates TLS itself (container port 443) keeps 7.0.0's
 container, because its CA must persist in the image's `/data`. The gateway
 runs with the same capability options. Images that bring their own user
 (Selenium, Gotenberg, Mailpit, Soketi) keep their defaults.

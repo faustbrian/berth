@@ -162,6 +162,9 @@ mod tests {
                 .expect("time")
                 .as_nanos()
         ));
+        // A clock tick is coarse: two parallel tests could share a name and
+        // remove each other's fake binary.
+        let bin_dir = crate::docker::unique_test_path(bin_dir);
         fs::create_dir_all(&bin_dir).expect("create fake docker dir");
         let binary = bin_dir.join("docker");
         let mut file = fs::File::create(&binary).expect("create fake docker");

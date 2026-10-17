@@ -486,3 +486,62 @@ fn a_migrated_7_0_database_with_container_settings_stays_dedicated() -> anyhow::
     );
     Ok(())
 }
+
+#[test]
+fn privilege_fields_are_rejected_by_name() {
+    // A worktree's project file must not grant container privileges (L003).
+    for field in [
+        "privileged: true",
+        "cap_add: [SYS_ADMIN]",
+        "devices: [/dev/kvm]",
+        "network_mode: host",
+        "pid: host",
+        "security_opt: [seccomp=unconfined]",
+        "user: root",
+    ] {
+        let name = field.split(':').next().expect("field name");
+        let error = parse(&format!(
+            "schema_version: 9\nproject: api\nservices:\n  app:\n    preset: laravel\n    {field}\n"
+        ))
+        .expect_err(field);
+        assert!(format!("{error:#}").contains(name), "{field}: {error:#}");
+    }
+}
+
+#[test]
+fn engine_sockets_and_bad_env_keys_fail_at_parse() {
+    let socket = parse(
+        "schema_version: 9\nproject: api\nservices:\n  app:\n    preset: laravel\n    volumes: ['/var/run/docker.sock:/var/run/docker.sock']\n",
+    )
+    .expect_err("socket mount");
+    assert!(
+        format!("{socket:#}").contains("engine socket"),
+        "{socket:#}"
+    );
+    let key = parse(
+        "schema_version: 9\nproject: api\nservices:\n  search:\n    preset: opensearch\n    env:\n      discovery.type: single-node\n      A-B: x\n",
+    )
+    .expect_err("bad key");
+    assert!(format!("{key:#}").contains("'A-B'"), "{key:#}");
+}
+
+#[test]
+fn service_names_must_be_valid_as_written() {
+    // Committed names are never repaired; the input is echoed (L007).
+    let long = "a".repeat(64);
+    for name in ["Bill", "a_b", "-db", "db-", long.as_str()] {
+        let error = parse(&format!(
+            "schema_version: 9\nproject: api\nservices:\n  {name}:\n    preset: mysql\n"
+        ))
+        .expect_err(name);
+        assert!(
+            format!("{error:#}").contains(&format!("'{name}'")),
+            "{name}: {error:#}"
+        );
+    }
+    parse(&format!(
+        "schema_version: 9\nproject: api\nservices:\n  {}:\n    preset: mysql\n",
+        "a".repeat(63)
+    ))
+    .expect("63 bytes is a valid label");
+}

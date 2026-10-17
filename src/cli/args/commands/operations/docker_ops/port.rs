@@ -15,7 +15,7 @@ pub(crate) struct PortArgs {
     /// Select a service profile (full, infra, data, app, web, api)
     #[arg(long, conflicts_with_all = ["service", "kind"])]
     pub(crate) profile: Option<String>,
-    #[arg(long, default_value = "table")]
+    #[arg(long, default_value = "table", value_parser = ["table", "json"], ignore_case = true)]
     pub(crate) format: String,
     /// Emit structured JSON array output
     #[arg(long, default_value_t = false)]

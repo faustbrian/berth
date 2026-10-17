@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Added `berth config validate [--json]`, which checks the project file
+  without a container engine (exit 0, or 125 with the precise error).
 - Added `--json` to `ps`, `url`, `about`, `health`, `logs` and `doctor`:
   each prints one JSON document (`logs` one object per line), and `doctor
   --json` lists every check.
@@ -136,6 +138,23 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- Project files reject bind mounts that reach a container engine socket (the
+  socket, a symlink to it, or a directory above it such as `/var/run`) and
+  environment keys that are not portable names (dotted keys such as
+  `discovery.type` stay valid).
+- Dependency cycles name their whole path (`worker -> queue -> worker`).
+- Image pulls retry rate limits and dropped connections up to three times
+  and report the registry's last error; other pull failures fail at once.
+- `logs --all` skips services without a container (shared-server tenants,
+  services not started); naming such a service still fails.
+- A restore whose database rejects the dump reports the database's error
+  instead of a broken pipe.
+- `--format` on `ps`, `url`, `about`, `health`, `doctor`, `ls`, `port` and
+  `inspect` accepts only `table` or `json`.
+- Dedicated services' data volumes are created with berth's ownership
+  labels, so a leaked volume is detectable by label.
+- A shared-server tenant that fails to provision names its instance and
+  tenant.
 - PHP app containers (app, Horizon, scheduler, Reverb) run as the invoking
   user's UID:GID with every capability dropped except `NET_BIND_SERVICE`,
   `no-new-privileges`, and writable tmpfs for Caddy's state and `HOME`, so
@@ -143,7 +162,7 @@ All notable changes to this project are documented in this file.
   and Podman map the user accordingly). `up` fails early, naming the files
   and the `chown` that fixes them, when a worktree still holds root-owned
   files from 7.0.0's root containers. Apps that terminate TLS themselves
-  (`localhost_tls` or container port 443) keep 7.0.0's container. Derived
+  (container port 443) keep 7.0.0's container. Derived
   images install Bun, Deno, fnm, nvm and Volta under `/usr/local` instead of
   `/root`.
 - The crate now builds under 8.x's lint baseline: `clippy::all`, the

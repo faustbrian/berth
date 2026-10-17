@@ -5,6 +5,7 @@
 use crate::config::{Driver, ServiceConfig};
 
 mod common;
+pub(crate) use common::named_volumes;
 mod object_store;
 mod search;
 mod sql;

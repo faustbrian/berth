@@ -31,6 +31,12 @@ case "$1 $2" in
   "image inspect") exit 0 ;;
   "volume rm") [ -f "$S/v-$3" ] || { echo "Error: No such volume: $3" >&2; exit 1; }; rm -f "$S/v-$3"; exit 0 ;;
   "volume ls") for f in "$S"/v-*; do [ -f "$f" ] && basename "$f" | sed 's/^v-//'; done; exit 0 ;;
+  "volume inspect")
+    vol=""; for arg in "$@"; do vol="$arg"; done
+    [ -f "$S/v-$vol" ] || { echo "Error: No such volume: $vol" >&2; exit 1; }; echo "$vol"; exit 0 ;;
+  "volume create")
+    vol=""; for arg in "$@"; do vol="$arg"; done
+    touch "$S/v-$vol"; exit 0 ;;
 esac
 case "$1" in
   run)
@@ -345,5 +351,36 @@ fn purging_an_instance_never_touches_one_whose_id_extends_it() {
         fixture.volumes(),
         kept,
         "agent-1-b's data survives agent-1's purge"
+    );
+}
+
+#[test]
+fn dedicated_data_volumes_are_created_with_ownership_labels() {
+    let fixture = Fixture::new("labeled");
+    assert!(fixture.berth(&["up", "--no-wait"]).status.success());
+    let calls = fixture.calls();
+    let creates: Vec<&str> = calls
+        .lines()
+        .filter(|line| line.starts_with("volume create"))
+        .collect();
+    assert_eq!(creates.len(), 2, "postgres and redis data volumes: {calls}");
+    for create in creates {
+        assert!(
+            create.contains("--label dev.berth.managed=true"),
+            "{create}"
+        );
+        assert!(create.contains("--label dev.berth.instance="), "{create}");
+        assert!(create.contains("--label dev.berth.role=volume"), "{create}");
+        assert!(create.ends_with("-data"), "{create}");
+    }
+    // A second `up` reuses them.
+    assert!(fixture.berth(&["up", "--no-wait"]).status.success());
+    assert_eq!(
+        fixture
+            .calls()
+            .lines()
+            .filter(|line| line.starts_with("volume create"))
+            .count(),
+        2
     );
 }

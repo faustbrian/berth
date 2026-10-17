@@ -2,7 +2,7 @@
 //! on the instance's tenant and its network attachment, never on the shared
 //! server container, which other instances use.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::config::{ServiceConfig, SharedEngine, SharedTarget};
 use crate::output::{self, LogLevel, Persistence};
@@ -74,7 +74,16 @@ pub(crate) fn up(service: &ServiceConfig) -> Result<()> {
                 redis::provision_tenant_commands(&tenant, &password)
             }
         };
-        server::admin_sql(target, &sql)?;
+        // Name whose tenant failed: the server is shared, and an agent must
+        // tell its own instance's problem from the server's (L063).
+        server::admin_sql(target, &sql).with_context(|| {
+            format!(
+                "failed to provision tenant {tenant} of instance {}/{} on shared server {}",
+                service.runtime.project.as_deref().unwrap_or("?"),
+                service.runtime.instance.as_deref().unwrap_or("?"),
+                target.server
+            )
+        })?;
         attach(service, target)?;
     }
     output::event(

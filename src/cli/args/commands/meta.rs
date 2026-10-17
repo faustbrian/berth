@@ -34,7 +34,7 @@ pub(crate) struct LockArgs {
 
 #[derive(Args)]
 pub(crate) struct DoctorArgs {
-    #[arg(long, default_value = "table")]
+    #[arg(long, default_value = "table", value_parser = ["table", "json"], ignore_case = true)]
     pub(crate) format: String,
     /// Print JSON (the same as `--format json`)
     #[arg(long, default_value_t = false)]

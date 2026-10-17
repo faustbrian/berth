@@ -10,6 +10,7 @@ mod labels;
 
 use entrypoint::append_entrypoint_args;
 use env::append_run_options;
+pub(super) use env::named_volumes;
 use labels::append_labels;
 
 /// Builds run args for command execution.

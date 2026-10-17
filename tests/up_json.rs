@@ -36,7 +36,10 @@ case "$1" in
     case "$name" in *_db) [ "$FAKE_DB_RUN" = busy ] && { echo "port is already allocated" >&2; exit 125; } ;; esac
     mkdir -p "$S/c"; echo running > "$S/c/$name"; exit 0 ;;
   rm) for arg in "$@"; do rm -f "$S/c/$arg"; done; exit 0 ;;
-  logs) printf 'ready to accept connections\n\377bad\nafter\n'; echo "a warning" >&2; exit 0 ;;
+  logs)
+    name=""; for arg in "$@"; do name="$arg"; done
+    [ -f "$S/c/$name" ] || { echo "Error response from daemon: No such container: $name" >&2; exit 1; }
+    printf 'ready to accept connections\n\377bad\nafter\n'; echo "a warning" >&2; exit 0 ;;
   inspect)
     name=""; for arg in "$@"; do name="$arg"; done
     [ -f "$S/c/$name" ] || exit 1
@@ -554,4 +557,44 @@ fn logs_json_prints_one_object_per_line_for_every_selection() {
     let dry = fixture.berth(&["--dry-run", "logs", "--json"], &[]);
     assert_eq!(dry.status.code(), Some(125));
     assert!(dry.stdout.is_empty());
+}
+
+#[test]
+fn logs_all_skips_services_without_a_container_but_a_named_one_stays_strict() {
+    let fixture = Fixture::new("logs-all");
+    assert!(
+        fixture
+            .berth(&["up", "--json", "--no-wait"], &[])
+            .status
+            .success()
+    );
+    let app = std::fs::read_dir(fixture.base.join("state/c"))
+        .expect("containers")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| path.to_string_lossy().ends_with("_app"))
+        .expect("app container");
+    std::fs::remove_file(&app).expect("remove the app container");
+
+    let all = fixture.berth(&["logs", "--all", "--json"], &[]);
+    assert!(
+        all.status.success(),
+        "{}",
+        String::from_utf8_lossy(&all.stderr)
+    );
+    let lines = log_lines(&all);
+    assert!(
+        lines.iter().any(|line| line["service"] == "db"),
+        "{lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|line| line["service"] == "app"),
+        "{lines:?}"
+    );
+
+    let named = fixture.berth(&["logs", "--service", "app"], &[]);
+    assert!(
+        !named.status.success(),
+        "a named service without a container fails"
+    );
 }

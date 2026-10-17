@@ -22,6 +22,6 @@ pub(super) fn order_target_names(
             };
             Ok(target.depends_on.clone())
         },
-        |current| format!("circular swarm dependency detected at '{current}'"),
+        |path| format!("circular swarm dependency: {path}"),
     )
 }

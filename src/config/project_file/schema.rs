@@ -50,6 +50,7 @@ pub(crate) fn parse_project_file(content: &str, path: &Path) -> Result<RawConfig
     validate_project_name(&file.project)
         .with_context(|| format!("invalid `project` in {}", path.display()))?;
 
+    let project_root = path.parent().unwrap_or_else(|| Path::new("."));
     let mut services = Vec::with_capacity(file.services.len());
     for (name, mut service) in file.services {
         if service.name.is_some() {
@@ -66,6 +67,14 @@ pub(crate) fn parse_project_file(content: &str, path: &Path) -> Result<RawConfig
                  berth_{{project}}_{{instance}}_{{service}} so parallel instances never collide",
                 path.display()
             );
+        }
+        for key in service.env.iter().flat_map(|env| env.keys()) {
+            super::service_policy::validate_env_key(&name, key)
+                .with_context(|| format!("invalid service in {}", path.display()))?;
+        }
+        for volume in service.volumes.iter().flatten() {
+            super::service_policy::validate_volume(&name, volume, project_root)
+                .with_context(|| format!("invalid service in {}", path.display()))?;
         }
         service.name = Some(name);
         services.push(service);

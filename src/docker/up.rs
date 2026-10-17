@@ -12,6 +12,7 @@ use super::{PullPolicy, inspect_status, is_dry_run};
 use docker_cmd::{docker_output, docker_output_owned, ensure_success};
 
 mod args_builder;
+mod data_volume;
 mod docker_cmd;
 mod dry_run;
 mod object_store_bucket;
@@ -38,6 +39,7 @@ pub fn up(service: &ServiceConfig, pull: PullPolicy, recreate: bool) -> Result<(
     }
 
     state::ensure_image_available(service, pull)?;
+    data_volume::ensure_labeled_volumes(service, &container_name)?;
 
     let run_args = args_builder::build_run_args(service, &container_name)?;
     let output = docker_output_owned(&run_args, &super::runtime_command_error_context("run"))?;

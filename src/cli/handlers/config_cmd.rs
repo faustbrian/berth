@@ -13,6 +13,46 @@ pub(crate) fn handle_config(config: &config::Config, format: &str) -> Result<()>
     serialize::print_pretty(config, format)
 }
 
+/// Handles `config validate`. Loading the configuration applied the schema,
+/// name, preset and policy checks; `depends_on` (unknown targets, cycles) is
+/// resolved here exactly as `up` resolves it. Nothing touches Docker.
+pub(crate) fn handle_config_validate(config: &config::Config, json: bool) -> Result<()> {
+    crate::cli::support::resolve_up_services(config, None, None, None)?;
+    let runtime = config.service.first().map(|service| &service.runtime);
+    let project = runtime.and_then(|runtime| runtime.project.clone());
+    let instance = runtime.and_then(|runtime| runtime.instance.clone());
+    if json {
+        let services: Vec<serde_json::Value> = config
+            .service
+            .iter()
+            .map(|service| {
+                serde_json::json!({
+                    "name": service.name,
+                    "kind": crate::docker::kind_label_value(service.kind),
+                    "shared": service.runtime.shared.is_some(),
+                })
+            })
+            .collect();
+        return serialize::print_json_pretty(&serde_json::json!({
+            "valid": true,
+            "project": project,
+            "instance": instance,
+            "services": services,
+        }));
+    }
+    crate::output::event(
+        "config",
+        crate::output::LogLevel::Success,
+        &format!(
+            "Configuration is valid ({} services, instance {})",
+            config.service.len(),
+            instance.as_deref().unwrap_or("none")
+        ),
+        crate::output::Persistence::Transient,
+    );
+    Ok(())
+}
+
 /// Handles the `config migrate` CLI command.
 pub(crate) fn handle_config_migrate(
     quiet: bool,

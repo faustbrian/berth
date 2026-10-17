@@ -43,7 +43,16 @@ pub(crate) fn handle_logs(config: &config::Config, options: HandleLogsOptions<'_
         options.profile,
     )?;
     if options.all {
-        let cloned: Vec<config::ServiceConfig> = selected.iter().copied().cloned().collect();
+        // `--all` means "every service that has logs": a shared-server
+        // tenant, an unstarted worker or a scheduler-only project has no
+        // container, and must not fail the rest (FI-47). Naming a service
+        // stays strict.
+        let cloned: Vec<config::ServiceConfig> = selected
+            .iter()
+            .copied()
+            .filter(|service| has_container(service))
+            .cloned()
+            .collect();
         return docker::logs_many(
             &cloned,
             docker_logs_options(
@@ -89,6 +98,23 @@ pub(crate) fn handle_logs(config: &config::Config, options: HandleLogsOptions<'_
             options.json,
         ),
     )
+}
+
+fn has_container(service: &config::ServiceConfig) -> bool {
+    let present = service
+        .container_name()
+        .ok()
+        .and_then(|name| docker::inspect_status(&name))
+        .is_some();
+    if !present {
+        crate::output::event(
+            &service.name,
+            crate::output::LogLevel::Info,
+            "No container (shared-server tenant or not started); skipped",
+            crate::output::Persistence::Transient,
+        );
+    }
+    present
 }
 
 fn run_single_service_logs(

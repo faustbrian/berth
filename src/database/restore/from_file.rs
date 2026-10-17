@@ -11,7 +11,7 @@ use std::path::Path;
 use crate::config::ServiceConfig;
 use crate::output::{self, LogLevel, Persistence};
 
-use super::process::{start_restore_process, wait_for_restore_success};
+use super::process::start_restore_process;
 
 const CHUNK_SIZE: usize = 8192;
 const PROGRESS_PERCENT_STEP: u8 = 1;
@@ -49,43 +49,42 @@ pub(super) fn restore_from_file(
     let mut processed_bytes = 0_u64;
     let mut next_progress_log = PROGRESS_PERCENT_STEP;
     let mut buffer = [0_u8; CHUNK_SIZE];
-    loop {
-        let bytes_read = reader
-            .read(&mut buffer)
-            .context("Failed to read from SQL dump file")?;
+    let stdin = &mut restore.stdin;
+    let streamed = (|| -> Result<()> {
+        loop {
+            let bytes_read = reader
+                .read(&mut buffer)
+                .context("Failed to read from SQL dump file")?;
 
-        if bytes_read == 0 {
-            break;
-        }
-
-        let chunk = buffer
-            .get(..bytes_read)
-            .ok_or_else(|| anyhow::anyhow!("Buffer slice out of bounds"))?;
-
-        restore
-            .stdin
-            .write_all(chunk)
-            .context("Failed to write to database process")?;
-
-        let chunk_len = u64::try_from(bytes_read).unwrap_or(0);
-        processed_bytes = processed_bytes.saturating_add(chunk_len).min(total_bytes);
-        let progress = progress_percent(processed_bytes, total_bytes);
-
-        while progress >= next_progress_log {
-            emit_progress_log(service, next_progress_log, processed_bytes, total_bytes);
-            if next_progress_log == 100 {
+            if bytes_read == 0 {
                 break;
             }
-            next_progress_log = next_progress_log
-                .saturating_add(PROGRESS_PERCENT_STEP)
-                .min(100);
+
+            let chunk = buffer
+                .get(..bytes_read)
+                .ok_or_else(|| anyhow::anyhow!("Buffer slice out of bounds"))?;
+
+            stdin
+                .write_all(chunk)
+                .context("Failed to write to database process")?;
+
+            let chunk_len = u64::try_from(bytes_read).unwrap_or(0);
+            processed_bytes = processed_bytes.saturating_add(chunk_len).min(total_bytes);
+            let progress = progress_percent(processed_bytes, total_bytes);
+
+            while progress >= next_progress_log {
+                emit_progress_log(service, next_progress_log, processed_bytes, total_bytes);
+                if next_progress_log == 100 {
+                    break;
+                }
+                next_progress_log = next_progress_log
+                    .saturating_add(PROGRESS_PERCENT_STEP)
+                    .min(100);
+            }
         }
-    }
-
-    drop(restore.stdin);
-    let wait_result = wait_for_restore_success(restore.child);
-
-    wait_result?;
+        Ok(())
+    })();
+    super::process::finish_restore(restore.child, restore.stdin, streamed)?;
     output::event(
         &service.name,
         LogLevel::Success,

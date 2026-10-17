@@ -98,20 +98,34 @@ fn apply_json_flags(cli: &mut Cli) {
         Commands::Health(args) => args.json || args.format.eq_ignore_ascii_case("json"),
         Commands::Doctor(args) => args.json || args.format.eq_ignore_ascii_case("json"),
         Commands::Logs(args) => args.json,
+        Commands::Ls(args) => args.json || args.format.eq_ignore_ascii_case("json"),
         _ => false,
     };
     if machine_readable {
         output::reserve_stdout();
     }
-    let format = match &mut cli.command {
-        Commands::Ps(args) if args.json => &mut args.format,
-        Commands::Url(args) if args.json => &mut args.format,
-        Commands::About(args) if args.json => &mut args.format,
-        Commands::Health(args) if args.json => &mut args.format,
-        Commands::Doctor(args) if args.json => &mut args.format,
+    normalize_format(cli);
+}
+
+/// `--json` sets `--format json`; any other value is lowercased.
+fn normalize_format(cli: &mut Cli) {
+    // clap accepts `--format JSON` (ignore_case) but keeps the spelling;
+    // handlers compare against the lowercase name, so normalize it once.
+    let (format, json) = match &mut cli.command {
+        Commands::Ps(args) => (&mut args.format, args.json),
+        Commands::Url(args) => (&mut args.format, args.json),
+        Commands::About(args) => (&mut args.format, args.json),
+        Commands::Health(args) => (&mut args.format, args.json),
+        Commands::Doctor(args) => (&mut args.format, args.json),
+        Commands::Ls(args) => (&mut args.format, args.json),
         _ => return,
     };
-    "json".clone_into(format);
+    let normalized = if json {
+        "json".to_owned()
+    } else {
+        format.to_ascii_lowercase()
+    };
+    *format = normalized;
 }
 
 fn apply_runtime_policy_overrides(cli: &Cli) {
@@ -209,5 +223,33 @@ mod tests {
                 crate::config::ContainerEngine::Podman
             );
         });
+    }
+}
+
+#[cfg(test)]
+mod format_tests {
+    use super::normalize_format;
+    use crate::cli::args::{Cli, Commands};
+    use clap::Parser;
+
+    fn format_of(args: &[&str]) -> String {
+        let mut cli = Cli::parse_from(args);
+        normalize_format(&mut cli);
+        match cli.command {
+            Commands::Ps(args) => args.format,
+            Commands::Url(args) => args.format,
+            Commands::Ls(args) => args.format,
+            Commands::Doctor(args) => args.format,
+            _ => unreachable!("only inspection commands are parsed here"),
+        }
+    }
+
+    #[test]
+    fn any_spelling_of_json_reaches_handlers_as_json() {
+        assert_eq!(format_of(&["berth", "ps", "--format", "JSON"]), "json");
+        assert_eq!(format_of(&["berth", "url", "--format", "Json"]), "json");
+        assert_eq!(format_of(&["berth", "ls", "--format", "JSON"]), "json");
+        assert_eq!(format_of(&["berth", "doctor", "--json"]), "json");
+        assert_eq!(format_of(&["berth", "ps", "--format", "TABLE"]), "table");
     }
 }
