@@ -12,7 +12,7 @@ mod update;
 mod write;
 
 pub(crate) use update::update_env;
-pub(crate) use write::{write_env_values, write_env_values_full, write_env_values_with_purge};
+pub(crate) use write::write_env_values;
 
 /// Reads env lines from persisted or external state.
 fn read_env_lines(env_path: &Path) -> Result<Vec<String>> {
@@ -41,7 +41,7 @@ fn write_env_lines(env_path: &Path, lines: Vec<String>) -> Result<()> {
     Ok(())
 }
 
-fn quote_env_value(value: &str) -> String {
+pub(super) fn quote_env_value(value: &str) -> String {
     let escaped = value.chars().fold(String::new(), |mut acc, ch| {
         match ch {
             '\\' => acc.push_str("\\\\"),

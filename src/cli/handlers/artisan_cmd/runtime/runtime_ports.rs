@@ -9,7 +9,13 @@ pub(super) fn prepare_testing_runtime(
     config: &mut config::Config,
 ) -> Result<(HashSet<String>, HashMap<String, String>)> {
     let remapped_services = assign_testing_runtime_ports(config)?;
-    let app_env = env::inferred_app_env(config);
+    let mut app_env = env::inferred_app_env(config);
+    // Test runs force `APP_ENV=testing` (the test command passes it too);
+    // Laravel then loads `.env.testing`, which decides whether the managed
+    // key is needed. An explicit `APP_ENV` in the app's `env` still wins in
+    // the container, but the test command's `--env=testing` selects the file.
+    app_env.insert("APP_ENV".to_owned(), "testing".to_owned());
+    env::apply_managed_runtime_env(config, &mut app_env)?;
 
     Ok((remapped_services, app_env))
 }

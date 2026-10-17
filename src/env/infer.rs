@@ -41,24 +41,6 @@ pub(crate) fn inferred_app_env(config: &Config) -> HashMap<String, String> {
     vars
 }
 
-/// Builds environment values managed by app runtime injection:
-/// inferred values plus explicit app target env overrides.
-#[must_use]
-pub(crate) fn managed_app_env(config: &Config) -> HashMap<String, String> {
-    let mut vars = inferred_app_env(config);
-    for service in &config.service {
-        if service.kind != Kind::App {
-            continue;
-        }
-        if let Some(explicit) = &service.env {
-            for (key, value) in explicit {
-                insert_if_absent(&mut vars, key, value.clone());
-            }
-        }
-    }
-    vars
-}
-
 /// Resolves the host value an app container can actually reach at runtime.
 ///
 /// Why: `localhost` inside a container points to itself, not the host machine.

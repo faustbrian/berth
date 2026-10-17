@@ -29,7 +29,7 @@ pub(super) fn run_standard_up(
 ) -> Result<()> {
     let startup_services =
         cli::support::resolve_up_services(config, options.service, options.kind, options.profile)?;
-    let app_env = cli::support::runtime_app_env(config, options.project_dependency_env);
+    let app_env = cli::support::runtime_app_env(config, options.project_dependency_env)?;
     let start_context = cli::support::ServiceStartContext::new(options.workspace_root, &app_env);
     for svc in startup_services {
         start_runtime_service(

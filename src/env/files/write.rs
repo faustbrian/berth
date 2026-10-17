@@ -3,7 +3,6 @@
 //! Contains env files write logic used by Berth command workflows.
 
 use anyhow::Result;
-use std::collections::BTreeMap;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -76,22 +75,9 @@ pub(crate) fn write_env_values_with_purge(
     Ok(())
 }
 
-/// Writes env values full to persisted or external state.
-pub(crate) fn write_env_values_full(
-    env_path: &Path,
-    values: &HashMap<String, String>,
-) -> Result<()> {
-    let ordered: BTreeMap<&String, &String> = values.iter().collect();
-    let lines = ordered
-        .into_iter()
-        .map(|(key, value)| format!("{key}={}", quote_env_value(value)))
-        .collect();
-    write_env_lines(env_path, lines)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{write_env_values_full, write_env_values_with_purge};
+    use super::write_env_values_with_purge;
     use std::collections::{HashMap, HashSet};
     use std::path::PathBuf;
 
@@ -103,25 +89,6 @@ mod tests {
 
         let result = write_env_values_with_purge(&env_path, &values, true, &managed_keys, true);
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn write_env_values_full_escapes_special_characters() -> anyhow::Result<()> {
-        crate::docker::with_dry_run_state(false, || -> anyhow::Result<()> {
-            let env_path = unique_path("escape");
-            std::fs::write(&env_path, "").expect("seed env file");
-
-            let values = HashMap::from([(
-                String::from("APP_KEY"),
-                String::from("with\"quote\\slash\nline"),
-            )]);
-
-            write_env_values_full(&env_path, &values)?;
-            let content = std::fs::read_to_string(&env_path)?;
-
-            assert_eq!(content, "APP_KEY=\"with\\\"quote\\\\slash\\nline\"\n");
-            Ok(())
-        })
     }
 
     fn unique_path(suffix: &str) -> PathBuf {

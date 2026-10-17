@@ -12,22 +12,36 @@ pub(super) fn append_env_args(
     injected_env: &HashMap<String, String>,
     inject_server_name: bool,
 ) {
-    for (key, value) in injected_env {
-        append_env_binding(run_args, key, value);
+    for (key, value) in container_env_pairs(target, injected_env, inject_server_name) {
+        append_env_binding(run_args, &key, &value);
     }
+}
 
+/// The `-e` pairs an app container receives, in order: injected values,
+/// then the app's explicit `env` (except an `http` URL override of an
+/// injected `https` URL), then FrankenPHP's `SERVER_NAME`. Docker keeps the
+/// last value of a repeated key, so this order is also the precedence.
+pub(crate) fn container_env_pairs(
+    target: &ServiceConfig,
+    injected_env: &HashMap<String, String>,
+    inject_server_name: bool,
+) -> Vec<(String, String)> {
+    let mut pairs: Vec<(String, String)> = injected_env
+        .iter()
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
     if let Some(env_vars) = &target.env {
         for (key, value) in env_vars {
             if should_block_insecure_url_override(key, value, injected_env) {
                 continue;
             }
-            append_env_binding(run_args, key, value);
+            pairs.push((key.clone(), value.clone()));
         }
     }
-
     if inject_server_name {
-        append_env_binding(run_args, "SERVER_NAME", ":80");
+        pairs.push(("SERVER_NAME".to_owned(), ":80".to_owned()));
     }
+    pairs
 }
 
 pub(super) fn append_host_gateway_mapping(

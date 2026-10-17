@@ -82,27 +82,26 @@ pub(crate) struct EnvArgs {
     pub(crate) command: Option<EnvCommands>,
     #[arg(long)]
     pub(crate) service: Option<String>,
-    #[arg(long, value_enum)]
+    /// Print the environment as JSON: `environment` (what app containers
+    /// receive) and `host` (endpoints a host tool can reach)
+    #[arg(long, default_value_t = false)]
+    pub(crate) json: bool,
+    // The 7.0.0 `.env` writers are kept only to fail with a precise message.
+    #[arg(long, hide = true, value_enum)]
     pub(crate) kind: Option<config::Kind>,
-    #[arg(long)]
+    #[arg(long, hide = true)]
     pub(crate) env_file: Option<PathBuf>,
-    /// Sync Berth-managed app env vars from running app container(s)
-    #[arg(long, default_value_t = false)]
+    #[arg(long, hide = true, default_value_t = false)]
     pub(crate) sync: bool,
-    /// Remove stale Berth-managed app env vars missing from sync/config
-    #[arg(long, default_value_t = false)]
+    #[arg(long, hide = true, default_value_t = false)]
     pub(crate) purge: bool,
-    #[arg(long, default_value_t = false)]
+    #[arg(long, hide = true, default_value_t = false)]
     pub(crate) create_missing: bool,
 }
 
 impl EnvArgs {
     pub(crate) fn service(&self) -> Option<&str> {
         self.service.as_deref()
-    }
-
-    pub(crate) const fn kind(&self) -> Option<config::Kind> {
-        self.kind
     }
 }
 

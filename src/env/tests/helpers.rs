@@ -1,6 +1,4 @@
 use crate::config::{Driver, Kind, ServiceConfig};
-use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub(super) fn svc(name: &str, kind: Kind, driver: Driver, port: u16) -> ServiceConfig {
     ServiceConfig {
@@ -45,16 +43,4 @@ pub(super) fn svc(name: &str, kind: Kind, driver: Driver, port: u16) -> ServiceC
         resolved_container_name: None,
         runtime: Default::default(),
     }
-}
-
-pub(super) fn temp_env_file(name: &str) -> PathBuf {
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0_u128, |dur| dur.as_nanos());
-    std::env::temp_dir().join(format!(
-        "berth-env-tests-{}-{}-{}.env",
-        name,
-        std::process::id(),
-        stamp
-    ))
 }

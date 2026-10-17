@@ -41,6 +41,20 @@ use trust::trust_inner_container_ca;
 pub(crate) use orchestrate::local_url;
 pub use orchestrate::{RunServeOptions, down, public_url, run};
 
+/// The environment an app container receives from `injected_env`: the same
+/// pairs, in the same order, as its `docker run -e` arguments.
+#[must_use]
+pub(crate) fn app_container_env(
+    target: &ServiceConfig,
+    injected_env: &std::collections::HashMap<String, String>,
+) -> Vec<(String, String)> {
+    container::container_env_pairs(
+        target,
+        injected_env,
+        should_inject_frankenphp_server_name(target, injected_env),
+    )
+}
+
 /// Waits until app HTTP endpoint responds with a 2xx status code.
 ///
 /// # Errors

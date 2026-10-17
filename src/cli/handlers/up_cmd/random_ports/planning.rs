@@ -88,7 +88,7 @@ pub(super) fn plan_runtime_startup(
         planned.push((runtime, uses_random_port));
     }
 
-    let app_env = cli::support::runtime_app_env(&runtime_config, options.project_dependency_env);
+    let app_env = cli::support::runtime_app_env(&runtime_config, options.project_dependency_env)?;
 
     Ok(RuntimePlan { planned, app_env })
 }

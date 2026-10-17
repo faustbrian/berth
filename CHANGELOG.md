@@ -14,6 +14,19 @@ All notable changes to this project are documented in this file.
   are named `berth_{project}_{instance}_{service}`, and service, app and
   one-off containers carry `dev.berth.*` ownership labels for their project,
   instance and root.
+- Changed berth to never write `.env`: the environment is injected into every
+  container. `berth env` prints it (`--json` gives `environment`, exactly what
+  app containers receive, and `host`, endpoints a host tool can reach), and
+  `berth env generate --output <file> [--host]` writes a new private file but
+  never replaces one. Laravel apps get `APP_CONFIG_CACHE` outside the workspace so a
+  host config cache cannot override injected values, and a managed
+  per-instance `APP_KEY` when neither the app's `env` nor the dotenv file
+  Laravel loads sets one (an explicit key is shared with workers). Explicit app
+  `env` now wins in `berth env` as it already did in containers.
+- Removed `--env-output` (`up`, `recreate`, `serve`, `swarm`), `env --sync`,
+  `--purge`, `--create-missing`, `--env-file` and `--kind`, and `start`'s
+  `artisan key:generate`; the flags fail with a message naming the
+  replacement.
 - Changed `up` to publish no host ports by default. Services are reached
   inside the instance network and web apps through gateway routes; health
   probes for unpublished services run inside the gateway. Opt in per service

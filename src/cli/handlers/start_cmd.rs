@@ -82,9 +82,6 @@ pub(crate) fn handle_start(
 mod tests {
     use super::{resolve_start_wait_flags, start_bootstrap};
     use crate::config::{Driver, Kind, ServiceConfig};
-    use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn start_wait_defaults_to_no_wait_when_unspecified() {
@@ -99,34 +96,6 @@ mod tests {
     #[test]
     fn start_no_wait_stays_no_wait() {
         assert_eq!(resolve_start_wait_flags(false, true), (false, true));
-    }
-
-    #[test]
-    fn app_key_missing_returns_false_when_key_present() {
-        let path = temp_env_path("present");
-        fs::write(&path, "APP_NAME=Berth\nAPP_KEY=base64:abc123\n").expect("write env");
-
-        assert!(!start_bootstrap::app_key_missing(&path));
-
-        fs::remove_file(path).expect("cleanup env");
-    }
-
-    #[test]
-    fn app_key_missing_returns_true_when_key_blank() {
-        let path = temp_env_path("blank");
-        fs::write(&path, "APP_KEY=\n").expect("write env");
-
-        assert!(start_bootstrap::app_key_missing(&path));
-
-        fs::remove_file(path).expect("cleanup env");
-    }
-
-    fn temp_env_path(suffix: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time")
-            .as_nanos();
-        std::env::temp_dir().join(format!("berth-start-{suffix}-{nanos}.env"))
     }
 
     #[test]

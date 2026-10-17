@@ -53,7 +53,7 @@ pub(crate) use artisan_command::{build_artisan_command, build_artisan_subcommand
 pub(crate) use build_open_summary_json::build_open_summary_json;
 pub(crate) use default_env_path::default_env_path;
 pub(crate) use ensure_sql_service::ensure_sql_service;
-pub(crate) use env_output_path::env_output_path;
+pub(crate) use env_output_path::{ENV_WRITE_REMOVED, env_output_path};
 pub(crate) use filter_services::filter_services;
 pub(crate) use for_each_service::{
     for_each_service, run_selected_services, run_services_with_app_last,

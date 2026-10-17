@@ -14,6 +14,7 @@ use existing::handle_existing_container;
 use start::start_new_container;
 
 mod args;
+pub(crate) use args::container_env_pairs;
 mod docker_cmd;
 mod dry_run;
 mod existing;

@@ -7,9 +7,13 @@ use std::path::PathBuf;
 
 #[derive(Subcommand)]
 pub(crate) enum EnvCommands {
-    /// Generate a full env file from managed Berth app variables
+    /// Write the managed environment to a new file (never an existing one)
     Generate {
         #[arg(long)]
         output: PathBuf,
+        /// Write the host view (endpoints a host tool can reach) instead of
+        /// what app containers receive
+        #[arg(long, default_value_t = false)]
+        host: bool,
     },
 }

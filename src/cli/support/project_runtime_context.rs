@@ -4,7 +4,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::{config, env};
+use crate::config;
 
 /// Immutable project runtime data needed by service command handlers.
 pub(crate) struct ProjectRuntimeContext {
@@ -26,7 +26,7 @@ pub(crate) fn resolve_project_runtime_context(
 ) -> Result<ProjectRuntimeContext> {
     Ok(ProjectRuntimeContext {
         workspace_root: super::workspace_root(config_path, project_root)?,
-        app_env: env::inferred_app_env(config),
+        app_env: super::runtime_app_env(config, &HashMap::new())?,
     })
 }
 

@@ -1,69 +1,92 @@
 //! cli handlers env cmd module.
 //!
-//! Contains cli handlers env cmd logic used by Berth command workflows.
+//! Prints the environment berth injects into app containers. berth never
+//! writes `.env`: `env generate --output` writes a new file the caller names.
 
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use std::collections::{BTreeMap, HashMap};
+use std::path::Path;
 
 use crate::cli::args::EnvCommands;
-use crate::{cli, config};
+use crate::{cli, config, env};
 
 mod generate;
-mod managed;
-mod update;
-
-use managed::ManagedEnvUpdateOptions;
-use update::ServiceEnvUpdateOptions;
 
 pub(crate) struct HandleEnvOptions<'a> {
     pub(crate) command: Option<&'a EnvCommands>,
     pub(crate) service: Option<&'a str>,
-    pub(crate) kind: Option<config::Kind>,
-    pub(crate) env_file: &'a Option<PathBuf>,
-    pub(crate) sync: bool,
-    pub(crate) purge: bool,
-    pub(crate) create_missing: bool,
+    pub(crate) json: bool,
+    pub(crate) writes_dotenv: bool,
     pub(crate) quiet: bool,
     pub(crate) config_path: Option<&'a Path>,
     pub(crate) project_root: Option<&'a Path>,
-    pub(crate) runtime_env: Option<&'a str>,
 }
 
 pub(crate) fn handle_env(config: &mut config::Config, options: HandleEnvOptions<'_>) -> Result<()> {
-    if let Some(EnvCommands::Generate { output }) = options.command {
-        return generate::handle_generate_env(config, output, options.quiet);
+    if options.writes_dotenv {
+        anyhow::bail!("{}", cli::support::ENV_WRITE_REMOVED);
     }
-
-    let env_path = cli::support::default_env_path(
+    let views = env_views(
+        config,
+        options.service,
         options.config_path,
         options.project_root,
-        options.env_file.as_deref(),
-        options.runtime_env,
     )?;
-
-    if options.sync || options.purge {
-        return managed::handle_managed_env_update(
-            config,
-            ManagedEnvUpdateOptions {
-                service: options.service,
-                kind: options.kind,
-                env_path: &env_path,
-                sync: options.sync,
-                purge: options.purge,
-                create_missing: options.create_missing,
-                quiet: options.quiet,
-            },
-        );
+    if let Some(EnvCommands::Generate { output, host }) = options.command {
+        let values = if *host { &views.host } else { &views.container };
+        return generate::handle_generate_env(output, values, options.quiet);
     }
+    if options.json {
+        let document = serde_json::json!({
+            "environment": views.container,
+            "host": views.host,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&document)
+                .map_err(|error| anyhow::anyhow!("failed to render env JSON: {error}"))?
+        );
+        return Ok(());
+    }
+    print!("{}", env::render_dotenv(&views.container));
+    Ok(())
+}
 
-    update::handle_service_env_update(
-        config,
-        ServiceEnvUpdateOptions {
-            service: options.service,
-            kind: options.kind,
-            env_path: &env_path,
-            create_missing: options.create_missing,
-            quiet: options.quiet,
-        },
-    )
+/// The environment an app container receives, and the subset of endpoint
+/// values a host tool can use.
+pub(crate) struct EnvViews {
+    pub(crate) container: BTreeMap<String, String>,
+    pub(crate) host: BTreeMap<String, String>,
+}
+
+/// Builds both views for the app service (`service`, or the project's app).
+///
+/// # Errors
+///
+/// Returns an error when the project's dependencies or managed values cannot
+/// be resolved.
+pub(crate) fn env_views(
+    config: &config::Config,
+    service: Option<&str>,
+    config_path: Option<&Path>,
+    project_root: Option<&Path>,
+) -> Result<EnvViews> {
+    let has_app = config
+        .service
+        .iter()
+        .any(|svc| svc.kind == config::Kind::App);
+    let container: HashMap<String, String> = if has_app {
+        let runtime =
+            cli::support::resolve_app_runtime_context(config, service, config_path, project_root)?;
+        // Built by the same function as the container's `-e` arguments.
+        crate::serve::app_container_env(runtime.target, &runtime.app_env)
+            .into_iter()
+            .collect()
+    } else {
+        cli::support::runtime_app_env(config, &HashMap::new())?
+    };
+    Ok(EnvViews {
+        container: container.into_iter().collect(),
+        host: env::host_env(config).into_iter().collect(),
+    })
 }

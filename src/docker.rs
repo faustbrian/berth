@@ -286,9 +286,7 @@ pub(crate) use failure_message::command_failed_in_container;
 pub use health::wait_until_healthy;
 pub(crate) use image_inspect::{docker_image_exists, docker_image_repo_digest};
 pub(crate) use image_pull::docker_pull;
-pub use inspect::{
-    inspect_env, inspect_host_port_binding, inspect_json, inspect_label, inspect_status,
-};
+pub use inspect::{inspect_host_port_binding, inspect_json, inspect_label, inspect_status};
 pub(crate) use labels::{
     ContainerRole, LABEL_CONTAINER, LABEL_MANAGED, VALUE_MANAGED_TRUE, ownership_label_args,
 };

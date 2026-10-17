@@ -5,13 +5,18 @@ use std::collections::HashMap;
 use crate::{config, env};
 
 /// Returns the app runtime env merged with project dependency injection.
+///
+/// # Errors
+///
+/// Returns an error when the managed `APP_KEY` cannot be read or created.
 pub(crate) fn runtime_app_env(
     config: &config::Config,
     project_dependency_env: &HashMap<String, String>,
-) -> HashMap<String, String> {
+) -> anyhow::Result<HashMap<String, String>> {
     let mut inferred_env = env::inferred_app_env(config);
     env::merge_with_protected_https_app_urls(&mut inferred_env, project_dependency_env);
-    inferred_env
+    env::apply_managed_runtime_env(config, &mut inferred_env)?;
+    Ok(inferred_env)
 }
 
 #[cfg(test)]
@@ -84,7 +89,7 @@ mod tests {
             ("CUSTOM_KEY".to_owned(), "value".to_owned()),
         ]);
 
-        let env = runtime_app_env(&config, &injected);
+        let env = runtime_app_env(&config, &injected).expect("env");
 
         assert_eq!(
             env.get("APP_URL"),

@@ -14,6 +14,7 @@ use docker_run_args::{
     append_runtime_image_and_command, append_smtp_port_mapping, append_volume_args,
     build_base_run_args,
 };
+pub(crate) use env_vars::container_env_pairs;
 use env_vars::{append_env_args, append_host_gateway_mapping};
 
 /// Builds the full `docker run` argument list for a serve target.

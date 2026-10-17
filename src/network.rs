@@ -14,6 +14,6 @@ pub(crate) use ensure::ensure_service_network;
 pub(crate) use host_url::{PUBLISH_HINT, host_url};
 pub(crate) use remove::remove_unused_networks;
 pub(crate) use run_args::{
-    inherit_publication, is_published, network_run_args, publication_drifted, publishes_host_port,
-    with_existing_publication,
+    host_binding_port, inherit_publication, is_published, network_run_args, publication_drifted,
+    publishes_host_port, with_existing_publication,
 };

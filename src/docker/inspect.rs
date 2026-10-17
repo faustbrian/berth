@@ -2,7 +2,6 @@
 //!
 //! Contains docker inspect logic used by Berth command workflows.
 
-use std::collections::HashMap;
 use std::process::Output;
 
 use super::is_dry_run;
@@ -24,27 +23,6 @@ pub fn inspect_status(container_name: &str) -> Option<String> {
 
     let stdout = successful_stdout(docker_inspect_format(container_name, "{{.State.Status}}")?)?;
     Some(stdout.trim().to_owned())
-}
-
-#[must_use]
-pub fn inspect_env(container_name: &str) -> Option<HashMap<String, String>> {
-    if is_dry_run() {
-        return Some(HashMap::new());
-    }
-
-    let stdout = successful_stdout(docker_inspect_format(
-        container_name,
-        "{{range .Config.Env}}{{println .}}{{end}}",
-    )?)?;
-
-    let mut vars = HashMap::new();
-    for line in stdout.lines() {
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        vars.insert(key.to_owned(), value.to_owned());
-    }
-    Some(vars)
 }
 
 #[must_use]

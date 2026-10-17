@@ -3,7 +3,7 @@
 use anyhow::Result;
 use std::path::Path;
 
-use crate::{cli, config, env};
+use crate::{cli, config};
 
 use super::planning::plan_randomized_runtimes;
 
@@ -29,7 +29,8 @@ pub(super) fn prepare_recreate_runtime(
         |config| {
             let (planned, runtime_config) =
                 plan_randomized_runtimes(config, service, services, kind, profile)?;
-            let app_env = env::inferred_app_env(&runtime_config);
+            let app_env =
+                cli::support::runtime_app_env(&runtime_config, &std::collections::HashMap::new())?;
             Ok((planned, app_env))
         },
     )

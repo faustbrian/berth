@@ -46,7 +46,7 @@ pub(crate) fn resolve_app_runtime_context_with_workspace_root<'a>(
     Ok(AppRuntimeContext {
         target: config::resolve_app_service(config, service)?,
         workspace_root,
-        app_env: super::runtime_app_env(config, &project_dependency_env),
+        app_env: super::runtime_app_env(config, &project_dependency_env)?,
     })
 }
 

@@ -1,21 +1,56 @@
 //! cli handlers env cmd generate module.
 //!
-//! Contains cli handlers env cmd generate logic used by Berth command workflows.
+//! Writes the managed environment to a new file the caller names. It never
+//! replaces an existing file (a project `.env` included): `create_new` fails
+//! on any existing path, a symbolic link included, so the write can never be
+//! redirected to a file that already exists.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use std::collections::BTreeMap;
+use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use crate::cli::handlers::log;
-use crate::{config, env};
+use crate::env;
 
-/// Handles the `generate env` CLI command.
+/// Handles the `env generate` CLI command.
+///
+/// # Errors
+///
+/// Returns an error when the file exists, its directory is a symbolic link,
+/// or it cannot be written.
 pub(super) fn handle_generate_env(
-    config: &config::Config,
     output: &Path,
+    values: &BTreeMap<String, String>,
     quiet: bool,
 ) -> Result<()> {
-    let values = env::managed_app_env(config);
-    env::write_env_values_full(output, &values)?;
+    if crate::docker::is_dry_run() {
+        log::info_if_not_quiet(
+            quiet,
+            "env",
+            &format!("[dry-run] Would write {}", output.display()),
+        );
+        return Ok(());
+    }
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(output)
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::AlreadyExists {
+                anyhow::anyhow!(
+                    "{} already exists; berth never replaces an env file, choose a new path",
+                    output.display()
+                )
+            } else {
+                anyhow::Error::new(error).context(format!("failed to create {}", output.display()))
+            }
+        })?;
+    file.write_all(env::render_dotenv(values).as_bytes())
+        .and_then(|()| file.sync_all())
+        .with_context(|| format!("failed to write {}", output.display()))?;
     log::info_if_not_quiet(
         quiet,
         "env",
@@ -26,44 +61,42 @@ pub(super) fn handle_generate_env(
 
 #[cfg(test)]
 mod tests {
-    use crate::docker;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    use crate::config;
-
     use super::handle_generate_env;
+    use std::collections::BTreeMap;
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
-    fn handle_generate_env_writes_all_values_to_destination() -> anyhow::Result<()> {
-        let laravel = config::preset_preview("laravel")?;
-        let mut mysql = config::preset_preview("mysql")?;
-        mysql.name = "db".to_owned();
+    fn generates_a_new_private_file_and_never_replaces_one() {
+        let dir = std::env::temp_dir().join(format!("berth-env-generate-{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&dir));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join("env.berth");
+        let values = BTreeMap::from([("DB_HOST".to_owned(), "db".to_owned())]);
+        handle_generate_env(&path, &values, true).expect("generate");
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("read"),
+            "DB_HOST=\"db\"\n"
+        );
+        let mode = std::fs::metadata(&path).expect("meta").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
 
-        let config_root = config::Config {
-            schema_version: 1,
-            project_type: config::ProjectType::Project,
-            container_prefix: Some("berth".to_owned()),
-            domain_strategy: None,
-            service: vec![laravel, mysql],
-            swarm: Vec::new(),
-        };
+        let existing = dir.join(".env");
+        std::fs::write(&existing, "APP_NAME=mine\n").expect("existing");
+        assert!(handle_generate_env(&existing, &values, true).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&existing).expect("read"),
+            "APP_NAME=mine\n"
+        );
 
-        let output_path = PathBuf::from(format!(
-            "/tmp/berth-generate-env-{}.env",
-            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
-        ));
-        if output_path.exists() {
-            std::fs::remove_file(&output_path)?;
-        }
-        std::fs::write(&output_path, "").expect("seed env file");
-
-        let result = docker::with_dry_run_state(false, || {
-            handle_generate_env(&config_root, &output_path, true)
-        });
-        result?;
-        let content = std::fs::read_to_string(&output_path)?;
-        assert!(content.contains("BERTH_SQL_CLIENT_FLAVOR"));
-        Ok(())
+        let target = dir.join("victim");
+        std::fs::write(&target, "KEEP=1\n").expect("victim");
+        let link = dir.join("link.env");
+        std::os::unix::fs::symlink(&target, &link).expect("link");
+        assert!(
+            handle_generate_env(&link, &values, true).is_err(),
+            "a symlink is never followed"
+        );
+        assert_eq!(std::fs::read_to_string(&target).expect("read"), "KEEP=1\n");
+        std::fs::remove_dir_all(&dir).expect("cleanup");
     }
 }

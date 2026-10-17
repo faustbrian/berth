@@ -5,13 +5,19 @@ use std::path::{Path, PathBuf};
 
 pub(crate) fn env_output_path(
     env_output: bool,
-    config_path: Option<&Path>,
-    project_root: Option<&Path>,
-    runtime_env: Option<&str>,
+    _config_path: Option<&Path>,
+    _project_root: Option<&Path>,
+    _runtime_env: Option<&str>,
 ) -> Result<Option<PathBuf>> {
     if !env_output {
         return Ok(None);
     }
-
-    super::default_env_path(config_path, project_root, None, runtime_env).map(Some)
+    anyhow::bail!("{ENV_WRITE_REMOVED}")
 }
+
+/// Why berth refuses to write `.env`: the environment is injected into every
+/// container, so a written copy only drifts (and leaks credentials into a
+/// file agents commit by mistake).
+pub(crate) const ENV_WRITE_REMOVED: &str = "berth 9 never writes .env: the environment is \
+    injected into every container. Print it with `berth env` (or `berth env --json`), or \
+    write a new file with `berth env generate --output <file>`";

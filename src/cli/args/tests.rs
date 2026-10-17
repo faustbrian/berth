@@ -253,7 +253,6 @@ fn lifecycle_argument_methods() {
     ]);
     if let commands::Commands::Setup(args) = cli.command {
         assert_eq!(args.service(), Some("api"));
-        assert_eq!(args.kind(), Some(config::Kind::App));
         assert_eq!(args.parallel, 2);
     } else {
         panic!("expected setup command");
@@ -433,8 +432,6 @@ fn operations_argument_methods() {
         "env",
         "--service",
         "api",
-        "--kind",
-        "app",
         "--env-file",
         "/tmp/env-file",
         "--sync",
@@ -446,7 +443,6 @@ fn operations_argument_methods() {
     ]);
     if let commands::Commands::Env(args) = cli.command {
         assert_eq!(args.service(), Some("api"));
-        assert_eq!(args.kind(), Some(config::Kind::App));
         assert!(matches!(args.command, Some(EnvCommands::Generate { .. })));
         assert_eq!(args.env_file, Some(PathBuf::from("/tmp/env-file")));
         assert!(args.sync);
@@ -776,7 +772,7 @@ fn command_variants_parse() {
     let env = Cli::parse_from(["berth", "env", "generate", "--output", "/tmp/env-out"]);
     if let commands::Commands::Env(commands::EnvArgs { command, .. }) = env.command {
         assert!(
-            matches!(command, Some(EnvCommands::Generate { output }) if output == PathBuf::from("/tmp/env-out"))
+            matches!(command, Some(EnvCommands::Generate { output, .. }) if output == PathBuf::from("/tmp/env-out"))
         );
     } else {
         panic!("expected env command");

@@ -56,7 +56,6 @@ pub(super) fn run_start_flow(
             service: options.service,
             kind: options.kind,
             profile: options.profile,
-            runtime_env: options.runtime_env,
             config_path: options.config_path,
             project_root: options.project_root,
             quiet: options.quiet,

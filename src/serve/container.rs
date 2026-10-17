@@ -7,6 +7,7 @@ use std::path::Path;
 use crate::config::ServiceConfig;
 
 mod lifecycle;
+pub(crate) use lifecycle::container_env_pairs;
 mod run_config;
 
 /// Ensures the serve container is running for a target.

@@ -66,15 +66,15 @@ pub(super) fn dispatch(
             handlers::HandleEnvOptions {
                 command: args.command.as_ref(),
                 service: args.service(),
-                kind: args.kind(),
-                env_file: &args.env_file,
-                sync: args.sync,
-                purge: args.purge,
-                create_missing: args.create_missing,
+                json: args.json,
+                writes_dotenv: args.kind.is_some()
+                    || args.env_file.is_some()
+                    || args.sync
+                    || args.purge
+                    || args.create_missing,
                 quiet: context.quiet(),
                 config_path: context.config_path(),
                 project_root: context.project_root(),
-                runtime_env: context.runtime_env(),
             },
         )),
         Commands::Logs(args) => Some(handlers::handle_logs(
