@@ -34,8 +34,8 @@
     )
 )]
 
-use anyhow::Result;
 use clap::Parser;
+use std::process::ExitCode;
 
 mod cli;
 
@@ -55,9 +55,35 @@ mod serve;
 mod share;
 mod swarm;
 
-fn main() -> Result<()> {
-    let cli = Cli::parse();
-    cli::dispatch::run(cli)
+/// Exit code for failures of berth itself (as opposed to a command berth ran),
+/// following the Docker CLI convention so agents can tell them apart.
+const BERTH_FAILURE_EXIT_CODE: u8 = 125;
+
+fn main() -> ExitCode {
+    // Usage errors are berth failures too (clap would exit 2, which collides
+    // with real test-runner exit codes); help and version still exit 0.
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => {
+            drop(error.print());
+            return if error.use_stderr() {
+                ExitCode::from(BERTH_FAILURE_EXIT_CODE)
+            } else {
+                ExitCode::SUCCESS
+            };
+        }
+    };
+    match cli::dispatch::run(cli) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("Error: {error:#}");
+            let child_code = error
+                .chain()
+                .find_map(|cause| cause.downcast_ref::<docker::ChildExitError>())
+                .map(docker::ChildExitError::code);
+            ExitCode::from(child_code.unwrap_or(BERTH_FAILURE_EXIT_CODE))
+        }
+    }
 }
 
 #[cfg(test)]

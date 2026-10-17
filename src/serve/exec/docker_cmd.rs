@@ -23,7 +23,10 @@ pub(super) fn run_or_log_docker(
 
     let status = crate::docker::run_docker_status_owned(args, execution_context)?;
     if !status.success() {
-        anyhow::bail!("{}", failed_message(status.code()));
+        return Err(crate::docker::command_failed_error(
+            status,
+            failed_message(status.code()),
+        ));
     }
     Ok(())
 }

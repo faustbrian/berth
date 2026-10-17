@@ -83,7 +83,12 @@ pub(crate) fn handle_package_manager_command(
     };
     let start_context = runtime.service_start_context();
 
-    cli::support::run_service_command_with_tty(&target, &full_command, tty, &start_context)
+    crate::docker::pass_through_exit_code(cli::support::run_service_command_with_tty(
+        &target,
+        &full_command,
+        tty,
+        &start_context,
+    ))
 }
 
 fn resolve_package_manager_command(command: &[String], default_command: &[&str]) -> Vec<String> {

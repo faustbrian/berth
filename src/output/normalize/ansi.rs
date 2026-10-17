@@ -2,25 +2,19 @@
 
 pub(in crate::output) fn strip_ansi_codes(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
-    let bytes = value.as_bytes();
-    let mut index = 0_usize;
+    let mut characters = value.chars().peekable();
 
-    while index < bytes.len() {
-        if bytes[index] == 0x1b && index + 1 < bytes.len() && bytes[index + 1] == b'[' {
-            index += 2;
-            while index < bytes.len() {
-                let byte = bytes[index];
-                if byte.is_ascii_alphabetic() {
-                    index += 1;
+    while let Some(character) = characters.next() {
+        if character == '\u{1b}' && characters.peek() == Some(&'[') {
+            characters.next();
+            for code in characters.by_ref() {
+                if code.is_ascii_alphabetic() {
                     break;
                 }
-                index += 1;
             }
             continue;
         }
-
-        output.push(char::from(bytes[index]));
-        index += 1;
+        output.push(character);
     }
 
     output
@@ -41,5 +35,13 @@ mod tests {
     #[test]
     fn strip_ansi_codes_keeps_plain_text() {
         assert_eq!(strip_ansi_codes("plain"), "plain");
+    }
+
+    #[test]
+    fn strip_ansi_codes_keeps_non_ascii_text() {
+        assert_eq!(
+            strip_ansi_codes("\u{1b}[31m/Users/jörg/app ✓\u{1b}[0m"),
+            "/Users/jörg/app ✓"
+        );
     }
 }

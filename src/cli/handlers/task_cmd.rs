@@ -234,10 +234,13 @@ fn run_composer_workflow(
 
     for command in composer_commands(action) {
         let display = command.join(" ");
-        cli::support::run_service_command_with_tty(target, &command, tty, start_context)
-            .with_context(|| {
-                format!("Composer workflow step failed for {package_name}: {display}")
-            })?;
+        crate::docker::pass_through_exit_code(cli::support::run_service_command_with_tty(
+            target,
+            &command,
+            tty,
+            start_context,
+        ))
+        .with_context(|| format!("Composer workflow step failed for {package_name}: {display}"))?;
     }
 
     super::log::success_if_not_quiet(
@@ -562,12 +565,12 @@ fn run_runtime_bump(options: RuntimeBumpOptions<'_>, manifest: RuntimeManifest<'
             command
         };
         let display = wrapped.join(" ");
-        cli::support::run_service_command_with_tty(
+        crate::docker::pass_through_exit_code(cli::support::run_service_command_with_tty(
             options.target,
             &wrapped,
             options.tty,
             options.start_context,
-        )
+        ))
         .with_context(|| {
             format!("Dependency workflow step failed for {package_name}: {display}")
         })?;

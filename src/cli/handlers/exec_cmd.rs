@@ -47,9 +47,9 @@ pub(crate) fn handle_exec(config: &config::Config, options: HandleExecOptions<'_
     };
 
     if options.command.is_empty() {
-        return docker::exec_interactive(svc, effective_tty);
+        return docker::pass_through_exit_code(docker::exec_interactive(svc, effective_tty));
     }
-    docker::exec_command(svc, options.command, effective_tty)
+    docker::pass_through_exit_code(docker::exec_command(svc, options.command, effective_tty))
 }
 
 #[cfg(test)]

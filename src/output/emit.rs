@@ -29,7 +29,7 @@ pub(super) fn emit_entry_direct(entry: &LogEntry) {
         return;
     }
 
-    println!("{}", entry.render_terminal_line());
+    eprintln!("{}", super::terminal_line_for_stderr(entry));
 }
 
 pub(super) fn now_local_timestamp() -> OffsetDateTime {

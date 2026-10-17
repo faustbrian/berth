@@ -16,8 +16,8 @@ mod test_extensions;
 mod tests;
 
 use command::{
-    build_artisan_command, ensure_artisan_ansi_flag, ensure_artisan_subcommand,
-    is_artisan_test_command, remove_artisan_env_overrides, resolve_artisan_tty,
+    build_artisan_command, ensure_artisan_subcommand, is_artisan_test_command,
+    remove_artisan_env_overrides, resolve_artisan_tty,
 };
 use runtime::{acquire_testing_runtime_lease, cleanup_test_services, ensure_test_services_running};
 use test_command::{build_artisan_test_command, should_bootstrap_playwright};
@@ -80,7 +80,6 @@ pub(crate) fn handle_artisan(
         user_command = remove_artisan_env_overrides(&user_command);
         user_command.push("--env=testing".to_owned());
     }
-    user_command = ensure_artisan_ansi_flag(user_command);
     let selected_service = resolve_single_app_service(
         &effective_config,
         options.service,
@@ -144,16 +143,17 @@ pub(crate) fn handle_artisan(
         build_artisan_command(user_command)
     };
     let start_context = runtime.service_start_context();
-    let command_result = cli::support::run_service_command_with_tty(
-        runtime.target,
-        &full_command,
-        if options.non_interactive {
-            false
-        } else {
-            resolve_artisan_tty(options.tty, options.no_tty)
-        },
-        &start_context,
-    );
+    let command_result =
+        crate::docker::pass_through_exit_code(cli::support::run_service_command_with_tty(
+            runtime.target,
+            &full_command,
+            if options.non_interactive {
+                false
+            } else {
+                resolve_artisan_tty(options.tty, options.no_tty)
+            },
+            &start_context,
+        ));
 
     if !(is_test_command && prepared_test_runtime) {
         return command_result;
@@ -164,10 +164,11 @@ pub(crate) fn handle_artisan(
         (Ok(()), Ok(())) => Ok(()),
         (Err(command_error), Ok(())) => Err(command_error),
         (Ok(()), Err(cleanup_error)) => Err(cleanup_error),
-        (Err(command_error), Err(cleanup_error)) => Err(anyhow!(
-            "artisan test command failed: {command_error}; test runtime cleanup failed: \
-             {cleanup_error}"
-        )),
+        // Keep the command's error (and its exit code) as the cause; the
+        // cleanup failure is added as context.
+        (Err(command_error), Err(cleanup_error)) => Err(command_error.context(format!(
+            "artisan test failed and test runtime cleanup also failed: {cleanup_error}"
+        ))),
     }
 }
 

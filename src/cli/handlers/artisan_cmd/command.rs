@@ -45,20 +45,6 @@ pub(super) fn build_artisan_command(user_command: Vec<String>) -> Vec<String> {
     cli::support::build_artisan_command(user_command)
 }
 
-/// Ensures artisan ansi flag exists and is in the required state.
-pub(super) fn ensure_artisan_ansi_flag(command: Vec<String>) -> Vec<String> {
-    let mut normalized: Vec<String> = command
-        .into_iter()
-        .filter(|arg| arg != "--no-ansi")
-        .collect();
-
-    if !normalized.iter().any(|arg| arg == "--ansi") {
-        normalized.push("--ansi".to_owned());
-    }
-
-    normalized
-}
-
 /// Resolves artisan tty using configured inputs and runtime state.
 pub(super) fn resolve_artisan_tty(tty: bool, no_tty: bool) -> bool {
     cli::support::effective_tty(tty, no_tty)
@@ -66,10 +52,7 @@ pub(super) fn resolve_artisan_tty(tty: bool, no_tty: bool) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        ensure_artisan_ansi_flag, ensure_artisan_subcommand, is_artisan_test_command,
-        remove_artisan_env_overrides,
-    };
+    use super::{ensure_artisan_subcommand, is_artisan_test_command, remove_artisan_env_overrides};
     use crate::cli::support::effective_tty;
 
     #[test]
@@ -108,24 +91,6 @@ mod tests {
                 "config:clear".to_owned(),
                 "--verbose".to_owned(),
                 "test".to_owned(),
-            ]
-        );
-    }
-
-    #[test]
-    fn ensure_artisan_ansi_flag_removes_no_ansi_and_adds_ansi() {
-        let command = vec![
-            "tinker".to_owned(),
-            "--no-ansi".to_owned(),
-            "--help".to_owned(),
-        ];
-
-        assert_eq!(
-            ensure_artisan_ansi_flag(command),
-            vec![
-                "tinker".to_owned(),
-                "--help".to_owned(),
-                "--ansi".to_owned(),
             ]
         );
     }

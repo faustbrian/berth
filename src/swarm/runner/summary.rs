@@ -27,10 +27,26 @@ pub(super) fn summarize_results(
     emit_summary(output_mode, succeeded, failures.len(), skipped);
 
     if !failures.is_empty() {
+        // The swarm exits with the first failing target's own exit code, so a
+        // failing test in one project is never reported as a berth failure.
+        let code = failures
+            .iter()
+            .find_map(|failure| failure.exit_code.filter(|code| *code != 0))
+            .unwrap_or(1);
+        let names = failures
+            .iter()
+            .map(|failure| failure.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
         for failure in failures {
             emit_failure(output_mode, failure);
         }
-        anyhow::bail!("swarm command failed");
+        return Err(anyhow::Error::new(
+            crate::docker::ChildExitError::from_code(
+                code,
+                format!("swarm command failed for: {names}"),
+            ),
+        ));
     }
 
     Ok(())
@@ -48,6 +64,7 @@ mod tests {
             root: PathBuf::from(format!("/tmp/{name}")),
             success,
             skipped,
+            exit_code: if success { Some(0) } else { Some(3) },
         }
     }
 
@@ -71,6 +88,16 @@ mod tests {
     fn summarize_results_fails_when_any_target_fails() {
         let results = vec![result("alpha", false, false)];
         assert!(summarize_results(&results, 0, OutputMode::Logged).is_err());
+    }
+    #[test]
+    fn a_failing_target_passes_its_exit_code_through() {
+        let results = vec![result("alpha", true, false), result("beta", false, false)];
+        let error = summarize_results(&results, 0, OutputMode::Logged).expect_err("failure");
+        let code = error
+            .downcast_ref::<crate::docker::ChildExitError>()
+            .map(crate::docker::ChildExitError::code);
+        assert_eq!(code, Some(3));
+        assert!(error.to_string().contains("beta"), "{error}");
     }
 }
 

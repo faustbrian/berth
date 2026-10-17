@@ -30,7 +30,7 @@ impl LoggerState {
         if self.quiet && !entry.level.visible_when_quiet() {
             return;
         }
-        println!("{}", entry.render_terminal_line());
+        eprintln!("{}", super::terminal_line_for_stderr(entry));
     }
 
     pub(super) fn persist(&self, entry: &LogEntry) {

@@ -266,6 +266,7 @@ mod tests {
             root: PathBuf::from("/tmp/ignored"),
             success: true,
             skipped: false,
+            exit_code: None,
         })
     }
 
@@ -281,6 +282,7 @@ mod tests {
             root: target.root.clone(),
             success: true,
             skipped: false,
+            exit_code: None,
         })
     }
 
@@ -296,6 +298,7 @@ mod tests {
             root: target.root.clone(),
             success: target.name != "svc-a",
             skipped: false,
+            exit_code: None,
         })
     }
 }

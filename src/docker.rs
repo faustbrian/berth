@@ -254,6 +254,7 @@ pub(crate) fn docker_command() -> String {
     active_engine_adapter().command_binary().to_owned()
 }
 
+mod child_exit;
 mod cmd;
 mod engine;
 mod exec;
@@ -270,6 +271,9 @@ mod policy;
 mod scheduler;
 mod up;
 
+pub(crate) use child_exit::{
+    ChildExitError, command_failed_error, exit_code_of, pass_through_exit_code,
+};
 pub(crate) use cmd::{
     docker_arg_refs, ensure_docker_output_success, run_docker_output, run_docker_output_owned,
     run_docker_status, run_docker_status_owned, spawn_docker_stdin_stderr_piped,

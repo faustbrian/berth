@@ -27,6 +27,16 @@ pub(crate) fn wait_until_http_healthy(
     health_path: Option<&str>,
 ) -> Result<()> {
     let health_url = health_url_for_target(target, health_path)?;
+    // A dry run starts nothing, so there is nothing to probe.
+    if crate::docker::is_dry_run() {
+        output::event(
+            &target.name,
+            LogLevel::Info,
+            &format!("[dry-run] Wait for health check at {health_url}"),
+            Persistence::Transient,
+        );
+        return Ok(());
+    }
     let accepted_statuses: HashSet<u16> = target
         .health_statuses
         .clone()
@@ -156,7 +166,7 @@ mod tests {
         }
 
         let command = curl.to_string_lossy().to_string();
-        let result = with_curl_command(&command, || test());
+        let result = crate::docker::with_dry_run_state(false, || with_curl_command(&command, test));
         fs::remove_dir_all(&bin_dir).ok();
         result
     }
@@ -186,7 +196,7 @@ mod tests {
         }
 
         let command = curl.to_string_lossy().to_string();
-        let result = with_curl_command(&command, || test());
+        let result = crate::docker::with_dry_run_state(false, || with_curl_command(&command, test));
         fs::remove_dir_all(&bin_dir).ok();
         result
     }

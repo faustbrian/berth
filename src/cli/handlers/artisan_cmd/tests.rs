@@ -3,9 +3,9 @@
 //! Contains cli handlers artisan cmd tests logic used by Berth command workflows.
 
 use super::{
-    HandleArtisanOptions, build_artisan_command, build_artisan_test_command,
-    ensure_artisan_ansi_flag, handle_artisan, is_artisan_test_command,
-    load_artisan_test_base_config, remove_artisan_env_overrides, resolve_artisan_tty,
+    HandleArtisanOptions, build_artisan_command, build_artisan_test_command, handle_artisan,
+    is_artisan_test_command, load_artisan_test_base_config, remove_artisan_env_overrides,
+    resolve_artisan_tty,
 };
 use crate::config;
 use std::collections::HashMap;
@@ -84,30 +84,6 @@ fn build_non_test_artisan_command_uses_plain_php_invocation() {
     assert_eq!(
         build_artisan_command(vec!["about".to_owned()]),
         vec!["php".to_owned(), "artisan".to_owned(), "about".to_owned(),]
-    );
-}
-
-#[test]
-fn ansi_is_added_by_default() {
-    assert_eq!(
-        ensure_artisan_ansi_flag(vec!["test".to_owned()]),
-        vec!["test".to_owned(), "--ansi".to_owned()]
-    );
-}
-
-#[test]
-fn ansi_flag_is_not_duplicated() {
-    assert_eq!(
-        ensure_artisan_ansi_flag(vec!["test".to_owned(), "--ansi".to_owned()]),
-        vec!["test".to_owned(), "--ansi".to_owned()]
-    );
-}
-
-#[test]
-fn no_ansi_flag_is_removed_and_ansi_is_enforced() {
-    assert_eq!(
-        ensure_artisan_ansi_flag(vec!["test".to_owned(), "--no-ansi".to_owned()]),
-        vec!["test".to_owned(), "--ansi".to_owned()]
     );
 }
 

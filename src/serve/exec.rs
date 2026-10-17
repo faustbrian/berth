@@ -40,7 +40,7 @@ pub(crate) fn exec_artisan(
     ensure_schema_dump_compat(target, artisan_args)?;
     let mut command = vec!["php".to_owned(), "artisan".to_owned()];
     command.extend(artisan_args.iter().cloned());
-    let command = ensure_artisan_ansi(command);
+    let command = ensure_artisan_ansi(command, tty);
     exec_command(target, &command, tty)
 }
 
@@ -56,13 +56,19 @@ pub(crate) fn exec_or_run_command(
     project_root: &Path,
     injected_env: &HashMap<String, String>,
 ) -> Result<()> {
-    let command = ensure_artisan_ansi(command.to_vec());
+    let command = ensure_artisan_ansi(command.to_vec(), tty);
     let container_name = target.container_name()?;
     if let Some(status) = crate::docker::inspect_status(&container_name)
         && status == "running"
     {
-        ensure_mysql_cli_compat(target)?;
-        ensure_schema_dump_compat_for_command(target, &command, injected_env)?;
+        // The compatibility shims are berth's own setup: their failure must not
+        // be mistaken for the user's command exiting non-zero.
+        ensure_mysql_cli_compat(target).map_err(|error| {
+            anyhow::anyhow!("failed to install the mysql compatibility wrapper: {error:#}")
+        })?;
+        ensure_schema_dump_compat_for_command(target, &command, injected_env).map_err(|error| {
+            anyhow::anyhow!("failed to prepare schema dump compatibility: {error:#}")
+        })?;
         return exec_command(target, &command, tty);
     }
 

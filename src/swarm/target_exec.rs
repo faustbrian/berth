@@ -31,6 +31,8 @@ pub(super) struct SwarmRunResult {
     pub(super) root: PathBuf,
     pub(super) success: bool,
     pub(super) skipped: bool,
+    /// Exit code of the target's berth process, when it finished.
+    pub(super) exit_code: Option<u8>,
 }
 
 /// Executes the requested command for one swarm target.

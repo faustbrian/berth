@@ -63,6 +63,19 @@ All notable changes to this project are documented in this file.
   `.berth.lock.yaml`. A legacy helm, stackctl or TOML project file fails with
   an error naming `berth config migrate` instead of being read.
 - `berth init` writes a `schema_version: 9` `.berth.yaml` starter file.
+- Commands berth runs in containers (`exec`, `artisan`, `composer`, PHP
+  tools, `node`, `bun`, `deno`, one-off commands) now set berth's exit code to
+  the command's exact exit code, or `128 + signal` when it was killed; a
+  failing `artisan test` keeps its code even when test-runtime cleanup also
+  fails, and `swarm` exits with the first failing target's code. Berth's own
+  failures exit `125`, including usage errors, `exec` against a stopped or
+  missing instance and failing internal steps such as hooks; errors are
+  printed to stderr.
+- Progress and log events are written to stderr, so stdout carries only
+  command output and machine-readable data such as `--format json`.
+- `artisan` adds `--ansi` only when the command runs with a TTY and keeps an
+  explicit `--ansi` or `--no-ansi`, so agents reading pipes get plain text;
+  log lines are colored only when stderr is a terminal.
 - `container_name` is no longer accepted in project files (berth names
   containers per instance), service names must be lowercase DNS labels, and
   named volumes of non-application services are namespaced per instance;
@@ -81,6 +94,8 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- `--dry-run` no longer probes application health URLs, which made a dry-run
+  `up` wait 30 seconds and then fail.
 - Isolated the swarm bootstrap test's fixture repository from the developer's
   global Git configuration so global commit hooks no longer fail the test.
 - Official PostgreSQL images tagged with major 18 or later now get their

@@ -27,13 +27,34 @@ pub fn exec_interactive(service: &ServiceConfig, tty: bool) -> Result<()> {
         return Ok(());
     }
 
+    ensure_container_running(service, &container_name)?;
     let status = run_docker_status(&args, &super::runtime_command_error_context("exec"))?;
 
     if !status.success() {
-        anyhow::bail!("Interactive session failed");
+        return Err(super::command_failed_error(
+            status,
+            command_failed_in_container(&container_name, status.code()),
+        ));
     }
 
     Ok(())
+}
+
+/// Fails early, as a berth error, when the service has no running container,
+/// so a missing or stopped instance is never reported as the command's own
+/// non-zero exit.
+fn ensure_container_running(service: &ServiceConfig, container_name: &str) -> Result<()> {
+    match super::inspect_status(container_name).as_deref() {
+        Some("running") => Ok(()),
+        Some(status) => anyhow::bail!(
+            "service '{}' is {status} (container {container_name}); run `berth up` first",
+            service.name
+        ),
+        None => anyhow::bail!(
+            "service '{}' has no container {container_name}, or Docker is unreachable; run `berth up` first",
+            service.name
+        ),
+    }
 }
 
 /// Execs piped as part of the docker exec workflow.
@@ -60,13 +81,14 @@ pub fn exec_command(service: &ServiceConfig, command: &[String], tty: bool) -> R
         return Ok(());
     }
 
+    ensure_container_running(service, &container_name)?;
     let status = run_docker_status(&args, "Failed to execute command in container")?;
 
     if !status.success() {
-        anyhow::bail!(
-            "{}",
-            command_failed_in_container(&container_name, status.code())
-        );
+        return Err(super::command_failed_error(
+            status,
+            command_failed_in_container(&container_name, status.code()),
+        ));
     }
 
     Ok(())
@@ -162,12 +184,16 @@ mod tests {
 
     #[test]
     fn exec_command_includes_exit_code_in_failure_message() {
-        with_fake_docker("exit 23", || {
-            let error = exec_command(&service(), &["php".to_owned(), "artisan".to_owned()], false)
-                .expect_err("docker exec should fail");
+        with_fake_docker(
+            "if [ \"$1\" = inspect ]; then printf running; exit 0; fi; exit 23",
+            || {
+                let error =
+                    exec_command(&service(), &["php".to_owned(), "artisan".to_owned()], false)
+                        .expect_err("docker exec should fail");
 
-            assert!(error.to_string().contains("acme-app"));
-            assert!(error.to_string().contains("exit code: 23"));
-        });
+                assert!(error.to_string().contains("acme-app"));
+                assert!(error.to_string().contains("exit code: 23"));
+            },
+        );
     }
 }

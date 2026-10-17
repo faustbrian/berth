@@ -33,6 +33,7 @@ pub(super) fn wait_for_target_completion(
                 root: target.root.clone(),
                 success: false,
                 skipped: true,
+                exit_code: None,
             });
         }
 
@@ -53,6 +54,7 @@ pub(super) fn wait_for_target_completion(
         root: target.root.clone(),
         success: status.success(),
         skipped: false,
+        exit_code: Some(crate::docker::exit_code_of(status)),
     })
 }
 

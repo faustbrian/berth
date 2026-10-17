@@ -11,6 +11,7 @@ use normalize::normalize_log_message;
 use serde_json::Value;
 use state::LoggerState;
 use stream::prepare_stream_message;
+use terminal_line::terminal_line_for_stderr;
 pub(crate) use types::{Channel, LogLevel, Persistence};
 
 static LOGGER_STATE: OnceLock<LoggerState> = OnceLock::new();
@@ -71,6 +72,7 @@ mod layer;
 mod normalize;
 mod state;
 mod stream;
+mod terminal_line;
 #[cfg(test)]
 mod tests;
 mod tracing_emit;
