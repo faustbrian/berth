@@ -249,6 +249,8 @@ class IsolationTest extends TestCase
         $this->assertSame('pgsql', DB::connection()->getDriverName());
         $this->assertStringStartsWith('accept__', DB::connection()->getDatabaseName());
         $this->assertSame(0, DB::table('markers')->count());
+        // The script checks that this file belongs to the invoking user.
+        file_put_contents(storage_path('app/owner-probe'), 'written by the app container');
         DB::table('markers')->insert(['agent' => 'test-run']);
         $this->assertSame(1, DB::table('markers')->count());
     }
@@ -403,6 +405,11 @@ agent() {
   printf '%s\n' "$status" > "$out/up.status"
   printf '%s\n' "$(( end - start ))" > "$out/up.ms"
 
+  # The app container as Docker runs it: user and capability sets (L022).
+  local app
+  app="$(jq -r '.services[] | select(.name == "app") | .container' "$out/up.json" 2>/dev/null)"
+  docker inspect --format '{{.Config.User}} {{json .HostConfig.CapDrop}} {{json .HostConfig.CapAdd}} {{json .HostConfig.SecurityOpt}}' \
+    "$app" > "$out/app-security.txt" 2>&1
   url="$(jq -r '.urls[0] // empty' "$out/up.json" 2>/dev/null)"
   code="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 30 "$url" 2>/dev/null || true)"
   printf '%s\n' "$code" > "$out/https.code"
@@ -413,6 +420,20 @@ agent() {
     --execute="DB::table('markers')->insert(['agent' => '$name']); echo DB::table('markers')->pluck('agent')->join(',');" \
     > "$out/markers.out" 2>&1
   printf '%s\n' "$?" > "$out/markers.status"
+
+  # Tools agents run as the container's (invoking) user: Composer and npm
+  # need a writable HOME and caches.
+  "$BERTH" composer --no-tty validate --no-check-publish > "$out/composer.out" 2>&1
+  printf '%s\n' "$?" > "$out/composer.status"
+  # One agent installs the skeleton's frontend dependencies (its npm cache
+  # fills HOME); the rest only run npm. `--legacy-peer-deps`: the pinned
+  # skeleton's own vite/@tailwindcss/vite peer ranges conflict.
+  if [[ "$name" == agent-1 ]]; then
+    "$BERTH" node --no-tty --package-manager npm install --no-audit --no-fund --legacy-peer-deps > "$out/npm.out" 2>&1
+  else
+    "$BERTH" node --no-tty --package-manager npm --version > "$out/npm.out" 2>&1
+  fi
+  printf '%s\n' "$?" > "$out/npm.status"
 
   "$BERTH" artisan --no-tty --non-interactive test tests/Feature/IsolationTest.php > "$out/test.out" 2>&1
   printf '%s\n' "$?" > "$out/test.status"
@@ -473,6 +494,9 @@ printf 'memory_samples=%s\n' "$samples" >> "$OUTPUT/metadata.txt"
 
 # --- Assertions --------------------------------------------------------------
 failures=0
+file_owner() {
+  if [[ "$(uname -s)" == Darwin ]]; then stat -f %u "$1" 2>/dev/null; else stat -c %u "$1" 2>/dev/null; fi
+}
 # Test output without ANSI colors.
 plain() { sed $'s/\x1b\\[[0-9;]*m//g' "$1"; }
 check() {
@@ -489,12 +513,20 @@ for index in $(seq 1 "$AGENTS"); do
   check "$name up" "$(cat "$out/up.status")" 0
   check "$name up document" "$(jq -r '.status' "$out/up.json" 2>/dev/null)" ready
   check "$name https" "$(cat "$out/https.code")" 200
+  # Docker may report capabilities with or without the `CAP_` prefix.
+  check "$name app runs least-privileged" "$(sed 's/CAP_//g' "$out/app-security.txt")" \
+    "$(id -u):$(id -g) [\"ALL\"] [\"NET_BIND_SERVICE\"] [\"no-new-privileges\"]"
   check "$name migrate" "$(cat "$out/migrate.status")" 0
   check "$name markers" "$(cat "$out/markers.status")" 0
   # Its development database holds only its own marker: no other agent's
   # data is visible.
   check "$name sees only its own data" "$(tail -n 1 "$out/markers.out" | tr -d '[:space:]')" "$name"
+  check "$name composer as the invoking user" "$(cat "$out/composer.status")" 0
+  check "$name npm as the invoking user" "$(cat "$out/npm.status")" 0
   check "$name focused test" "$(cat "$out/test.status")" 0
+  # Files the app writes into the checkout belong to the agent's user.
+  check "$name app writes files as the invoking user" \
+    "$(file_owner "$WORKTREES/$name/storage/app/owner-probe")" "$(id -u)"
   # Exit codes alone do not prove the tests ran: count them.
   check "$name focused test ran both tests" \
     "$(plain "$out/test.out" | grep -cE 'Tests: +2 passed')" 1
@@ -520,6 +552,12 @@ grep -rqE "Reaped accept/agent-killed-[0-9a-f]+ because its owner process exited
 # Its instance containers and its interrupted test run's slot containers.
 check "killed agent's containers removed" \
   "$(docker ps -a --filter "label=dev.berth.installation=$(installation)" --format '{{.Names}}' | grep -c 'agent-killed')" 0
+
+log "checking the gateway"
+gateway="$(docker ps -q --filter "label=dev.berth.installation=$(installation)" --filter label=dev.berth.role=gateway)"
+check "gateway runs least-privileged" "$(
+  docker inspect --format '{{json .HostConfig.CapDrop}} {{json .HostConfig.CapAdd}} {{json .HostConfig.SecurityOpt}}' "$gateway" 2>&1 | sed 's/CAP_//g'
+)" '["ALL"] ["NET_BIND_SERVICE"] ["no-new-privileges"]'
 
 log "checking leftovers"
 leftover_instances="$(jq '.instances | length' "$OUTPUT/ls-after-kill.json")"

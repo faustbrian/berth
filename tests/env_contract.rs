@@ -311,3 +311,26 @@ fn the_7_0_dotenv_writers_fail_precisely_and_touch_nothing() {
         );
     }
 }
+
+#[test]
+fn the_app_container_runs_as_the_invoking_user_with_no_spare_capabilities() {
+    let fixture = Fixture::new("least-privilege", None);
+    let up = fixture.berth(&["up", "--no-wait"]);
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    let run = fixture.app_run();
+    let user = format!(
+        "--user {}:{}",
+        rustix::process::geteuid().as_raw(),
+        rustix::process::getegid().as_raw()
+    );
+    for expected in [
+        user.as_str(),
+        "--cap-drop ALL --cap-add NET_BIND_SERVICE",
+        "--security-opt no-new-privileges",
+        "--tmpfs /data:rw,noexec,nosuid,mode=1777",
+        "--tmpfs /config:rw,noexec,nosuid,mode=1777",
+        "--env HOME=/home/berth",
+    ] {
+        assert!(run.contains(expected), "missing {expected}: {run}");
+    }
+}

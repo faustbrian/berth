@@ -28,6 +28,11 @@ pub(super) fn render_derived_dockerfile(
     let sql_client_flavor = sql_client_flavor.as_str();
 
     if include_js_tooling {
+        // App containers run as the invoking user (L023), who cannot reach
+        // `/root`: every runtime and version manager lives under
+        // `/usr/local`, and caches stay in the user's `HOME`. As image `ENV`,
+        // the paths also hold at runtime.
+        dockerfile.push_str(JS_TOOLING_ENV);
         dockerfile.push_str(
             &format!(
                 "RUN apt-get update \\\n    && apt-get install -y --no-install-recommends bash curl ca-certificates gnupg unzip ghostscript {sql_client_package} postgresql-client \\\n    && {} \\\n    && curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \\\n    && rm -rf /var/lib/apt/lists/*\n",
@@ -68,6 +73,16 @@ pub(super) fn render_derived_dockerfile(
     dockerfile
 }
 
+/// Install locations outside `/root`; Bun's download cache stays in the
+/// container user's writable `HOME` rather than under the root-owned install.
+const JS_TOOLING_ENV: &str = "ENV BUN_INSTALL=/usr/local/bun BUN_INSTALL_CACHE_DIR=/home/berth/.bun/install/cache DENO_INSTALL=/usr/local/deno FNM_DIR=/usr/local/fnm NVM_DIR=/usr/local/nvm VOLTA_HOME=/usr/local/volta\n";
+
+/// Version managers write their indexes and downloads into their home at
+/// run time too; the container user is not root (L023).
+fn writable_by_container_user(install: String, home: &str) -> String {
+    format!("{install} \\\n    && chmod -R a+rwX {home}")
+}
+
 fn render_js_tooling_install(
     runtime: JavaScriptRuntime,
     version_manager: VersionManager,
@@ -102,7 +117,7 @@ fn render_deno_install(version: Option<&str>, playwright_package_spec: Option<&s
         .unwrap_or_default();
 
     let install = format!(
-        "curl -fsSL https://deno.land/install.sh | sh -s --{version_arg} \\\n    && ln -sf /root/.deno/bin/deno /usr/local/bin/deno"
+        "curl -fsSL https://deno.land/install.sh | sh -s --{version_arg} \\\n    && ln -sf /usr/local/deno/bin/deno /usr/local/bin/deno"
     );
     append_playwright_install_deps(install, playwright_package_spec)
 }
@@ -113,7 +128,7 @@ fn render_bun_install(version: Option<&str>, playwright_package_spec: Option<&st
         .unwrap_or_default();
 
     let install = format!(
-        "curl -fsSL https://bun.sh/install | bash -s -- {version_arg} \\\n    && ln -sf /root/.bun/bin/bun /usr/local/bin/bun"
+        "curl -fsSL https://bun.sh/install | bash -s -- {version_arg} \\\n    && ln -sf /usr/local/bun/bin/bun /usr/local/bin/bun"
     );
     append_playwright_install_deps(install, playwright_package_spec)
 }
@@ -140,6 +155,7 @@ fn render_fnm_install(node_version: Option<&str>, playwright_package_spec: Optio
             " \\\n    && eval \"$(fnm env --shell bash)\" \\\n    && fnm install {version} \\\n    && fnm default {version} \\\n    && fnm exec --using {version} npm install -g pnpm yarn"
         ));
     }
+    let install = writable_by_container_user(install, "/usr/local/fnm");
     append_playwright_install_deps(install, playwright_package_spec)
 }
 
@@ -150,6 +166,7 @@ fn render_nvm_install(node_version: Option<&str>, playwright_package_spec: Optio
             " \\\n    && export NVM_DIR=/usr/local/nvm \\\n    && . \"$NVM_DIR/nvm.sh\" \\\n    && nvm install {version} \\\n    && nvm alias default {version} \\\n    && nvm exec {version} npm install -g pnpm yarn"
         ));
     }
+    let install = writable_by_container_user(install, "/usr/local/nvm");
     append_playwright_install_deps(install, playwright_package_spec)
 }
 
@@ -163,6 +180,7 @@ fn render_volta_install(
             " \\\n    && export VOLTA_HOME=/usr/local/volta \\\n    && export PATH=\"$VOLTA_HOME/bin:$PATH\" \\\n    && volta install node@{version} \\\n    && volta run --node {version} npm install -g pnpm yarn"
         ));
     }
+    let install = writable_by_container_user(install, "/usr/local/volta");
     append_playwright_install_deps(install, playwright_package_spec)
 }
 

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::config::ServiceConfig;
 use crate::serve::sql_client_flavor::sql_client_flavor_from_injected_env;
 
-use super::container::exec_command;
+use super::container::exec_setup_as_root;
 mod scripts;
 use scripts::{install_mysql_wrapper_script, install_wrapper_script};
 
@@ -17,7 +17,7 @@ pub(super) fn ensure_mysql_cli_compat(target: &ServiceConfig) -> Result<()> {
         "-lc".to_owned(),
         install_mysql_wrapper_script().to_owned(),
     ];
-    exec_command(target, &command, false)
+    exec_setup_as_root(target, &command)
 }
 
 /// Installs `mysqldump` wrapper when about to run `artisan schema:dump`.
@@ -37,7 +37,7 @@ pub(super) fn ensure_schema_dump_compat(
 
     // No TTY required; install script into the running app container
     // before running `php artisan schema:dump`.
-    exec_command(target, &command, false)
+    exec_setup_as_root(target, &command)
 }
 
 /// Installs `mysqldump` wrapper for direct command execution paths.
@@ -58,7 +58,7 @@ pub(super) fn ensure_schema_dump_compat_for_command(
         install_wrapper_script(sql_client_flavor.as_str()),
     ];
 
-    exec_command(target, &install, false)
+    exec_setup_as_root(target, &install)
 }
 
 /// Returns whether the artisan subcommand is `schema:dump`.

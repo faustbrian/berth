@@ -196,3 +196,41 @@ fn does_not_inject_server_name_when_already_defined() {
     injected.insert("SERVER_NAME".to_owned(), ":80".to_owned());
     assert!(!should_inject_frankenphp_server_name(&service, &injected));
 }
+
+#[test]
+fn derived_js_tooling_never_installs_under_root_home() {
+    // App containers run as the invoking user, who cannot reach `/root`.
+    for (runtime, manager) in [
+        (JavaScriptRuntime::Node, VersionManager::System),
+        (JavaScriptRuntime::Node, VersionManager::Fnm),
+        (JavaScriptRuntime::Node, VersionManager::Nvm),
+        (JavaScriptRuntime::Node, VersionManager::Volta),
+        (JavaScriptRuntime::Bun, VersionManager::System),
+        (JavaScriptRuntime::Deno, VersionManager::System),
+    ] {
+        let rendered = render_derived_dockerfile(
+            "dunglas/frankenphp:php8.5",
+            &Vec::new(),
+            true,
+            runtime,
+            manager,
+            Some("22"),
+            SqlClientFlavor::Mysql,
+            Some("playwright@1.50.0"),
+        );
+        assert!(
+            !rendered.contains("/root"),
+            "{runtime:?}/{manager:?}:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("ENV BUN_INSTALL=/usr/local/bun BUN_INSTALL_CACHE_DIR=/home/berth/.bun/install/cache DENO_INSTALL=/usr/local/deno FNM_DIR=/usr/local/fnm"),
+            "{rendered}"
+        );
+        if manager != VersionManager::System {
+            assert!(
+                rendered.contains("chmod -R a+rwX /usr/local/"),
+                "{manager:?}"
+            );
+        }
+    }
+}

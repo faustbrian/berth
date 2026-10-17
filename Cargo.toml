@@ -26,6 +26,7 @@ time = { version = "0.3", features = ["formatting", "local-offset"] }
 serde-saphyr = { version = "2", default-features = false, features = ["serialize", "deserialize"] }
 sha2 = "0.11"
 getrandom = "0.3"
+rustix = { version = "1.1.4", default-features = false, features = ["process", "std"] }
 
 [lints.rust]
 # Absolute safety - forbid unsafe code entirely

@@ -136,6 +136,16 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- PHP app containers (app, Horizon, scheduler, Reverb) run as the invoking
+  user's UID:GID with every capability dropped except `NET_BIND_SERVICE`,
+  `no-new-privileges`, and writable tmpfs for Caddy's state and `HOME`, so
+  files written into a worktree are no longer owned by root (rootless Docker
+  and Podman map the user accordingly). `up` fails early, naming the files
+  and the `chown` that fixes them, when a worktree still holds root-owned
+  files from 7.0.0's root containers. Apps that terminate TLS themselves
+  (`localhost_tls` or container port 443) keep 7.0.0's container. Derived
+  images install Bun, Deno, fnm, nvm and Volta under `/usr/local` instead of
+  `/root`.
 - The crate now builds under 8.x's lint baseline: `clippy::all`, the
   no-panic lints and `unused` are denied, the blanket `allow` of every
   Clippy group is gone, and no recipe disables warnings. `just lint` runs

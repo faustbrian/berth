@@ -28,6 +28,7 @@ pub(super) fn run_command_one_off(
     )?);
     crate::network::ensure_service_network(target)?;
     args.extend(crate::network::network_run_args(target, false));
+    args.extend(crate::serve::container::least_privilege_run_args(target)?);
     args.push(if tty { "-it" } else { "-i" }.to_owned());
     args.push("-w".to_owned());
     args.push("/app".to_owned());

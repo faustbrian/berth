@@ -30,6 +30,7 @@ pub(super) fn build_run_args(
     inject_server_name: bool,
 ) -> Result<Vec<String>> {
     let mut run_args = build_base_run_args(target)?;
+    run_args.extend(super::super::least_privilege_run_args(target)?);
     if let Some(smtp_port) = mailhog_smtp_port(target)
         && crate::network::publishes_host_port(target)
     {

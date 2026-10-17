@@ -243,6 +243,30 @@ fails on a busy port can be retried on another.
 Routable services are web apps, Mailpit's UI and WebSocket servers; workers,
 schedulers, Horizon, RabbitMQ, Gotenberg and Selenium have no route.
 
+## Least privilege
+
+PHP app containers (the FrankenPHP app and its Horizon, scheduler and Reverb
+processes, which mount the checkout) run as the invoking user's UID:GID, so
+files they write into the worktree belong to the agent's user. They drop every
+capability except `NET_BIND_SERVICE` (FrankenPHP's binary is
+capability-marked), run with `no-new-privileges`, and get writable
+`noexec,nosuid` tmpfs at `/data` and `/config` (Caddy's state, 16 MiB each)
+and at `/home/berth`, their `HOME` for Composer, npm, Bun and Playwright caches
+(capped at 1 GiB; tmpfs holds only what is written). Derived images install
+JavaScript runtimes and version managers under `/usr/local`, never `/root`, and version managers' homes are writable by the container user.
+berth's own setup inside a running app container (the MySQL client wrappers)
+runs as root with the container's capability set (`NET_BIND_SERVICE` only).
+The user mapping follows the engine: `--user UID:GID` on rootful Docker,
+nothing on rootless Docker (container root already is the host user),
+`--userns=keep-id` plus `--user` on Podman; under `sudo`, `SUDO_UID`/`SUDO_GID`.
+Before starting, berth fails if `storage/`, `bootstrap/cache/`, `vendor/` or
+`node_modules/` hold paths that user does not own (root-owned leftovers of
+7.0.0's root containers) and prints the `chown` that fixes them. An app that
+terminates TLS itself (`localhost_tls` or container port 443) keeps 7.0.0's
+container, because its CA must persist in the image's `/data`. The gateway
+runs with the same capability options. Images that bring their own user
+(Selenium, Gotenberg, Mailpit, Soketi) keep their defaults.
+
 ## Commands and exit codes
 
 - `exec`, `artisan`, `composer`, PHP tools, `node`, `bun` and `deno` run via

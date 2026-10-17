@@ -57,7 +57,7 @@ fn build_nvm_command(options: BuildNodeCommandOptions<'_>) -> Result<Vec<String>
         .collect::<Vec<_>>()
         .join(" ");
     let script = format!(
-        "export NVM_DIR=/usr/local/nvm && . \"$NVM_DIR/nvm.sh\" && nvm install {version} >/dev/null && nvm exec {version} {joined}"
+        "export NVM_DIR=/usr/local/nvm && . \"$NVM_DIR/nvm.sh\" && nvm exec {version} {joined}"
     );
 
     Ok(vec!["bash".to_owned(), "-lc".to_owned(), script])
