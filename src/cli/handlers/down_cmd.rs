@@ -126,6 +126,10 @@ fn purge_instance(config: &config::Config) -> Result<()> {
         );
         return Ok(());
     }
-    docker::purge_instance_objects(project, instance)?;
-    crate::home::remove_instance_state(project, instance)
+    // Each step runs even when an earlier one fails, so one stubborn object
+    // never leaves the rest behind; the first failure is reported.
+    let tenants = crate::shared::drop_instance_tenants(project, instance);
+    let objects = docker::purge_instance_objects(project, instance);
+    let state = crate::home::remove_instance_state(project, instance);
+    tenants.and(objects).and(state)
 }

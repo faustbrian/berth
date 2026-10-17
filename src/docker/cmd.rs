@@ -1,7 +1,7 @@
 //! Shared low-level docker command runners.
 
 use anyhow::{Context, Result};
-use std::process::{Child, Command, ExitStatus, Output, Stdio};
+use std::process::{Child, ExitStatus, Output, Stdio};
 
 /// Converts owned docker args into borrowed args for command execution.
 pub(crate) fn docker_arg_refs(args: &[String]) -> Vec<&str> {
@@ -10,8 +10,7 @@ pub(crate) fn docker_arg_refs(args: &[String]) -> Vec<&str> {
 
 /// Runs `docker` with args and captures output.
 pub(crate) fn run_docker_output(args: &[&str], context: &str) -> Result<Output> {
-    Command::new(crate::docker::docker_command())
-        .args(args)
+    super::secret_env::docker_process(args)?
         .output()
         .with_context(|| context.to_owned())
 }
@@ -24,8 +23,7 @@ pub(crate) fn run_docker_output_owned(args: &[String], context: &str) -> Result<
 
 /// Runs `docker` with args and waits for exit status.
 pub(crate) fn run_docker_status(args: &[&str], context: &str) -> Result<ExitStatus> {
-    Command::new(crate::docker::docker_command())
-        .args(args)
+    super::secret_env::docker_process(args)?
         .stdout(crate::output::child_stdout())
         .status()
         .with_context(|| context.to_owned())
@@ -39,8 +37,7 @@ pub(crate) fn run_docker_status_owned(args: &[String], context: &str) -> Result<
 
 /// Spawns `docker` with stdin/stderr piped.
 pub(crate) fn spawn_docker_stdin_stderr_piped(args: &[&str], context: &str) -> Result<Child> {
-    Command::new(crate::docker::docker_command())
-        .args(args)
+    super::secret_env::docker_process(args)?
         .stdin(Stdio::piped())
         .stdout(crate::output::child_stdout())
         .stderr(Stdio::piped())
@@ -50,8 +47,7 @@ pub(crate) fn spawn_docker_stdin_stderr_piped(args: &[&str], context: &str) -> R
 
 /// Spawns `docker` with stdout/stderr piped.
 pub(crate) fn spawn_docker_stdout_stderr_piped(args: &[&str], context: &str) -> Result<Child> {
-    Command::new(crate::docker::docker_command())
-        .args(args)
+    super::secret_env::docker_process(args)?
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

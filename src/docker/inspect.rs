@@ -25,6 +25,16 @@ pub fn inspect_status(container_name: &str) -> Option<String> {
     Some(stdout.trim().to_owned())
 }
 
+/// The status of the container backing `service`: its own container, or for
+/// a shared-backed service the shared server as the instance sees it.
+#[must_use]
+pub fn inspect_service_status(service: &crate::config::ServiceConfig) -> Option<String> {
+    if service.runtime.shared.is_some() {
+        return crate::shared::status(service);
+    }
+    inspect_status(&service.container_name().ok()?)
+}
+
 #[must_use]
 pub fn inspect_host_port_binding(
     container_name: &str,

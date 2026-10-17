@@ -11,6 +11,12 @@ use docker_cmd::{remove_named_volume_output, try_remove_container_with_volumes};
 
 /// Resets a service runtime so test runs start from a clean container state.
 pub(super) fn reset_service_runtime(service: &ServiceConfig) -> Result<()> {
+    // A shared-backed service's run state is its tenant: dropping it gives
+    // the next run a fresh database (recreated when the run starts).
+    if service.runtime.shared.is_some() {
+        crate::shared::detach(service)?;
+        return crate::shared::drop_tenant(service);
+    }
     let container_name = service.container_name()?;
     let named_volumes = collect_named_volume_targets(service)?;
 

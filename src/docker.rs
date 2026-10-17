@@ -275,6 +275,7 @@ mod manage;
 mod ops;
 mod policy;
 mod redact;
+mod secret_env;
 pub(crate) use redact::{redact_known_secrets, register_secret};
 mod scheduler;
 mod up;
@@ -294,7 +295,9 @@ pub(crate) use failure_message::command_failed_in_container;
 pub use health::wait_until_healthy;
 pub(crate) use image_inspect::{docker_image_exists, docker_image_repo_digest};
 pub(crate) use image_pull::docker_pull;
-pub use inspect::{inspect_host_port_binding, inspect_json, inspect_label, inspect_status};
+pub use inspect::{
+    inspect_host_port_binding, inspect_json, inspect_label, inspect_service_status, inspect_status,
+};
 pub(crate) use labels::{
     ContainerRole, LABEL_CONTAINER, LABEL_MANAGED, VALUE_MANAGED_TRUE, kind_label_value,
     ownership_label_args,

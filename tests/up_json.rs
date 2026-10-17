@@ -64,7 +64,7 @@ exit 0
 
 const FAKE_CURL: &str = "#!/bin/sh\nprintf 'ok\\n200'\n";
 
-const PROJECT: &str = "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n    password: canary-s3cret-value\n    env:\n      DATABASE_URL: postgres://u:canary-s3cret-value@db/x\n  app:\n    preset: laravel\n    hook:\n      - name: greet\n        phase: post_up\n        run:\n          type: script\n          path: hook.sh\n";
+const PROJECT: &str = "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n    isolation: dedicated\n    password: canary-s3cret-value\n    env:\n      DATABASE_URL: postgres://u:canary-s3cret-value@db/x\n  app:\n    preset: laravel\n    hook:\n      - name: greet\n        phase: post_up\n        run:\n          type: script\n          path: hook.sh\n";
 
 struct Fixture {
     base: PathBuf,
@@ -326,8 +326,8 @@ fn seed_restores_never_write_ahead_of_the_document() {
     let fixture = Fixture::new("seed");
     std::fs::write(fixture.base.join("project/seed.sql"), "SELECT 1;\n").expect("seed");
     fixture.write_project(&PROJECT.replace(
-        "    preset: postgres\n",
-        "    preset: postgres\n    seed_file: seed.sql\n",
+        "    preset: postgres\n    isolation: dedicated\n",
+        "    preset: postgres\n    isolation: dedicated\n    seed_file: seed.sql\n",
     ));
     let up = fixture.berth(&["up", "--json", "--seed"], &[]);
     assert!(up.status.success(), "{}", text(&up.stderr));
@@ -339,7 +339,7 @@ fn seed_restores_never_write_ahead_of_the_document() {
 fn several_app_services_none_named_app_still_give_one_ready_document() {
     let fixture = Fixture::new("apps");
     fixture.write_project(
-        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n  web:\n    preset: laravel\n  worker:\n    preset: queue-worker\n",
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n    isolation: dedicated\n  web:\n    preset: laravel\n  worker:\n    preset: queue-worker\n",
     );
     let up = fixture.berth(&["up", "--json"], &[]);
     assert!(up.status.success(), "{}", text(&up.stderr));
@@ -388,7 +388,7 @@ fn a_laravel_without_about_boots_through_artisan_version() {
 fn default_credentials_never_mangle_names_routes_or_errors() {
     let fixture = Fixture::new("laravel-named");
     fixture.write_project(
-        "schema_version: 9\nproject: laravel-shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n  app:\n    preset: laravel\n",
+        "schema_version: 9\nproject: laravel-shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n    isolation: dedicated\n  app:\n    preset: laravel\n",
     );
     let up = fixture.berth(
         &["up", "--json", "--wait-timeout", "5"],

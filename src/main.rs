@@ -56,6 +56,7 @@ mod output;
 mod parallel;
 mod serve;
 mod share;
+mod shared;
 mod swarm;
 
 /// Exit code for failures of berth itself (as opposed to a command berth ran),

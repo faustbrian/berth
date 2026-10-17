@@ -24,4 +24,41 @@ pub struct ServiceRuntime {
     /// Whether the service's port is published on the host (`publish: true`,
     /// `--publish-all`, runtime environments and test leases).
     pub publish_host_port: bool,
+    /// The requested `isolation`, if any.
+    pub isolation: Option<super::Isolation>,
+    /// Whether `.berth.yaml` sets `database`, `username` or `password` for
+    /// the service (rather than its preset).
+    pub authored_credentials: bool,
+    /// The shared server and tenant backing the service, if it is shared.
+    pub shared: Option<SharedTarget>,
+}
+
+/// A service backed by a tenant in a shared server.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SharedTarget {
+    /// Engine of the shared server.
+    pub engine: SharedEngine,
+    /// Container name of the shared server.
+    pub server: String,
+    /// Image the shared server runs.
+    pub image: String,
+    /// Compatibility fingerprint (hex) the server is keyed by.
+    pub fingerprint: String,
+}
+
+/// Engines berth shares between instances.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SharedEngine {
+    /// PostgreSQL: a database and login role per tenant.
+    Postgres,
+}
+
+impl SharedEngine {
+    /// The engine's name in container names and labels.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Postgres => "postgres",
+        }
+    }
 }

@@ -58,5 +58,6 @@ pub fn preset_preview(preset: &str) -> Result<ServiceConfig> {
         javascript: None,
         container_name: None,
         publish: None,
+        isolation: None,
     })
 }

@@ -31,7 +31,7 @@ fn print_service_section(service: &ServiceConfig) {
         .container_name()
         .unwrap_or_else(|_| "<unresolved>".to_owned());
     let raw_status =
-        docker::inspect_status(&container_name).unwrap_or_else(|| "not created".to_owned());
+        docker::inspect_service_status(service).unwrap_or_else(|| "not created".to_owned());
     let status_value = render_status_value(&raw_status);
 
     let published_port =

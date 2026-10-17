@@ -12,11 +12,24 @@ mod dump;
 mod reset;
 
 /// Creates database for downstream execution.
+///
+/// A shared-backed service's database is its tenant, which berth provisions
+/// (closed to other tenants) rather than a bare `CREATE DATABASE`.
 pub(super) fn create_database(service: &ServiceConfig) -> Result<()> {
+    if service.runtime.shared.is_some() {
+        return crate::shared::up(service);
+    }
     create::create_database(service)
 }
 
+/// Empties the service's database. A shared-backed service's tenant is
+/// dropped and provisioned again, so the new database stays closed to other
+/// tenants.
 pub(super) fn reset_database(service: &ServiceConfig) -> Result<()> {
+    if service.runtime.shared.is_some() {
+        crate::shared::drop_tenant(service)?;
+        return crate::shared::up(service);
+    }
     reset::reset_database(service)
 }
 

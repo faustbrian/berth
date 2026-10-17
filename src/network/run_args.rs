@@ -7,7 +7,13 @@ use crate::config::ServiceConfig;
 /// routes), so they publish only when asked to; a service without an
 /// instance network can only be reached through its host port.
 #[must_use]
+///
+/// A shared server's tenant never has a host port, whatever `-P` or
+/// `--no-publish-all` ask for.
 pub(crate) fn publishes_host_port(service: &ServiceConfig) -> bool {
+    if service.runtime.shared.is_some() {
+        return false;
+    }
     service.runtime.publish_host_port || service.runtime.network.is_none()
 }
 
@@ -22,6 +28,9 @@ pub(crate) fn is_published(service: &ServiceConfig) -> bool {
 }
 
 fn has_host_binding(service: &ServiceConfig) -> bool {
+    if service.runtime.shared.is_some() {
+        return false;
+    }
     host_binding_port(service).is_some()
 }
 

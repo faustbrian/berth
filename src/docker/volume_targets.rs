@@ -17,7 +17,7 @@ pub(crate) fn collect_named_volume_targets(service: &ServiceConfig) -> Result<Ve
     // App mounts are host paths relative to the project (`storage:/app/storage`
     // binds `{root}/storage`): berth creates no volume for them, and a volume
     // of that name belongs to someone else.
-    if service.kind == crate::config::Kind::App {
+    if service.kind == crate::config::Kind::App || service.runtime.shared.is_some() {
         return Ok(Vec::new());
     }
 
@@ -99,6 +99,10 @@ fn uses_default_named_data_volume(service: &ServiceConfig) -> bool {
 ///
 /// Returns an error when Docker refuses to remove a volume.
 pub(crate) fn remove_service_volumes(service: &ServiceConfig) -> Result<()> {
+    // A shared-backed service's data is its tenant.
+    if service.runtime.shared.is_some() {
+        return crate::shared::drop_tenant(service);
+    }
     for volume in collect_named_volume_targets(service)? {
         if crate::docker::is_dry_run() {
             crate::docker::print_docker_command(&["volume".to_owned(), "rm".to_owned(), volume]);
@@ -127,6 +131,9 @@ pub(crate) fn remove_service_volumes(service: &ServiceConfig) -> Result<()> {
 ///
 /// Returns an error when Docker refuses to remove the container.
 pub(crate) fn remove_container_with_volumes(service: &ServiceConfig) -> Result<()> {
+    if service.runtime.shared.is_some() {
+        return crate::shared::detach(service);
+    }
     let container = service.container_name()?;
     if crate::docker::is_dry_run() {
         crate::docker::print_docker_command(&[

@@ -12,11 +12,13 @@ mod swarm;
 mod swarm_git;
 
 pub use config_root::Config;
-pub use enums::{ContainerEngine, DomainStrategy, Driver, Kind, ProjectType, RestartPolicy};
+pub use enums::{
+    ContainerEngine, DomainStrategy, Driver, Isolation, Kind, ProjectType, RestartPolicy,
+};
 pub use lockfile::{LockedImage, Lockfile};
 pub use service::ServiceConfig;
 pub use service_hook::{HookOnError, HookPhase, HookRun, ServiceHook};
-pub use service_runtime::ServiceRuntime;
+pub use service_runtime::{ServiceRuntime, SharedEngine, SharedTarget};
 pub(crate) use swarm::SwarmInjectEnv;
 pub use swarm::SwarmTarget;
 pub use swarm_git::SwarmGit;

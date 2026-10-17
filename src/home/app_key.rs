@@ -5,9 +5,7 @@
 //! the berth home, stays stable until the instance is purged, and is never
 //! derived from anything visible in Docker labels.
 
-use anyhow::{Context, Result};
-use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
+use anyhow::Result;
 use std::path::Path;
 
 const FILE_NAME: &str = "app-key";
@@ -23,45 +21,12 @@ pub(crate) fn app_key(project: &str, instance: &str) -> Result<String> {
     if cfg!(test) {
         return Ok(format!("base64:{}=", "A".repeat(43)));
     }
-    let dir = super::private_dir(&Path::new("instances").join(project).join(instance))?;
-    let path = dir.join(FILE_NAME);
-    if path.exists() {
-        return read_key(&path);
-    }
-    let key = random_key()?;
-    let staged = dir.join(format!(".{FILE_NAME}.{}", std::process::id()));
-    let result = stage(&staged, &key).and_then(|()| match std::fs::hard_link(&staged, &path) {
-        Ok(()) => Ok(key),
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => read_key(&path),
-        Err(error) => Err(error).with_context(|| format!("failed to create {}", path.display())),
-    });
-    drop(std::fs::remove_file(&staged));
-    result
-}
-
-fn stage(path: &Path, key: &str) -> Result<()> {
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(path)
-        .with_context(|| format!("failed to create {}", path.display()))?;
-    file.write_all(key.as_bytes())
-        .and_then(|()| file.sync_all())
-        .with_context(|| format!("failed to write {}", path.display()))
-}
-
-fn read_key(path: &Path) -> Result<String> {
-    let raw = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read {}", path.display()))?;
-    let key = raw.trim().to_owned();
-    if !is_valid(&key) {
-        anyhow::bail!(
-            "{} does not hold a valid APP_KEY; delete it to create a new one",
-            path.display()
-        );
-    }
-    Ok(key)
+    super::secret_file::read_or_create(
+        &Path::new("instances").join(project).join(instance),
+        FILE_NAME,
+        random_key,
+        is_valid,
+    )
 }
 
 fn is_valid(key: &str) -> bool {

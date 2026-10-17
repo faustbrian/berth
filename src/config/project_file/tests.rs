@@ -427,3 +427,34 @@ fn migrate_drops_v7_domains_berth_9_cannot_serve_and_keeps_servable_ones() -> an
     );
     Ok(())
 }
+
+#[test]
+fn a_migrated_v8_shared_database_loads_as_a_tenant() -> anyhow::Result<()> {
+    let dir = temp_dir("v8-database");
+    let converted = convert_legacy_config(
+        "schema_version: 8\nproject: bill\nservices:\n  db:\n    preset: postgres\n    database: app\n",
+        &dir.join(".stackctl.yaml"),
+    )?;
+    assert!(
+        !converted.content.contains("database:"),
+        "{}",
+        converted.content
+    );
+    assert!(
+        converted
+            .notes
+            .iter()
+            .any(|note| note.contains("dropped `database`")),
+        "{:?}",
+        converted.notes
+    );
+    let path = dir.join(".berth.yaml");
+    std::fs::write(&path, &converted.content)?;
+    std::fs::write(dir.join("composer.json"), "{\"type\": \"project\"}")?;
+    let config = crate::config::load_config_with(crate::config::LoadConfigPathOptions::new(
+        Some(&path),
+        None,
+    ))?;
+    assert!(config.service[0].runtime.shared.is_some());
+    Ok(())
+}

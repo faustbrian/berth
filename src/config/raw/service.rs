@@ -99,4 +99,8 @@ pub(crate) struct RawServiceConfig {
     /// through gateway routes, so parallel instances never race for ports.
     #[serde(default)]
     pub publish: Option<bool>,
+    /// `shared` (a tenant in a shared server) or `dedicated` (a container of
+    /// the instance's own). Defaults to `shared` where berth supports it.
+    #[serde(default)]
+    pub isolation: Option<super::super::Isolation>,
 }

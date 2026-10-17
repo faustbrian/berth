@@ -6,6 +6,17 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- Added shared PostgreSQL servers: every instance's PostgreSQL service is a
+  tenant (its own database and role, closed to other tenants) in one server
+  per compatible image, created on demand by `up`. Parallel worktrees no
+  longer start a database container each. Tenants may create their own
+  `_test_N` databases, so ParaTest works; `down` leaves the server running
+  for other instances and `down --purge` drops the instance's tenants. Set
+  `isolation: dedicated` for a container of the instance's own, as in 7.0.0.
+- Added secret-safe docker invocations: secret environment values (`APP_KEY`,
+  database passwords) are passed to docker by name, never as arguments that
+  other local processes can read.
+
 - Added instances: every checkout of a project is its own environment. The
   instance ID (`{slug}-{hash6}`) is derived from the canonical project root,
   so parallel git worktrees never share containers or named volumes, and

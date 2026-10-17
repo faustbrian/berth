@@ -81,7 +81,7 @@ impl Fixture {
     fn new(label: &str) -> Self {
         Self::with_project(
             label,
-            "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n  cache:\n    preset: redis\n  app:\n    preset: laravel\n",
+            "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n    isolation: dedicated\n  cache:\n    preset: redis\n  app:\n    preset: laravel\n",
         )
     }
 
@@ -238,7 +238,7 @@ fn purge_removes_containers_with_their_anonymous_volumes() {
 fn an_env_purge_keeps_the_default_data_and_a_whole_purge_clears_every_env() {
     let fixture = Fixture::with_project(
         "envs",
-        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n    volumes: [\"dbdata:/var/lib/postgresql\"]\n",
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n    isolation: dedicated\n    volumes: [\"dbdata:/var/lib/postgresql\"]\n",
     );
     assert!(fixture.berth(&["up", "--no-wait"]).status.success());
     assert!(

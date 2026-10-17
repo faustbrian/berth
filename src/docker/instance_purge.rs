@@ -58,6 +58,25 @@ pub(crate) fn purge_instance_objects(project: &str, instance: &str) -> Result<()
         if let Err(error) = crate::gateway::detach_network(&network) {
             failures.push(format!("{error:#}"));
         }
+        // Shared servers stay attached to every runtime environment's network
+        // that used them (another `--env`, a crashed lease).
+        let attached = [
+            "ps".to_owned(),
+            "-a".to_owned(),
+            "--format".to_owned(),
+            "{{.Names}}".to_owned(),
+            "--filter".to_owned(),
+            format!("network={network}"),
+            "--filter".to_owned(),
+            "label=dev.berth.role=shared-server".to_owned(),
+        ];
+        for server in lines(&attached)? {
+            record(
+                &mut failures,
+                &["network", "disconnect", "--force", &network, &server],
+                &["is not connected", "not found", "no such"],
+            );
+        }
         record(
             &mut failures,
             &["network", "rm", &network],

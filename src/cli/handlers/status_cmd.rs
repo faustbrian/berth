@@ -28,10 +28,7 @@ fn render_status_json(services: &[&config::ServiceConfig]) -> Result<()> {
 }
 
 fn build_status_json(service: &config::ServiceConfig) -> serde_json::Value {
-    let status = service
-        .container_name()
-        .ok()
-        .and_then(|name| docker::inspect_status(&name));
+    let status = docker::inspect_service_status(service);
     serde_json::json!({
         "name": service.name,
         "kind": cli::support::kind_name(service.kind),

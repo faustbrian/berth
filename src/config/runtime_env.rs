@@ -21,6 +21,25 @@ pub(super) fn apply_runtime_env(config: &mut Config, env_name: &str) -> Result<(
     let port_offset = runtime_env_port_offset(&normalized);
 
     for service in &mut config.service {
+        // A shared-backed service gets the namespace's own tenant on the
+        // same server; it has no container, port or volume of its own.
+        if service.runtime.shared.is_some() {
+            if let (Some(project), Some(instance)) = (
+                service.runtime.project.clone(),
+                service.runtime.instance.clone(),
+            ) {
+                crate::shared::assign_shared_target(
+                    service,
+                    &project,
+                    &instance,
+                    Some(&normalized),
+                )?;
+            }
+            if let Some(network) = &mut service.runtime.network {
+                network.push_str(&suffix);
+            }
+            continue;
+        }
         let base_name = service.container_name().with_context(|| {
             format!(
                 "failed to resolve base container name for '{}'",

@@ -73,11 +73,8 @@ fn build_services_rows(config: &config::Config) -> Vec<AboutRow<'static>> {
     let mut not_created = 0usize;
 
     for service in &config.service {
-        let container_name = service
-            .container_name()
-            .unwrap_or_else(|_| "<unresolved>".to_owned());
         let status =
-            docker::inspect_status(&container_name).unwrap_or_else(|| "not created".to_owned());
+            docker::inspect_service_status(service).unwrap_or_else(|| "not created".to_owned());
         match status.as_str() {
             "running" => running += 1,
             "created" => created += 1,

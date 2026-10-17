@@ -113,8 +113,39 @@ Known consequence: shared Redis/Valkey denies `FLUSHDB`/`FLUSHALL`, so
 service when a project needs it. Tenants may `SELECT` other logical databases
 because Laravel's cache defaults to database 1; key prefixes still isolate
 tenants. PostgreSQL databases that ParaTest creates accept connections from
-other roles (PostgreSQL's default `CONNECT` grant), but their tables remain
-private to the owning tenant.
+other roles (PostgreSQL's default `CONNECT` grant); their tables remain
+private to the owning tenant, but before PostgreSQL 15 another tenant could
+also create objects in their `public` schema. Tenants share one user's
+machine, so this guards against accidents, not a hostile neighbour.
+
+Lifecycle commands act on the tenant, never the server: `down`, `stop`,
+`kill` and `rm` remove the service's name from the server's endpoint on the
+instance network (two shared services of one instance share an endpoint
+carrying both names); `pause`, `unpause` and `attach` refuse; `restart` and `recreate`
+re-provision the tenant; `db reset` drops and re-provisions it; `down
+--purge` drops every tenant of the instance on every shared server of the
+installation (each runtime environment's and ParaTest's `_test_N` databases,
+and any database a tenant role owns, included), detaches the servers from
+all of the instance's networks, and removes its credentials; each step runs
+even when an earlier one fails. Each
+`--env` namespace and each `artisan test` lease gets a tenant of its own on the
+same server. A shared tenant cannot publish a host port or take authored
+`database`, `username` or `password` values (its credentials are generated);
+both are configuration errors that point at `isolation: dedicated`, which `config
+migrate` sets for 7.0.0 services that authored credentials. A lost credentials
+file gives the tenant a new password on the next `up`.
+
+PostgreSQL specifics: tenant roles have `CREATEDB` (for ParaTest) and nothing
+else, so extensions that need a superuser (PostGIS, TimescaleDB) and
+restores of dumps that set other owners need `isolation: dedicated`; since that lets a tenant create any database name, provisioning drops
+databases in an instance's namespace (`{project}__{instance}`, then `_…`)
+owned by a role outside it before the instance uses them. Shared servers need
+PostgreSQL 13 or later, run their admin SQL on stdin over TCP inside the
+container with the admin password in the environment (so readiness only
+passes once the image's temporary init server is gone), close `template1` to
+tenants, and keep data in a labeled volume mounted at the image's
+`PGDATA`. Secrets never appear in a docker argument: berth passes a secret
+`-e NAME=value` as `-e NAME` with the value in the docker CLI's environment.
 
 ## Gateway
 

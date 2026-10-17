@@ -84,8 +84,8 @@ pub fn exec_command_to_stderr(service: &ServiceConfig, command: &[String]) -> Re
     }
 
     ensure_container_running(service, &container_name)?;
-    let status = std::process::Command::new(crate::docker::docker_command())
-        .args(&args)
+    let arg_refs = super::docker_arg_refs(&args);
+    let status = super::secret_env::docker_process(&arg_refs)?
         .stdout(std::io::stderr())
         .status()
         .map_err(|error| anyhow::anyhow!("Failed to execute command in container: {error}"))?;

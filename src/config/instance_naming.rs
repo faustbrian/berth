@@ -54,6 +54,7 @@ pub(crate) fn apply_instance_identity(
             crate::docker::register_secret(secret);
         }
         assign_route(service, &project, &identity.id)?;
+        crate::shared::assign_shared_target(service, &project, &identity.id, None)?;
     }
     Ok(())
 }

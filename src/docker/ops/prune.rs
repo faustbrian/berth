@@ -39,6 +39,10 @@ pub(super) fn prune(options: PruneOptions<'_>) -> Result<()> {
 }
 
 pub(super) fn prune_stopped_container(service: &ServiceConfig) -> Result<()> {
+    // The shared server is not the instance's to remove.
+    if service.runtime.shared.is_some() {
+        return Ok(());
+    }
     let container_name = service.container_name()?;
     if is_dry_run() {
         print_docker_command(&["rm".to_owned(), container_name]);

@@ -112,6 +112,12 @@ fn redact_assignment(assignment: &str) -> String {
     }
 }
 
+/// Whether `NAME=value` carries a secret: a secret name or a registered
+/// secret value.
+pub(crate) fn is_secret_assignment(name: &str, value: &str) -> bool {
+    !value.is_empty() && (is_secret_name(name) || is_known_secret(value))
+}
+
 fn is_secret_name(name: &str) -> bool {
     let upper = name.to_ascii_uppercase();
     SECRET_MARKERS.iter().any(|marker| upper.contains(marker))

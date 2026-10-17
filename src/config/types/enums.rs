@@ -102,6 +102,17 @@ pub enum ContainerEngine {
 }
 
 /// Docker container restart policy.
+/// Where a database or cache service's data lives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Isolation {
+    /// A logical tenant (database and role) in a server shared by every
+    /// compatible instance. The default where isolation is proven.
+    Shared,
+    /// A container of the instance's own, as in 7.0.0.
+    Dedicated,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]

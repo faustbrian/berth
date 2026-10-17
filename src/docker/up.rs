@@ -19,6 +19,10 @@ mod state;
 
 /// Ensures the service container is running.
 pub fn up(service: &ServiceConfig, pull: PullPolicy, recreate: bool) -> Result<()> {
+    if service.runtime.shared.is_some() {
+        crate::network::ensure_service_network(service)?;
+        return crate::shared::up(service);
+    }
     let service = &*crate::network::with_existing_publication(service);
     let container_name = service.container_name()?;
     crate::network::ensure_service_network(service)?;

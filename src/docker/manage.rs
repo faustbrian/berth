@@ -10,21 +10,36 @@ mod container_ops;
 mod image_ops;
 
 /// Downs down as part of the docker manage workflow.
+///
+/// A shared-backed service only leaves the instance network: the shared
+/// server keeps serving other instances.
 pub fn down(service: &ServiceConfig, timeout: u64) -> Result<()> {
+    if service.runtime.shared.is_some() {
+        return crate::shared::detach(service);
+    }
     container_ops::down(service, timeout)
 }
 
 /// Stops stop as part of the docker manage workflow.
 pub fn stop(service: &ServiceConfig, timeout: u64) -> Result<()> {
+    if service.runtime.shared.is_some() {
+        return crate::shared::detach(service);
+    }
     container_ops::stop(service, timeout)
 }
 
 /// Rms rm as part of the docker manage workflow.
 pub fn rm(service: &ServiceConfig, force: bool) -> Result<()> {
+    if service.runtime.shared.is_some() {
+        return crate::shared::detach(service);
+    }
     container_ops::rm(service, force)
 }
 
 pub fn recreate(service: &ServiceConfig) -> Result<()> {
+    if service.runtime.shared.is_some() {
+        return crate::shared::up(service);
+    }
     container_ops::recreate(service)
 }
 
@@ -35,6 +50,9 @@ pub fn pull(service: &ServiceConfig) -> Result<()> {
 
 /// Restarts restart as part of the docker manage workflow.
 pub fn restart(service: &ServiceConfig) -> Result<()> {
+    if service.runtime.shared.is_some() {
+        return crate::shared::up(service);
+    }
     container_ops::restart(service)
 }
 

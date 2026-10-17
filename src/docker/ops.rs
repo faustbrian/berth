@@ -48,6 +48,7 @@ pub fn attach(
     sig_proxy: bool,
     detach_keys: Option<&str>,
 ) -> Result<()> {
+    crate::shared::refuse_server_operation(service, "attach to")?;
     attach::attach(service, no_stdin, sig_proxy, detach_keys)
 }
 
@@ -60,15 +61,23 @@ pub fn cp(source: &str, destination: &str, options: CpOptions) -> Result<()> {
     cp::cp(source, destination, options)
 }
 
+/// Kills the service's container. A shared-backed service only leaves the
+/// instance network, as with `stop`: the server keeps serving other
+/// instances.
 pub fn kill(service: &ServiceConfig, signal: Option<&str>) -> Result<()> {
+    if service.runtime.shared.is_some() {
+        return crate::shared::detach(service);
+    }
     kill::kill(service, signal)
 }
 
 pub fn pause(service: &ServiceConfig) -> Result<()> {
+    crate::shared::refuse_server_operation(service, "pause")?;
     pause::pause(service)
 }
 
 pub fn unpause(service: &ServiceConfig) -> Result<()> {
+    crate::shared::refuse_server_operation(service, "unpause")?;
     unpause::unpause(service)
 }
 

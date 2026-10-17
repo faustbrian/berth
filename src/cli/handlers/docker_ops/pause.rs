@@ -21,6 +21,13 @@ pub(crate) fn handle_pause(
         kind,
         profile,
         parallel,
-        docker::pause,
+        |svc| {
+            // A shared tenant is refused only when named: pausing the whole
+            // instance leaves the server other instances use alone.
+            if svc.runtime.shared.is_some() && service.is_none() && services.is_empty() {
+                return Ok(());
+            }
+            docker::pause(svc)
+        },
     )
 }

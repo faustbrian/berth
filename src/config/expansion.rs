@@ -111,6 +111,7 @@ mod tests {
             javascript: None,
             container_name: None,
             publish: None,
+            isolation: None,
         })?;
 
         assert!(service.octane);

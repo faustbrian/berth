@@ -28,19 +28,32 @@ case "$1 $2" in
 esac
 case "$1" in
   run)
+    case "$*" in *"--entrypoint printenv"*) echo /home/postgres/pgdata/data; exit 0 ;; esac
     name=""; prev=""
     for arg in "$@"; do [ "$prev" = "--name" ] && name="$arg"; prev="$arg"; done
-    mkdir -p "$S/c"; touch "$S/c/$name"; printf '%s\n' "$*" > "$S/run-$name"; exit 0 ;;
+    # A secret is passed as `-e NAME` with its value in docker's environment;
+    # `run-` records what the container receives, `raw-` the argv itself.
+    out=""; prev=""
+    for arg in "$@"; do
+      word="$arg"
+      if [ "$prev" = "-e" ] && [ "${arg#*=}" = "$arg" ]; then eval "word=\"$arg=\${$arg}\""; fi
+      out="$out $word"; prev="$arg"
+    done
+    mkdir -p "$S/c"; touch "$S/c/$name"; printf '%s\n' "${out# }" > "$S/run-$name"; printf '%s\n' "$*" > "$S/raw-$name"; exit 0 ;;
   rm) for arg in "$@"; do rm -f "$S/c/$arg"; done; exit 0 ;;
   inspect)
     name=""; for arg in "$@"; do name="$arg"; done
     [ -f "$S/c/$name" ] || exit 1
     case "$*" in
       *NetworkSettings.Networks*) printf '{}' ;;
+      *dev.berth.shared.fingerprint*)
+        fp=$(grep -o 'dev.berth.shared.fingerprint=[0-9a-f]*' "$S/run-$name" | cut -d= -f2)
+        printf 'running\t%s\t%s' "$(cat "$BERTH_HOME/installation-id")" "$fp" ;;
       *--format*) printf running ;;
       *) printf '[{"State":{"Status":"running"},"NetworkSettings":{"Ports":{}},"HostConfig":{"PortBindings":{}}}]' ;;
     esac
     exit 0 ;;
+  exec) grep -q server_version_num && echo 170004; exit 0 ;;
 esac
 exit 0
 "#;
@@ -154,6 +167,19 @@ fn a_fresh_worktree_gets_a_managed_key_and_the_config_cache_bypass_without_a_dot
     assert!(
         !text(&up.stdout).contains("base64:"),
         "no secrets on stdout of text mode"
+    );
+    let raw = std::fs::read_dir(fixture.base.join("state"))
+        .expect("state")
+        .filter_map(Result::ok)
+        .find(|entry| {
+            entry.file_name().to_string_lossy().starts_with("raw-")
+                && entry.file_name().to_string_lossy().ends_with("_app")
+        })
+        .map(|entry| std::fs::read_to_string(entry.path()).expect("raw"))
+        .expect("app argv");
+    assert!(
+        raw.contains("-e APP_KEY ") && !raw.contains("base64:"),
+        "the key never reaches argv: {raw}"
     );
 }
 
