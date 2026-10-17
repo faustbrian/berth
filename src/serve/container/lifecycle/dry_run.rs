@@ -45,6 +45,7 @@ pub(super) fn print_dry_run_container_start(
         container_name,
         crate::docker::ContainerRole::Service,
     ));
+    run_args.extend(crate::network::network_run_args(target, true));
     run_args.extend([mapping, runtime_image.to_owned()]);
     output::event(
         &target.name,

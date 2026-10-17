@@ -360,3 +360,25 @@ fn inferred_app_env_applies_service_env_mapping_without_overwriting_primary_db()
         Some(&"billing_pass".to_owned())
     );
 }
+
+#[test]
+fn instance_network_services_are_reached_by_name_and_container_port() {
+    let mut db = svc("db", Kind::Database, Driver::Postgres, 54321);
+    db.runtime.network = Some("berth_api_a-1".to_owned());
+    let mut cache = svc("cache", Kind::Cache, Driver::Redis, 63791);
+    cache.runtime.network = Some("berth_api_a-1".to_owned());
+    let config = Config {
+        schema_version: 1,
+        project_type: crate::config::ProjectType::Project,
+        container_prefix: Some("api".to_owned()),
+        domain_strategy: None,
+        service: vec![db, cache],
+        swarm: vec![],
+    };
+
+    let vars = inferred_app_env(&config);
+    assert_eq!(vars.get("DB_HOST"), Some(&"db".to_owned()));
+    assert_eq!(vars.get("DB_PORT"), Some(&"5432".to_owned()));
+    assert_eq!(vars.get("REDIS_HOST"), Some(&"cache".to_owned()));
+    assert_eq!(vars.get("REDIS_PORT"), Some(&"6379".to_owned()));
+}

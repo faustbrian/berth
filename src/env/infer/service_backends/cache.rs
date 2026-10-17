@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::config::{Driver, ServiceConfig};
 
-use super::super::{insert_if_absent, runtime_host_for_app};
+use super::super::{insert_if_absent, runtime_host_for_app, runtime_port_for_app};
 
 /// Applies inferred cache/session/queue variables.
 ///
@@ -14,7 +14,11 @@ pub(super) fn apply(vars: &mut HashMap<String, String>, service: &ServiceConfig)
     if service.driver == Driver::Memcached {
         insert_if_absent(vars, "CACHE_STORE", "memcached".to_owned());
         insert_if_absent(vars, "MEMCACHED_HOST", runtime_host_for_app(service));
-        insert_if_absent(vars, "MEMCACHED_PORT", service.port.to_string());
+        insert_if_absent(
+            vars,
+            "MEMCACHED_PORT",
+            runtime_port_for_app(service).to_string(),
+        );
         return;
     }
 
@@ -24,7 +28,7 @@ pub(super) fn apply(vars: &mut HashMap<String, String>, service: &ServiceConfig)
     insert_if_absent(vars, "SESSION_CONNECTION", "default".to_owned());
     insert_if_absent(vars, "REDIS_CLIENT", "phpredis".to_owned());
     let redis_host = runtime_host_for_app(service);
-    let redis_port = service.port.to_string();
+    let redis_port = runtime_port_for_app(service).to_string();
     let redis_username = service.username.clone().unwrap_or_default();
     let redis_password = service.password.clone().unwrap_or_default();
 

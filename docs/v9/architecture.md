@@ -82,6 +82,13 @@ service name as alias, so applications reach them by name. Shared servers and
 the gateway are attached to the instance networks they serve and nothing
 else. Host ports are published only when a service opts in.
 
+Networks are created on demand by any command that starts a container and
+removed by `down` (and after each test run) once no container, running or
+stopped, references them; a stopped container keeps its network's ID, so its
+network is never removed under it. Docker does not check host routes for an
+explicit subnet, so a host whose VPN routes `10.128.0.0/9` may see conflicts;
+Podman rejects such subnets and berth probes past them.
+
 ## Shared servers
 
 PostgreSQL, MySQL, MariaDB, Redis and Valkey run as shared servers keyed by a

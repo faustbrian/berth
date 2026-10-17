@@ -6,7 +6,7 @@ use crate::config::{Driver, ServiceConfig};
 
 use super::{
     inferred_app_public_url, insert_if_absent, is_app_driver, runtime_host_for_app,
-    service_endpoint,
+    runtime_port_for_app, service_endpoint,
 };
 
 mod dusk;
@@ -44,6 +44,12 @@ pub(super) fn apply_app_target_env(vars: &mut HashMap<String, String>, service: 
         let smtp_port = service
             .smtp_port
             .unwrap_or(service.port.saturating_add(1000));
+        // Inside an instance network the SMTP listener is the container's.
+        let smtp_port = if service.runtime.network.is_some() {
+            1025
+        } else {
+            smtp_port
+        };
         insert_if_absent(vars, "MAIL_MAILER", "smtp".to_owned());
         insert_if_absent(vars, "MAIL_HOST", runtime_host_for_app(service));
         insert_if_absent(vars, "MAIL_PORT", smtp_port.to_string());
@@ -56,7 +62,11 @@ pub(super) fn apply_app_target_env(vars: &mut HashMap<String, String>, service: 
 
     if is_app_driver(service, Driver::Rabbitmq) {
         insert_if_absent(vars, "RABBITMQ_HOST", runtime_host_for_app(service));
-        insert_if_absent(vars, "RABBITMQ_PORT", service.port.to_string());
+        insert_if_absent(
+            vars,
+            "RABBITMQ_PORT",
+            runtime_port_for_app(service).to_string(),
+        );
         insert_if_absent(
             vars,
             "RABBITMQ_USER",

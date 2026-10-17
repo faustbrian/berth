@@ -58,9 +58,10 @@ pub(super) fn cleanup_test_services(
     selected_service: Option<&str>,
 ) -> Result<()> {
     let startup_services = resolve_testing_startup_services(config, selected_service)?;
-    for svc in startup_services {
+    for svc in &startup_services {
         reset_service_runtime(svc)?;
     }
+    crate::network::remove_unused_networks(startup_services.iter().copied())?;
 
     Ok(())
 }

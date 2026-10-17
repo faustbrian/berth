@@ -33,6 +33,7 @@ pub(super) fn build_run_args(service: &ServiceConfig, container_name: &str) -> V
         ),
     ];
 
+    args.extend(crate::network::network_run_args(service, true));
     append_run_options(&mut args, service, container_name);
     append_host_gateway_mapping(&mut args, service);
     append_labels(&mut args, service, container_name);

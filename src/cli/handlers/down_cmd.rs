@@ -55,6 +55,7 @@ pub(crate) fn handle_down(config: &config::Config, options: HandleDownOptions<'_
     cli::support::run_selected_services(&selected, options.parallel, |svc| {
         stop_selected_service(svc, options.quiet, options.timeout)
     })?;
+    crate::network::remove_unused_networks(selected.iter().copied())?;
 
     cli::hooks::run_phase_hooks_for_services(
         &selected,

@@ -16,4 +16,6 @@ pub struct ServiceRuntime {
     pub instance: Option<String>,
     /// Canonical project root of the instance.
     pub root: Option<PathBuf>,
+    /// Docker network of the instance (and runtime environment).
+    pub network: Option<String>,
 }

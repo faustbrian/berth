@@ -63,10 +63,23 @@ pub(crate) fn managed_app_env(config: &Config) -> HashMap<String, String> {
 ///
 /// Why: `localhost` inside a container points to itself, not the host machine.
 pub(super) fn runtime_host_for_app(service: &ServiceConfig) -> String {
+    // On an instance network, services are reached by their service name.
+    if service.runtime.network.is_some() {
+        return service.name.clone();
+    }
     if service.uses_host_gateway_alias() {
         return crate::docker::host_gateway_alias().to_owned();
     }
     service.host.clone()
+}
+
+/// Resolves the port an app container uses to reach a service: the
+/// container port on an instance network, else the published host port.
+pub(super) fn runtime_port_for_app(service: &ServiceConfig) -> u16 {
+    if service.runtime.network.is_some() {
+        return service.resolved_container_port();
+    }
+    service.port
 }
 
 /// Inserts a key/value pair only when the key is not already present.
@@ -99,7 +112,7 @@ pub(super) fn service_endpoint(service: &ServiceConfig) -> String {
         "{}://{}:{}",
         service.scheme(),
         runtime_host_for_app(service),
-        service.port
+        runtime_port_for_app(service)
     )
 }
 

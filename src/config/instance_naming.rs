@@ -40,6 +40,7 @@ pub(crate) fn apply_instance_identity(
         service.runtime.project = Some(project.clone());
         service.runtime.instance = Some(identity.id.clone());
         service.runtime.root = Some(identity.root.clone());
+        service.runtime.network = Some(namespace.clone());
     }
     Ok(())
 }

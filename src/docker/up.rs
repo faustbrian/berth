@@ -20,6 +20,7 @@ mod state;
 /// Ensures the service container is running.
 pub fn up(service: &ServiceConfig, pull: PullPolicy, recreate: bool) -> Result<()> {
     let container_name = service.container_name()?;
+    crate::network::ensure_service_network(service)?;
 
     if is_dry_run() {
         return dry_run::describe(service, pull, recreate, &container_name);

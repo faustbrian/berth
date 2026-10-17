@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::config::ServiceConfig;
 
-use super::super::{insert_if_absent, runtime_host_for_app};
+use super::super::{insert_if_absent, runtime_host_for_app, runtime_port_for_app};
 
 /// Applies inferred Laravel DB variables for SQL services.
 ///
@@ -17,7 +17,7 @@ pub(super) fn apply(vars: &mut HashMap<String, String>, service: &ServiceConfig)
         service.laravel_connection().unwrap_or("mysql").to_owned(),
     );
     insert_if_absent(vars, "DB_HOST", runtime_host_for_app(service));
-    insert_if_absent(vars, "DB_PORT", service.port.to_string());
+    insert_if_absent(vars, "DB_PORT", runtime_port_for_app(service).to_string());
     insert_if_absent(
         vars,
         "DB_DATABASE",

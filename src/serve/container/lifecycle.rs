@@ -34,6 +34,7 @@ pub(super) fn ensure_container_running(
     injected_env: &HashMap<String, String>,
 ) -> Result<()> {
     let container_name = target.container_name()?;
+    crate::network::ensure_service_network(target)?;
 
     if crate::docker::is_dry_run() {
         print_dry_run_container_start(

@@ -14,6 +14,16 @@ All notable changes to this project are documented in this file.
   are named `berth_{project}_{instance}_{service}`, and service, app and
   one-off containers carry `dev.berth.*` ownership labels for their project,
   instance and root.
+- Added per-instance Docker networks: every instance (and every `--env`
+  runtime namespace in it) gets its own bridge network with an explicit `/24`
+  from `10.128.0.0/9`, allocated under a host lock so 30 parallel instances
+  never exhaust Docker's default address pools. Services join under their
+  service name, the app reaches them by name and container port
+  (`DB_HOST=db`), instances cannot reach each other, and `down` removes the
+  network once no container uses it.
+- Added the berth home directory (`~/.berth`, or `BERTH_HOME`) with a random
+  installation ID that labels berth's networks, and host file locks that the
+  kernel releases when a berth process dies.
 - Added `docs/v9/architecture.md`, the berth 9.x design for instances,
   ownership, leases, shared servers, the gateway and exit codes.
 - Added the berth 9.x ledger (`docs/v9/ledger.md`), which records one Port,

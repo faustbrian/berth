@@ -4,7 +4,9 @@ use std::collections::HashMap;
 
 use crate::config::{Driver, ServiceConfig};
 
-use super::super::{insert_if_absent, runtime_host_for_app, service_endpoint};
+use super::super::{
+    insert_if_absent, runtime_host_for_app, runtime_port_for_app, service_endpoint,
+};
 
 /// Applies inferred Scout/search variables based on selected search driver.
 pub(super) fn apply(vars: &mut HashMap<String, String>, service: &ServiceConfig) {
@@ -42,7 +44,11 @@ fn apply_meilisearch(vars: &mut HashMap<String, String>, service: &ServiceConfig
 fn apply_typesense(vars: &mut HashMap<String, String>, service: &ServiceConfig) {
     insert_if_absent(vars, "SCOUT_DRIVER", "typesense".to_owned());
     insert_if_absent(vars, "TYPESENSE_HOST", runtime_host_for_app(service));
-    insert_if_absent(vars, "TYPESENSE_PORT", service.port.to_string());
+    insert_if_absent(
+        vars,
+        "TYPESENSE_PORT",
+        runtime_port_for_app(service).to_string(),
+    );
     insert_if_absent(vars, "TYPESENSE_PROTOCOL", service.scheme().to_owned());
     insert_if_absent(
         vars,

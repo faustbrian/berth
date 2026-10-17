@@ -172,3 +172,20 @@ fn service_names_must_be_lowercase_dns_labels() {
     assert!(format!("{error:#}").contains("queue_worker"), "{error:#}");
     std::fs::remove_dir_all(&base).expect("cleanup");
 }
+
+#[test]
+fn runtime_environments_get_their_own_network() {
+    let base = base("env-network");
+    let root = worktree(&base, "checkout");
+    let mut config = load(&root, Some("ci-7"));
+    assert_eq!(
+        config.service[0].runtime.network.as_deref(),
+        Some("berth_shipit-api_ci-7")
+    );
+    apply_runtime_env(&mut config, "testing").expect("apply testing env");
+    assert_eq!(
+        config.service[0].runtime.network.as_deref(),
+        Some("berth_shipit-api_ci-7-testing")
+    );
+    std::fs::remove_dir_all(&base).expect("cleanup");
+}

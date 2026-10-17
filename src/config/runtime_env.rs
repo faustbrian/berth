@@ -28,6 +28,11 @@ pub(super) fn apply_runtime_env(config: &mut Config, env_name: &str) -> Result<(
             )
         })?;
         service.resolved_container_name = Some(format!("{base_name}{suffix}"));
+        // A runtime environment gets its own network so its services never
+        // share DNS aliases with the instance's default services.
+        if let Some(network) = &mut service.runtime.network {
+            network.push_str(&suffix);
+        }
         service.port = shift_port(service.port, port_offset, &service.name, "port")?;
         if let Some(smtp_port) = service.smtp_port {
             service.smtp_port = Some(shift_port(
