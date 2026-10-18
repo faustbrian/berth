@@ -46,7 +46,11 @@ pub(super) fn renew_and_reap(cli: &Cli, config: &Config) -> Result<Option<Active
         return Ok(None);
     };
     let in_use = crate::instance::hold_in_use(&project, &instance)?;
-    crate::instance::renew_lease(&project, &instance, &root, ttl, owner)?;
+    // Only `up` establishes the instance anew and takes over from a dead
+    // owner; any other command keeps the recorded owner, so a command that
+    // outlives its killed agent never stops the instance from being reaped.
+    let take_over = matches!(cli.command, Commands::Up(_));
+    crate::instance::renew_lease(&project, &instance, &root, ttl, owner, take_over)?;
     reap_in_passing(Some((&project, &instance)));
     Ok(Some(ActiveLease {
         project,
@@ -82,7 +86,7 @@ impl ActiveLease {
         {
             return Ok(());
         }
-        crate::instance::renew_lease(&self.project, &self.instance, &self.root, None, None)
+        crate::instance::renew_lease(&self.project, &self.instance, &self.root, None, None, false)
             .map(drop)
     }
 }

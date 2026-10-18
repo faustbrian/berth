@@ -9,12 +9,12 @@ use crate::javascript::VersionManager;
 use std::collections::HashMap;
 
 #[test]
-fn derived_image_tag_sanitizes_container_name() {
-    let signature = "base=image;js=true;exts=pdo_mysql";
-    assert!(
-        derived_image_tag("acme/api:serve-app", signature)
-            .starts_with("berth/acme-api-serve-app-serve-")
-    );
+fn derived_image_tags_depend_on_content_only() {
+    // Every instance needing the same image shares its tag (L029).
+    let tag = derived_image_tag("dockerfile-fnv1a64-v1:00ff");
+    assert!(tag.starts_with("berth/serve-"), "{tag}");
+    assert_eq!(tag, derived_image_tag("dockerfile-fnv1a64-v1:00ff"));
+    assert_ne!(tag, derived_image_tag("dockerfile-fnv1a64-v1:0100"));
 }
 
 #[test]

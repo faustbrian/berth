@@ -42,8 +42,9 @@ different value fails. Port 443 is left out of URLs.
 - berth's own failures (invalid config, Docker errors, a failed `up`, usage
   errors) exit **125**, with the message on stderr only.
 - `--help` and `--version` exit 0.
-- Without a TTY, commands run non-interactively by default; `--tty` and
-  `--no-tty` force it either way. Errors fail fast: berth never retries for
+- Without a terminal on stdin, commands run without a TTY by default;
+  `--no-tty` disables it even with one, and `--tty` asks for one (honored
+  only when stdin is a terminal). Errors fail fast: berth never retries for
   minutes (image pulls retry transient registry errors at most three times).
 
 ## `up --wait --json`
@@ -85,7 +86,9 @@ about`); `--wait-timeout` (default 120 s) bounds it.
   endpoints a host tool can reach (only published services have any).
 - On failure `up --json` still prints one document and exits 125:
   `{"schema":1,"project":…,"instance":…,"root":…,"status":"failed","error":"…"}`.
-  Known secrets in the error are redacted.
+  Known secrets in the error are redacted. Two failures come before there is
+  a project to describe and print nothing on stdout (exit 125, the error on
+  stderr): a project file that cannot be loaded, and `--dry-run` (refused).
 
 ## Commands in the instance
 
@@ -96,7 +99,15 @@ about`); `--wait-timeout` (default 120 s) bounds it.
   the invoking user, with the managed environment.
 - `berth exec [--service S] -- CMD…` runs in the service's running
   container; when it is not running, `exec` fails with 125 and says to run
-  `berth up` first.
+  `berth up` first. On a shared-backed service, `berth exec --service db`
+  without a command opens the tenant's own client; a command of your own,
+  `cp` and `inspect` are refused (125), because they would act on the server
+  every instance shares.
+- Inside a container, reach other services by name (`db:5432`, the
+  `endpoint` field) and other projects through swarm `inject_env` values.
+  Route URLs (`*.berth.localhost`) are for the host: libcurl resolves every
+  `*.localhost` name to the container's own loopback, so an app calling its
+  own `APP_URL` from inside its container is refused.
 - The app reads its configuration from the injected environment; `.env` is
   never written. The host's cached Laravel config is bypassed
   (`APP_CONFIG_CACHE` points inside the container).
@@ -205,6 +216,20 @@ must be in `depends_on` and running.
 - The in-use lock is taken after the config is loaded: a command racing a
   reap on its first berth call can still see its credentials removed.
 - `--ttl` has no "none" value; omit it.
+- The tenant client `berth exec --service db` opens runs inside the shared
+  server, so a deliberate shell escape (`psql`'s `\!`, MySQL's `system`)
+  reaches it, as raw `docker exec` would; running the client in a one-off
+  container on the instance network is deferred. `berth cp` with a raw
+  container name instead of a service name is passed to Docker unchanged.
+- Two berth homes using the same project and instance names can remove each
+  other's containers by name (never their data volumes, which carry the
+  installation label).
+- An authored `domain` equal to another instance's derived route makes the
+  gateway withhold that host from both until one goes.
+- Test-slot lock files (`~/.berth/locks/test-slots/`, at most the pool size
+  per checkout, empty) are kept for reuse.
+- The 443 in-container TLS case is verified on Docker Desktop; on rootful
+  Linux Docker it relies on the file capabilities root keeps.
 - MinIO no longer publishes images; the `minio` preset needs the image
   locally (`rustfs` and `garage` are S3-compatible alternatives).
 - Podman and rootless Docker are supported for the user mapping but are not

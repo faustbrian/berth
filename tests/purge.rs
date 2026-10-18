@@ -30,13 +30,16 @@ case "$1 $2" in
   "network connect"|"network disconnect") exit 0 ;;
   "image inspect") exit 0 ;;
   "volume rm") [ -f "$S/v-$3" ] || { echo "Error: No such volume: $3" >&2; exit 1; }; rm -f "$S/v-$3"; exit 0 ;;
-  "volume ls") for f in "$S"/v-*; do [ -f "$f" ] && basename "$f" | sed 's/^v-//'; done; exit 0 ;;
+  "volume ls") for f in "$S"/v-*; do [ -f "$f" ] && printf '%s\t%s\n' "$(basename "$f" | sed 's/^v-//')" "$(cat "$f")"; done; exit 0 ;;
   "volume inspect")
     vol=""; for arg in "$@"; do vol="$arg"; done
-    [ -f "$S/v-$vol" ] || { echo "Error: No such volume: $vol" >&2; exit 1; }; echo "$vol"; exit 0 ;;
+    [ -f "$S/v-$vol" ] || { echo "Error: No such volume: $vol" >&2; exit 1; }
+    cat "$S/v-$vol"; exit 0 ;;
   "volume create")
     vol=""; for arg in "$@"; do vol="$arg"; done
-    touch "$S/v-$vol"; exit 0 ;;
+    # A created volume records its installation label, as Docker would.
+    for arg in "$@"; do case "$arg" in dev.berth.installation=*) printf '%s' "${arg#dev.berth.installation=}" > "$S/v-$vol" ;; esac; done
+    [ -f "$S/v-$vol" ] || touch "$S/v-$vol"; exit 0 ;;
 esac
 case "$1" in
   run)
@@ -382,5 +385,37 @@ fn dedicated_data_volumes_are_created_with_ownership_labels() {
             .filter(|line| line.starts_with("volume create"))
             .count(),
         2
+    );
+}
+
+#[test]
+fn another_installations_volume_is_never_purged_or_adopted() {
+    let fixture = Fixture::new("foreign-label");
+    assert!(fixture.berth(&["up", "--no-wait"]).status.success());
+    let volumes = fixture.volumes();
+    let db = volumes
+        .iter()
+        .find(|volume| volume.ends_with("_db-data"))
+        .expect("db volume")
+        .clone();
+    // The same name, labeled by another berth home.
+    std::fs::write(
+        fixture.base.join("state").join(format!("v-{db}")),
+        "other-installation",
+    )
+    .expect("relabel");
+    let purge = fixture.berth(&["down", "--purge"]);
+    assert!(purge.status.success(), "{}", text(&purge.stderr));
+    assert_eq!(
+        fixture.volumes(),
+        vec![db.clone()],
+        "only the foreign volume is left"
+    );
+    let up = fixture.berth(&["up", "--no-wait"]);
+    assert_eq!(up.status.code(), Some(125));
+    assert!(
+        text(&up.stderr).contains("belongs to another berth installation"),
+        "{}",
+        text(&up.stderr)
     );
 }

@@ -190,9 +190,6 @@ fn run_berth(
     env: &[(&str, &str)],
 ) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_berth"));
-    for &(key, value) in env {
-        command.env(key, value);
-    }
     command
         .current_dir(cwd)
         .args(args)
@@ -209,7 +206,12 @@ fn run_berth(
         .env("BERTH_GATEWAY_HTTPS_PORT", ports.0.to_string())
         .env("BERTH_GATEWAY_HTTP_PORT", ports.1.to_string())
         .env("FAKE_STATE", base.join("state"))
-        .env_remove("BERTH_INSTANCE")
+        .env_remove("BERTH_INSTANCE");
+    // Test-specific variables win over the defaults above.
+    for &(key, value) in env {
+        command.env(key, value);
+    }
+    command
         .stdin(std::process::Stdio::null())
         .output()
         .expect("run berth")
@@ -776,4 +778,151 @@ fn an_unreadable_lease_is_reported_and_never_reaped() {
         find(&host.instances(), "a").is_some(),
         "an unreadable lease is never reaped"
     );
+}
+
+#[test]
+fn a_new_up_after_the_owner_died_takes_the_instance_over_instead_of_losing_it() {
+    let host = Host::new("takeover");
+    let a = host.checkout("a");
+    let b = host.checkout("b");
+    let mut agent = Command::new("sleep").arg("60").spawn().expect("agent");
+    let pid = agent.id().to_string();
+    let up = host.berth(&a, &["up", "--no-wait", "--owner-pid", &pid]);
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    assert!(host.berth(&b, &["up", "--no-wait"]).status.success());
+    agent.kill().expect("SIGKILL the agent");
+    drop(agent.wait());
+
+    // Someone runs a plain `up` in the checkout before any reap pass: the
+    // dead owner must not be carried over, or the next pass deletes it.
+    let again = host.berth(&a, &["up", "--no-wait"]);
+    assert!(again.status.success(), "{}", text(&again.stderr));
+    host.expire_reap_interval();
+    let ps = host.berth(&b, &["ps"]);
+    assert!(
+        !text(&ps.stderr).contains("because its owner process exited"),
+        "{}",
+        text(&ps.stderr)
+    );
+    let row = find(&host.instances(), "a").expect("a survives").clone();
+    assert_eq!(row["owner_pid"], serde_json::Value::Null, "{row}");
+}
+
+#[test]
+fn another_installations_instances_are_never_listed_or_reaped() {
+    let host = Host::new("two-homes");
+    let a = host.checkout("a");
+    let b = host.checkout("b");
+    // Installation A: an instance whose lease has expired.
+    assert!(
+        host.berth(&a, &["up", "--no-wait", "--ttl", "1s"])
+            .status
+            .success()
+    );
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    // Installation B shares the engine (the fake state) but not the home.
+    let other_home = host.base.join("other-home");
+    let other = other_home.to_str().expect("utf8");
+    let up = host.berth_env(&b, &["up", "--no-wait"], &[("BERTH_HOME", other)]);
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    let listing = host.berth_env(&host.base, &["ls", "--json"], &[("BERTH_HOME", other)]);
+    assert!(listing.status.success(), "{}", text(&listing.stderr));
+    assert!(
+        !text(&listing.stderr).contains("Reaped"),
+        "installation B never reaps A's instance: {}",
+        text(&listing.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&listing.stdout).expect("ls");
+    let roots: Vec<&str> = document["instances"]
+        .as_array()
+        .expect("instances")
+        .iter()
+        .filter_map(|row| row["root"].as_str())
+        .collect();
+    assert!(roots.iter().all(|root| !root.ends_with("/a")), "{roots:?}");
+    // Installation A's own pass still reaps it.
+    host.expire_reap_interval();
+    assert!(find(&host.instances(), "a").is_none());
+}
+
+#[test]
+fn state_of_an_instance_that_never_ran_up_goes_with_its_checkout() {
+    let host = Host::new("state-only");
+    let c = host.checkout("c");
+    std::fs::write(
+        c.join(".berth.yaml"),
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n",
+    )
+    .expect("shared project");
+    // Generated credentials, no lease and no containers.
+    let env = host.berth(&c, &["env", "--json"]);
+    assert!(env.status.success(), "{}", text(&env.stderr));
+    assert!(
+        find(&host.instances(), "c").is_some(),
+        "listed with its checkout"
+    );
+    std::fs::remove_dir_all(&c).expect("delete the checkout");
+    host.expire_reap_interval();
+    let listing = host.berth(&host.base, &["ls", "--json"]);
+    assert!(
+        text(&listing.stderr).contains("because its checkout is gone"),
+        "{}",
+        text(&listing.stderr)
+    );
+    let document: serde_json::Value = serde_json::from_slice(&listing.stdout).expect("ls");
+    assert_eq!(
+        document["instances"].as_array().map(Vec::len),
+        Some(0),
+        "{document}"
+    );
+}
+
+#[test]
+fn a_command_that_outlives_its_killed_agent_keeps_the_instance_reapable() {
+    let host = Host::new("outlive");
+    let a = host.checkout("a");
+    let b = host.checkout("b");
+    let mut agent = Command::new("sleep").arg("60").spawn().expect("agent");
+    let pid = agent.id().to_string();
+    assert!(
+        host.berth(&a, &["up", "--no-wait", "--owner-pid", &pid])
+            .status
+            .success()
+    );
+    assert!(host.berth(&b, &["up", "--no-wait"]).status.success());
+    agent.kill().expect("SIGKILL the agent");
+    drop(agent.wait());
+    // A command the agent started finishes after it died: renewing the
+    // lease must keep the dead owner, not clear it.
+    let leftover = host.berth(&a, &["ps"]);
+    assert!(leftover.status.success(), "{}", text(&leftover.stderr));
+    host.expire_reap_interval();
+    let ps = host.berth(&b, &["ps"]);
+    assert!(
+        text(&ps.stderr).contains("because its owner process exited"),
+        "{}",
+        text(&ps.stderr)
+    );
+    assert!(find(&host.instances(), "a").is_none());
+}
+
+#[test]
+fn concurrent_commands_never_drop_a_lease_ttl_set_meanwhile() {
+    let host = Host::new("lease-race");
+    let a = host.checkout("a");
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    for round in 0..3 {
+        std::thread::scope(|scope| {
+            let readers: Vec<_> = (0..8)
+                .map(|_| scope.spawn(|| host.berth(&a, &["ps"])))
+                .collect();
+            let ttl = host.berth(&a, &["up", "--no-wait", "--ttl", "1h"]);
+            assert!(ttl.status.success(), "{}", text(&ttl.stderr));
+            for reader in readers {
+                assert!(reader.join().expect("reader").status.success());
+            }
+        });
+        let row = find(&host.instances(), "a").expect("a").clone();
+        assert_eq!(row["ttl_seconds"], 3600, "round {round}: {row}");
+    }
 }

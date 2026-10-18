@@ -92,18 +92,23 @@ pub(crate) fn purge_instance_objects(project: &str, instance: &str) -> Result<()
     // `_` ends the instance ID, which cannot contain one, so `agent-1` never
     // matches `agent-1-b`. Every volume berth creates for an instance (default
     // `{container}-data`, authored, env-suffixed) starts with this prefix.
+    // A volume labeled by another berth installation (another `BERTH_HOME`
+    // using the same project and instance names) is never this one's.
     let namespace = format!("berth_{project}_{instance}_");
+    let installation = crate::home::installation_id()?;
     let volumes = [
         "volume".to_owned(),
         "ls".to_owned(),
         "--format".to_owned(),
-        "{{.Name}}".to_owned(),
+        "{{.Name}}\t{{.Label \"dev.berth.installation\"}}".to_owned(),
     ];
-    for volume in lines(&volumes)? {
-        if volume.starts_with(&namespace) {
+    for line in lines(&volumes)? {
+        let (volume, owner) = line.split_once('\t').unwrap_or((line.as_str(), ""));
+        let foreign = !owner.is_empty() && owner != installation;
+        if volume.starts_with(&namespace) && !foreign {
             record(
                 &mut failures,
-                &["volume", "rm", &volume],
+                &["volume", "rm", volume],
                 &["no such volume"],
             );
         }

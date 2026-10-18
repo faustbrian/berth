@@ -1396,3 +1396,56 @@ fn a_reset_restore_reprovisions_only_the_instance_tenant() {
         "instance b's tenant is untouched: {sql}"
     );
 }
+
+#[test]
+fn commands_of_the_callers_choosing_never_run_in_a_shared_server() {
+    let host = Host::new("exec-shared");
+    let a = host.checkout("a", PROJECT);
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    let server = host.servers().pop().expect("server");
+    host.clear();
+    let attempts: [&[&str]; 4] = [
+        &[
+            "exec",
+            "--no-tty",
+            "--service",
+            "db",
+            "--",
+            "sh",
+            "-c",
+            "id",
+        ],
+        &["cp", "db:/var/lib/postgresql", "./copy"],
+        &["cp", "./x", "db:/tmp/x"],
+        &["inspect", "--service", "db"],
+    ];
+    for args in attempts {
+        let output = host.berth(&a, args);
+        assert_eq!(output.status.code(), Some(125), "{args:?}");
+        assert!(
+            text(&output.stderr).contains("isolation: dedicated"),
+            "{args:?}: {}",
+            text(&output.stderr)
+        );
+    }
+    assert!(
+        !host.calls().lines().any(|line| line.contains(&server)
+            && (line.starts_with("exec ")
+                || line.starts_with("cp ")
+                || line.starts_with("inspect "))
+            && !line.contains("--format")),
+        "{}",
+        host.calls()
+    );
+    // Without a command, `exec` is the tenant's own client.
+    host.clear();
+    let client = host.berth(&a, &["exec", "--no-tty", "--service", "db"]);
+    assert!(client.status.success(), "{}", text(&client.stderr));
+    assert!(
+        host.calls().lines().any(|line| line.starts_with("exec")
+            && line.contains(&server)
+            && line.contains("psql")),
+        "{}",
+        host.calls()
+    );
+}

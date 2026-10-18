@@ -54,7 +54,17 @@ pub(crate) fn invoking_user() -> Result<InvokingUser> {
 /// be determined.
 pub(crate) fn container_user_args() -> Result<Vec<String>> {
     let user = invoking_user()?;
-    let ids = format!("{}:{}", user.uid, user.gid);
+    user_args_for(user.uid, user.gid)
+}
+
+/// [`container_user_args`] for explicit host IDs (the gateway runs as the
+/// owner of its state directories).
+///
+/// # Errors
+///
+/// Returns an error when Docker's rootless mode cannot be determined.
+pub(crate) fn user_args_for(uid: u32, gid: u32) -> Result<Vec<String>> {
+    let ids = format!("{uid}:{gid}");
     match crate::docker::container_engine() {
         ContainerEngine::Podman => Ok(vec![
             "--userns=keep-id".to_owned(),
@@ -102,6 +112,22 @@ fn is_rootless_security_options(options: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::is_rootless_security_options;
+
+    #[test]
+    fn each_engine_maps_the_host_user_its_own_way() {
+        use super::user_args_for;
+        // Unit tests model rootful Docker.
+        assert_eq!(
+            user_args_for(501, 20).expect("docker"),
+            ["--user", "501:20"]
+        );
+        crate::docker::with_container_engine(crate::config::ContainerEngine::Podman, || {
+            assert_eq!(
+                user_args_for(501, 20).expect("podman"),
+                ["--userns=keep-id", "--user", "501:20"]
+            );
+        });
+    }
 
     #[test]
     fn rootless_docker_is_recognised_from_its_security_options() {

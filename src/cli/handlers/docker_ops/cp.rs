@@ -38,6 +38,8 @@ fn resolve_cp_endpoint(config: &config::Config, endpoint: &str) -> Result<String
     let Ok(svc) = config::find_service(config, prefix) else {
         return Ok(endpoint.to_owned());
     };
+    // A shared server's files are every instance's data.
+    crate::shared::refuse_server_operation(svc, "copy files in or out of")?;
     let container_name = svc.container_name()?;
     Ok(format!("{container_name}:{path}"))
 }

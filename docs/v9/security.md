@@ -99,6 +99,10 @@ symlinked destinations.
 
 ## Not covered
 
+- The tenant database client runs inside the shared server: a deliberate
+  shell escape from it (`psql \!`) reaches the server, as raw `docker exec`
+  does for any local user with Docker access (deferred: run the client in a
+  one-off container on the instance network).
 - Host trust-store installation (deferred): the CA stays inside the berth
   home.
 - A shared server is one process: a tenant can observe server-wide resource

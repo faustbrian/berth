@@ -18,6 +18,13 @@ use crate::config::ServiceConfig;
 /// Returns an error when Docker cannot inspect or create a volume.
 pub(super) fn ensure_labeled_volumes(service: &ServiceConfig, container_name: &str) -> Result<()> {
     for volume in super::args_builder::named_volumes(service, container_name) {
+        // Never adopt another installation's data (another `BERTH_HOME` with
+        // the same project and instance names).
+        if crate::docker::is_foreign_volume(&volume)? {
+            anyhow::bail!(
+                "volume {volume} belongs to another berth installation; use another --instance"
+            );
+        }
         let inspected = crate::docker::run_docker_output(
             &["volume", "inspect", "--format", "{{.Name}}", &volume],
             "failed to inspect a data volume",

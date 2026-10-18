@@ -12,6 +12,7 @@ use anyhow::Result;
 use crate::config::ServiceConfig;
 
 mod container;
+pub(crate) use container::user_args_for;
 mod exec;
 mod extensions;
 mod health;

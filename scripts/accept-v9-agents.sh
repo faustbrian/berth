@@ -248,6 +248,8 @@ class IsolationTest extends TestCase
         // run must be on its own shared-server tenants instead.
         $this->assertSame('pgsql', DB::connection()->getDriverName());
         $this->assertStringStartsWith('accept__', DB::connection()->getDatabaseName());
+        // The script checks that no other agent's run used this database.
+        file_put_contents(storage_path('app/db-names'), DB::connection()->getDatabaseName().PHP_EOL, FILE_APPEND);
         $this->assertSame(0, DB::table('markers')->count());
         // The script checks that this file belongs to the invoking user.
         file_put_contents(storage_path('app/owner-probe'), 'written by the app container');
@@ -284,6 +286,7 @@ class ParallelSlice${index}Test extends TestCase
         // ParaTest gives each process its own \`{database}_test_{token}\`.
         \$this->assertSame('pgsql', DB::connection()->getDriverName());
         \$this->assertMatchesRegularExpression('/^accept__.*_test_[0-9]+\$/', DB::connection()->getDatabaseName());
+        file_put_contents(storage_path('app/db-names'), DB::connection()->getDatabaseName().PHP_EOL, FILE_APPEND);
         \$this->assertSame(0, DB::table('markers')->count());
         DB::table('markers')->insert(['agent' => 'slice-${index}']);
         \$this->assertSame(1, DB::table('markers')->count());
@@ -327,6 +330,18 @@ class SlowTest extends TestCase
         $this->assertTrue(true);
     }
 }
+PHP
+# A route that answers with the database it is connected to, so the HTTPS
+# probe proves the route reaches this instance's own app.
+cat >> "$FIXTURE/routes/web.php" <<'PHP'
+
+Route::get('/berth-instance', fn () => Illuminate\Support\Facades\DB::connection()->getDatabaseName());
+PHP
+# An artisan command that exits with the code it is given: a distinctive
+# code (3) proves exit codes pass through `berth artisan` exactly.
+cat >> "$FIXTURE/routes/console.php" <<'PHP'
+
+Artisan::command('berth:exit {code}', fn (string $code) => (int) $code);
 PHP
 printf '/vendor\n' >> "$FIXTURE/.gitignore"
 git -C "$FIXTURE" add -A
@@ -411,8 +426,11 @@ agent() {
   docker inspect --format '{{.Config.User}} {{json .HostConfig.CapDrop}} {{json .HostConfig.CapAdd}} {{json .HostConfig.SecurityOpt}}' \
     "$app" > "$out/app-security.txt" 2>&1
   url="$(jq -r '.urls[0] // empty' "$out/up.json" 2>/dev/null)"
-  code="$(curl -sk -o /dev/null -w '%{http_code}' --max-time 30 "$url" 2>/dev/null || true)"
+  # Verified against the gateway's CA, not `-k`.
+  local ca="$BERTH_HOME/gateway/data/caddy/pki/authorities/local/root.crt"
+  code="$(curl -s --cacert "$ca" -o "$out/https.body" -w '%{http_code}' --max-time 30 "$url" 2>/dev/null || true)"
   printf '%s\n' "$code" > "$out/https.code"
+  curl -s --cacert "$ca" --max-time 30 "$url/berth-instance" > "$out/route.body" 2>/dev/null || true
 
   "$BERTH" artisan --no-tty --non-interactive migrate --force > "$out/migrate.out" 2>&1
   printf '%s\n' "$?" > "$out/migrate.status"
@@ -440,6 +458,8 @@ agent() {
   "$BERTH" artisan --no-tty --non-interactive test --parallel --processes=4 \
     > "$out/paratest.out" 2>&1
   printf '%s\n' "$?" > "$out/paratest.status"
+  "$BERTH" artisan --no-tty --non-interactive berth:exit 3 > "$out/exit3.out" 2>&1
+  printf '%s\n' "$?" > "$out/exit3.status"
   "$BERTH" artisan --no-tty --non-interactive test tests/Probe/DeliberateFailureTest.php \
     > "$out/failing.out" 2>&1
   printf '%s\n' "$?" > "$out/failing.status"
@@ -517,6 +537,9 @@ for index in $(seq 1 "$AGENTS"); do
   check "$name up" "$(cat "$out/up.status")" 0
   check "$name up document" "$(jq -r '.status' "$out/up.json" 2>/dev/null)" ready
   check "$name https" "$(cat "$out/https.code")" 200
+  check "$name route reaches its own instance" "$(cat "$out/route.body")" \
+    "$(jq -r '.environment.DB_DATABASE' "$out/up.json")"
+  check "$name exit code 3 passes through artisan" "$(cat "$out/exit3.status")" 3
   # Docker may report capabilities with or without the `CAP_` prefix.
   check "$name app runs least-privileged" "$(sed 's/CAP_//g' "$out/app-security.txt")" \
     "$(id -u):$(id -g) [\"ALL\"] [\"NET_BIND_SERVICE\"] [\"no-new-privileges\"]"
@@ -545,6 +568,23 @@ done
 
 check "test-lease app runs least-privileged" "$(cat "$OUTPUT/lease-security.txt")" \
   "$(id -u):$(id -g) [\"ALL\"] [\"NET_BIND_SERVICE\"]"
+
+log "checking that no two agents' runs shared a database"
+: > "$OUTPUT/db-names.txt"
+for index in $(seq 1 "$AGENTS"); do
+  name="agent-$index"
+  dev="$(jq -r '.environment.DB_DATABASE' "$OUTPUT/agents/$name/up.json")"
+  names="$WORKTREES/$name/storage/app/db-names"
+  if [[ ! -s "$names" ]]; then
+    log "  $name recorded no test databases"
+    failures=$((failures + 1))
+    continue
+  fi
+  grep -qx "$dev" "$names" && { log "  $name's tests ran in its development database"; failures=$((failures + 1)); }
+  sort -u "$names" | sed "s/^/$name /" >> "$OUTPUT/db-names.txt"
+done
+shared="$(awk '{print $2}' "$OUTPUT/db-names.txt" | sort | uniq -d | wc -l | tr -d ' ')"
+check "databases used by more than one agent" "$shared" 0
 
 log "checking that the killed agent is reaped"
 # Reaping runs at most every 30 seconds per installation.

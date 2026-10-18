@@ -67,7 +67,8 @@ services:
 - Project file and every command and flag: [`USAGE.md`](USAGE.md)
 - Agent contract: [`docs/v9/agents.md`](docs/v9/agents.md)
 - How it works: [`docs/v9/architecture.md`](docs/v9/architecture.md),
-  security model: [`docs/v9/security.md`](docs/v9/security.md)
+  security model: [`docs/v9/security.md`](docs/v9/security.md),
+  benchmarks against helm 6: [`docs/v9/benchmarks.md`](docs/v9/benchmarks.md)
 - What was kept, ported or dropped from stackctl 8:
   [`docs/v9/ledger.md`](docs/v9/ledger.md)
 - Release changes: [`CHANGELOG.md`](CHANGELOG.md)

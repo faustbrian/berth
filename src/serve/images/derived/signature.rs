@@ -1,23 +1,11 @@
 //! Signature and tag derivation for serve derived images.
 
-use std::hash::{Hash, Hasher};
-
-/// Derives a docker-safe derived image tag from container name and signature.
-pub(super) fn derived_image_tag(container_name: &str, signature: &str) -> String {
-    let sanitized: String = container_name
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
-                ch
-            } else {
-                '-'
-            }
-        })
-        .collect();
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    signature.hash(&mut hasher);
-    let digest = hasher.finish();
-    format!("berth/{}-serve-{:x}", sanitized.to_lowercase(), digest)
+/// The derived image's tag, from its content signature alone: every instance
+/// and test run that needs the same image shares one tag, so parallel first
+/// builds converge on it and purging an instance leaves no per-instance image
+/// behind.
+pub(super) fn derived_image_tag(signature: &str) -> String {
+    format!("berth/serve-{:016x}", fnv1a64(signature.as_bytes()))
 }
 
 /// Derives the cache signature describing derived image contents.

@@ -477,10 +477,30 @@ fn inspection_commands_print_exactly_one_json_document() {
             );
         }
         let document = one_document(&output.stdout);
-        assert!(
-            document.is_object() || document.is_array(),
-            "{args:?}: {document}"
-        );
+        // The documented shapes (docs/v9/agents.md), not just "some JSON".
+        let keys: &[&str] = match args[0] {
+            "ps" => &["name", "kind", "driver", "image", "port", "status"],
+            "url" => &["name", "url", "published"],
+            "health" => &["name", "ok", "error"],
+            "about" => &["application", "environment", "services"],
+            "ls" => &["instances"],
+            _ => &["ok", "error", "checks"],
+        };
+        let sample = if document.is_array() {
+            assert!(
+                document.as_array().is_some_and(|rows| !rows.is_empty()),
+                "{args:?}: {document}"
+            );
+            document[0].clone()
+        } else {
+            document.clone()
+        };
+        for key in keys {
+            assert!(
+                sample.get(*key).is_some(),
+                "{args:?} lacks {key}: {document}"
+            );
+        }
     }
     let doctor = one_document(&fixture.berth(&["doctor", "--json"], &[]).stdout);
     assert!(

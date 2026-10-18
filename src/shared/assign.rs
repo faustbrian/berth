@@ -88,6 +88,9 @@ pub(crate) fn assign_shared_target(
     let server = super::naming::server_name(engine, &installation, &fingerprint);
     let tenant = super::naming::tenant_name(project, instance, &service.name, env);
     let password = tenant_password(project, instance, &tenant)?;
+    if let Some(root) = service.runtime.root.as_deref() {
+        crate::instance::record_root(project, instance, root)?;
+    }
     crate::docker::register_secret(&password);
 
     let username = match engine {

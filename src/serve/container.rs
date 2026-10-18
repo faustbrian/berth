@@ -10,6 +10,7 @@ mod checkout_ownership;
 mod container_user;
 mod least_privilege;
 mod lifecycle;
+pub(crate) use container_user::user_args_for;
 pub(crate) use least_privilege::least_privilege_run_args;
 pub(crate) use lifecycle::container_env_pairs;
 mod run_config;

@@ -39,6 +39,8 @@ pub fn inspect_container(
     size: bool,
     object_type: Option<&str>,
 ) -> Result<()> {
+    // A shared server's configuration holds its admin secret.
+    crate::shared::refuse_server_operation(service, "inspect")?;
     inspect::inspect_container(service, format, size, object_type)
 }
 

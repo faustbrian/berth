@@ -270,6 +270,41 @@ fn up_starts_the_gateway_and_applies_the_route_through_a_validated_reload() {
         "{}",
         fixture.document()
     );
+    // The CA lives in the berth home, mounted at Caddy's data directory, so
+    // a recreated gateway keeps it.
+    let data = fixture.base.join("home/gateway/data");
+    assert!(
+        gateway_call.contains(&format!("-v {}:/data", data.display())),
+        "{gateway_call}"
+    );
+    // The route's upstream is this instance's own app container.
+    let document: serde_json::Value =
+        serde_json::from_str(&fixture.document()).expect("caddy document");
+    let app_container = calls[app_run.expect("app run")]
+        .split(' ')
+        .skip_while(|word| *word != "--name")
+        .nth(1)
+        .expect("app container name")
+        .to_owned();
+    let rendered = document.to_string();
+    let host = rendered
+        .split('"')
+        .find(|part| part.ends_with("-shop.berth.localhost"))
+        .expect("route host")
+        .to_owned();
+    let instance = app_container
+        .strip_prefix("berth_shop_")
+        .and_then(|rest| rest.strip_suffix("_app"))
+        .expect("instance in the container name");
+    assert_eq!(
+        host,
+        format!("{instance}-shop.berth.localhost"),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains(&format!("{app_container}:80")),
+        "{rendered}"
+    );
     assert!(
         !fixture
             .base

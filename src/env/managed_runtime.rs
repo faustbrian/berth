@@ -65,7 +65,11 @@ pub(crate) fn apply_managed_runtime_env(
     let key = if crate::docker::is_dry_run() {
         DRY_RUN_APP_KEY.to_owned()
     } else {
-        crate::home::app_key(project, instance)?
+        let key = crate::home::app_key(project, instance)?;
+        if let Some(root) = app.runtime.root.as_deref() {
+            crate::instance::record_root(project, instance, root)?;
+        }
+        key
     };
     crate::docker::register_secret(&key);
     vars.insert("APP_KEY".to_owned(), key);

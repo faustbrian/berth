@@ -260,6 +260,23 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- A plain `up` after an instance's owner process died no longer carries the
+  dead owner over, which got the freshly rebuilt instance reaped (other
+  commands keep it, so an instance whose agent was killed is still reaped);
+  concurrent lease updates no longer drop each other's TTL or owner.
+- A checkout missing only because its volume is unmounted is no longer
+  reaped as gone; an instance that never ran `up` records its checkout, so
+  its state goes when the checkout does; purge removes the instance's lock
+  files; `gc` waits for a reap in progress instead of reporting none.
+- Purge and `up` never remove or adopt a volume labeled by another berth
+  installation.
+- `exec` with a command, `cp` and `inspect` refuse a shared-backed service,
+  which would act on the server every instance shares; `exec` without a
+  command still opens the tenant's own client.
+- The gateway maps its user like app containers, so it starts on rootless
+  Docker and Podman.
+- Derived images are tagged by content only, so parallel instances share
+  one tag and purging an instance leaves no image behind.
 - Fixed the `mariadb` preset's health check, `exec` shell and `dump`, which
   called `mysql*` programs that MariaDB 11 images no longer ship. MySQL
   client passwords now travel in `MYSQL_PWD` instead of `-p<password>`.

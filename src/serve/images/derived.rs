@@ -69,7 +69,6 @@ pub(super) fn resolve_runtime_image(
         return Ok(target.image.clone());
     }
 
-    let container_name = target.container_name()?;
     let dockerfile = render_derived_dockerfile(
         &target.image,
         &installable_extensions,
@@ -105,7 +104,7 @@ pub(super) fn resolve_runtime_image(
         return Ok(target.image.clone());
     }
 
-    let derived_tag = derived_image_tag(&container_name, &signature);
+    let derived_tag = derived_image_tag(&signature);
     if crate::docker::is_dry_run() {
         emit_derived_event(
             target,
@@ -135,9 +134,9 @@ pub(super) fn resolve_runtime_image(
     Ok(derived_tag)
 }
 
-/// Builds a stable derived image tag from container identity and content signature.
-pub(super) fn derived_image_tag(container_name: &str, signature: &str) -> String {
-    signature::derived_image_tag(container_name, signature)
+/// Builds a stable derived image tag from the content signature.
+pub(super) fn derived_image_tag(signature: &str) -> String {
+    signature::derived_image_tag(signature)
 }
 
 fn emit_derived_event(

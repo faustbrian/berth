@@ -268,6 +268,8 @@ mod failure_message;
 mod health;
 mod image_inspect;
 mod image_pull;
+mod volume_owner;
+pub(crate) use volume_owner::is_foreign_volume;
 mod inspect;
 mod labels;
 mod logs;

@@ -29,6 +29,8 @@ fn dry_run_up(root: &Path, instance_env: Option<&str>) -> String {
     command
         .current_dir(root)
         .args(["--dry-run", "--non-interactive", "up", "--service", "db"])
+        // Never the developer's own berth home.
+        .env("BERTH_HOME", root.join(".berth-home"))
         .env_remove("BERTH_INSTANCE");
     if let Some(instance) = instance_env {
         command.env("BERTH_INSTANCE", instance);

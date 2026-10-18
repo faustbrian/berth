@@ -35,6 +35,21 @@ pub(crate) fn home_path(relative: &Path) -> Result<PathBuf> {
 /// Returns an error when the directory exists but cannot be removed, or is a
 /// symbolic link.
 pub(crate) fn remove_instance_state(project: &str, instance: &str) -> Result<()> {
+    // Its lock files go too; a holder still has the open file, and the
+    // reaper's inode re-check tells a deleted lock from a new one.
+    for lock in [
+        format!("instance_{project}_{instance}.lock"),
+        format!("lease_{project}_{instance}.lock"),
+    ] {
+        let path = home_path(&Path::new("locks").join(lock))?;
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error).with_context(|| format!("failed to delete {}", path.display()));
+            }
+        }
+    }
     let dir = home_path(&Path::new("instances").join(project).join(instance))?;
     match std::fs::symlink_metadata(&dir) {
         Ok(metadata) if metadata.file_type().is_symlink() => {

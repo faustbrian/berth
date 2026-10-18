@@ -74,7 +74,13 @@ pub(crate) fn read_lease(project: &str, instance: &str) -> Result<Option<Lease>>
 
 /// Writes an instance's lease for `root`: `ttl` and `owner` replace the TTL
 /// and owner process when given, otherwise the existing ones are kept;
-/// either way the expiry is renewed.
+/// either way the expiry is renewed. With `take_over` (`up`), an existing
+/// owner that has exited is dropped rather than carried forward: whoever
+/// brings the instance up now uses it, and a dead owner would get it reaped
+/// under them. Other commands keep the owner, alive or not, so the instance
+/// is still reaped once a command that outlived its killed agent ends.
+/// The read-modify-write runs under a per-instance host lock, so concurrent
+/// commands never drop each other's TTL or owner.
 ///
 /// # Errors
 ///
@@ -85,7 +91,12 @@ pub(crate) fn renew_lease(
     root: &Path,
     ttl: Option<Duration>,
     owner: Option<super::owner::OwnerProcess>,
+    take_over: bool,
 ) -> Result<Lease> {
+    let _lock = crate::home::HostLock::acquire(
+        &format!("lease_{project}_{instance}"),
+        Duration::from_secs(30),
+    )?;
     let existing = read_lease(project, instance)?;
     let ttl_secs = match ttl {
         Some(ttl) => Some(ttl.as_secs()),
@@ -95,7 +106,12 @@ pub(crate) fn renew_lease(
         root: root.to_path_buf(),
         ttl_secs,
         expires_at: ttl_secs.map(|ttl| now_secs().saturating_add(ttl)),
-        owner: owner.or_else(|| existing.as_ref().and_then(|lease| lease.owner.clone())),
+        owner: owner.or_else(|| {
+            existing
+                .as_ref()
+                .and_then(|lease| lease.owner.clone())
+                .filter(|owner| !take_over || owner.alive())
+        }),
     };
     if existing.as_ref() == Some(&lease) {
         return Ok(lease);

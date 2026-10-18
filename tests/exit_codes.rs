@@ -21,6 +21,11 @@ case "$1" in
     [ "$FAKE_STATUS" = missing ] && exit 1
     printf '%s' "${FAKE_STATUS:-running}"; exit 0 ;;
   exec)
+    [ -n "$FAKE_LOG" ] && echo "$*" >> "$FAKE_LOG"
+    # berth's own `sh -lc` compatibility shims succeed unless FAKE_SHIM_FAIL.
+    if [ -z "$FAKE_SHIM_FAIL" ]; then
+      for arg in "$@"; do [ "$arg" = "-lc" ] && exit 0; done
+    fi
     # FAKE_SHIM_FAIL fails only berth's `sh -lc` compatibility shim step.
     if [ -n "$FAKE_SHIM_FAIL" ]; then
       for arg in "$@"; do [ "$arg" = "-lc" ] && exit 7; done
@@ -71,6 +76,8 @@ impl Fixture {
             .env("PATH", path)
             .env("FAKE_MODE", mode)
             .env("FAKE_CODE", code)
+            // Never the developer's own berth home.
+            .env("BERTH_HOME", self.root.parent().expect("base").join("home"))
             .env_remove("BERTH_INSTANCE")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -236,4 +243,64 @@ fn a_failing_setup_shim_is_a_berth_failure_not_the_commands_exit() {
         String::from_utf8_lossy(&output.stderr).contains("mysql compatibility wrapper"),
         "the failure must come from the shim: {output:?}"
     );
+}
+
+#[test]
+fn package_manager_and_php_tool_commands_keep_their_exit_codes() {
+    let fixture = Fixture::new("tools");
+    for args in [
+        &["--non-interactive", "composer", "--no-tty", "validate"][..],
+        &["--non-interactive", "pest", "--no-tty"][..],
+        &["--non-interactive", "phpstan", "--no-tty", "analyse"][..],
+    ] {
+        for code in ["7", "1"] {
+            let output = fixture.berth(args, "exit", code, None);
+            assert_eq!(
+                output.status.code(),
+                code.parse().ok(),
+                "{args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        let killed = fixture.berth(args, "kill", "0", None);
+        assert_eq!(killed.status.code(), Some(137), "{args:?}");
+    }
+}
+
+#[test]
+fn without_a_terminal_commands_run_without_a_tty_by_default() {
+    let fixture = Fixture::new("tty-default");
+    let log = fixture.root.join("exec.log");
+    let path = format!(
+        "{}:{}",
+        fixture.bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    // No --tty, --no-tty or --non-interactive: stdin is a pipe.
+    let output = Command::new(env!("CARGO_BIN_EXE_berth"))
+        .current_dir(&fixture.root)
+        .args(["exec", "--", "true"])
+        .env("PATH", path)
+        .env("FAKE_MODE", "exit")
+        .env("FAKE_CODE", "0")
+        .env("FAKE_LOG", &log)
+        .env(
+            "BERTH_HOME",
+            fixture.root.parent().expect("base").join("home"),
+        )
+        .env_remove("BERTH_INSTANCE")
+        .stdin(Stdio::piped())
+        .output()
+        .expect("run berth");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let calls = std::fs::read_to_string(&log).expect("exec log");
+    assert!(
+        calls.lines().any(|line| line.starts_with("exec -i ")),
+        "{calls}"
+    );
+    assert!(!calls.contains("-it"), "{calls}");
 }

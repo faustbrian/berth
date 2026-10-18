@@ -41,8 +41,8 @@ pub(super) fn mailhog_smtp_port(target: &ServiceConfig) -> Option<u16> {
 }
 
 #[cfg(test)]
-pub(super) fn derived_image_tag(container_name: &str, signature: &str) -> String {
-    derived::derived_image_tag(container_name, signature)
+pub(super) fn derived_image_tag(signature: &str) -> String {
+    derived::derived_image_tag(signature)
 }
 
 #[cfg(test)]

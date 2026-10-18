@@ -108,6 +108,15 @@ pub(crate) fn remove_service_volumes(service: &ServiceConfig) -> Result<()> {
             crate::docker::print_docker_command(&["volume".to_owned(), "rm".to_owned(), volume]);
             continue;
         }
+        if crate::docker::is_foreign_volume(&volume)? {
+            crate::output::event(
+                &service.name,
+                crate::output::LogLevel::Warn,
+                &format!("Kept volume {volume}: it belongs to another berth installation"),
+                crate::output::Persistence::Persistent,
+            );
+            continue;
+        }
         let output = crate::docker::run_docker_output(
             &["volume", "rm", &volume],
             "failed to remove docker volume",

@@ -49,14 +49,19 @@ impl InstanceRecord {
         }
     }
 
-    /// Whether the owning checkout definitely no longer exists. A path that
-    /// cannot be checked (permission denied, an I/O error) counts as present:
-    /// reaping deletes data, so doubt never does.
+    /// Whether the owning checkout definitely no longer exists: the
+    /// checkout is missing while its parent directory is there. A path that
+    /// cannot be checked (permission denied, an I/O error), or whose parent is
+    /// missing too (an unmounted external or network volume), counts as
+    /// present: reaping deletes data, so doubt never does.
     #[must_use]
     pub(crate) fn owner_gone(&self) -> bool {
-        self.root
-            .as_ref()
-            .is_some_and(|root| matches!(root.try_exists(), Ok(false)))
+        self.root.as_ref().is_some_and(|root| {
+            matches!(root.try_exists(), Ok(false))
+                && root
+                    .parent()
+                    .is_some_and(|parent| matches!(parent.try_exists(), Ok(true)))
+        })
     }
 }
 
@@ -159,6 +164,8 @@ pub(crate) fn list_instances() -> Result<Vec<InstanceRecord>> {
         }
         if let Some(lease) = &record.lease {
             record.root = Some(lease.root.clone());
+        } else if record.root.is_none() {
+            record.root = super::root_record::recorded_root(&record.project, &record.instance);
         }
     }
     Ok(records.into_values().collect())
@@ -252,6 +259,12 @@ mod tests {
         let mut deleted = record(&[]);
         deleted.root = Some(dir.join("deleted"));
         assert!(deleted.owner_gone(), "a missing checkout is gone");
+        let mut unmounted = record(&[]);
+        unmounted.root = Some(dir.join("unmounted-volume").join("checkout"));
+        assert!(
+            !unmounted.owner_gone(),
+            "a checkout whose parent is missing too may be on an unmounted volume"
+        );
         let mut present = record(&[]);
         present.root = Some(checkout);
         assert!(!present.owner_gone());

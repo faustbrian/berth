@@ -39,8 +39,15 @@ pub(crate) fn reap(force: bool, keep: Option<(&str, &str)>) -> Result<ReapReport
     if crate::docker::is_dry_run() {
         return Ok(ReapReport::default());
     }
-    let Some(_lock) = crate::home::HostLock::try_acquire("reap")? else {
-        return Ok(ReapReport::default());
+    // A forced pass (`berth gc`) waits for a pass in progress instead of
+    // reporting that nothing was reaped; ordinary commands never wait.
+    let _lock = if force {
+        crate::home::HostLock::acquire("reap", Duration::from_secs(600))?
+    } else {
+        let Some(lock) = crate::home::HostLock::try_acquire("reap")? else {
+            return Ok(ReapReport::default());
+        };
+        lock
     };
     let stamp = crate::home::private_dir(std::path::Path::new("locks"))?.join("reap.stamp");
     if !force && ran_recently(&stamp) {

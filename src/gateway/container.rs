@@ -20,7 +20,7 @@ pub(crate) const GATEWAY_IMAGE: &str =
 /// (8.x FI-40's compatibility revision).
 const SPEC_LABEL: &str = "dev.berth.gateway.spec";
 /// Bump when the gateway's `docker run` flags change.
-const SPEC_REVISION: u32 = 1;
+const SPEC_REVISION: u32 = 2;
 
 /// Gateway state directories under the berth home.
 pub(crate) struct GatewayDirs {
@@ -105,31 +105,39 @@ pub(crate) fn ensure_gateway(
     for port in [ports.https, ports.http] {
         ensure_port_free(port)?;
     }
-    let owner = owner_ids(&dirs.data)?;
+    // As the owner of the state directories, mapped like app containers:
+    // rootless Docker needs no `--user` (its root is that owner), Podman
+    // needs keep-id; otherwise the gateway cannot write its CA.
+    let (uid, gid) = owner_ids(&dirs.data)?;
+    let user = crate::serve::user_args_for(uid, gid)?;
     let https = format!("127.0.0.1:{0}:{0}", ports.https);
     let http = format!("127.0.0.1:{0}:{0}", ports.http);
     let data_mount = format!("{}:/data", dirs.data.display());
     let config_mount = format!("{}:/etc/berth:ro", dirs.config.display());
     let spec_label = format!("{SPEC_LABEL}={expected_spec}");
     let installation_label = format!("dev.berth.installation={installation}");
-    docker(
-        &[
-            "run",
-            "-d",
-            "--name",
-            &name,
-            "--restart",
-            "unless-stopped",
-            "--label",
-            "dev.berth.managed=true",
-            "--label",
-            &installation_label,
-            "--label",
-            "dev.berth.role=gateway",
-            "--label",
-            &spec_label,
-            "--user",
-            &owner,
+    let mut args: Vec<String> = [
+        "run",
+        "-d",
+        "--name",
+        &name,
+        "--restart",
+        "unless-stopped",
+        "--label",
+        "dev.berth.managed=true",
+        "--label",
+        &installation_label,
+        "--label",
+        "dev.berth.role=gateway",
+        "--label",
+        &spec_label,
+    ]
+    .iter()
+    .map(|arg| (*arg).to_owned())
+    .collect();
+    args.extend(user);
+    args.extend(
+        [
             "--cap-drop",
             "ALL",
             "--cap-add",
@@ -153,9 +161,12 @@ pub(crate) fn ensure_gateway(
             "run",
             "--config",
             "/etc/berth/caddy.json",
-        ],
-        "failed to start the berth gateway",
-    )?;
+        ]
+        .iter()
+        .map(|arg| (*arg).to_owned()),
+    );
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    docker(&refs, "failed to start the berth gateway")?;
     Ok(GatewayState::Started)
 }
 
@@ -263,10 +274,10 @@ fn listener_owner(port: u16) -> Option<String> {
 
 /// The gateway runs as the user that owns the berth home, so files it writes
 /// (the CA) stay owned by that user.
-fn owner_ids(dir: &Path) -> Result<String> {
+fn owner_ids(dir: &Path) -> Result<(u32, u32)> {
     let metadata =
         std::fs::metadata(dir).with_context(|| format!("failed to inspect {}", dir.display()))?;
-    Ok(format!("{}:{}", metadata.uid(), metadata.gid()))
+    Ok((metadata.uid(), metadata.gid()))
 }
 
 fn docker(args: &[&str], context: &str) -> Result<()> {

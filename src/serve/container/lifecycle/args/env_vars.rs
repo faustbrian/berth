@@ -104,7 +104,10 @@ fn append_domain_host_gateway_mappings(
     let mut local_suffixes = BTreeSet::new();
 
     // The instance's own routes resolve to the gateway through its network
-    // aliases; only other instances' routes need the host gateway.
+    // aliases for resolvers that consult DNS; only other instances' routes
+    // need the host gateway. libcurl (PHP's HTTP clients) resolves every
+    // `*.localhost` name to loopback itself and never sees either, so
+    // in-container clients use service names or swarm endpoints instead.
     for domain in target.resolved_domains() {
         if let Some(host) = normalize_hostname(domain)
             && let Some(suffix) = hostname_suffix(&host)
