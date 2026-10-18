@@ -74,15 +74,18 @@ case "$1" in
     case "$*" in *"--entrypoint printenv"*) echo /var/lib/postgresql/data; exit 0 ;; esac
     case "$*" in *"--entrypoint sh"*) cat > "$S/acl-seed"; exit 0 ;; esac
     name=""; prev=""; : > "$S/labels"
+    net=""
     for arg in "$@"; do
       [ "$prev" = "--name" ] && name="$arg"
       [ "$prev" = "--label" ] && echo "$arg" >> "$S/labels"
+      [ "$prev" = "--network" ] && net="$arg"
       prev="$arg"
     done
     mkdir -p "$S/c"; mv "$S/labels" "$S/c/$name"; echo "$prev" > "$S/img-$name"
+    [ -n "$net" ] && { mkdir -p "$S/att/$name"; : > "$S/att/$name/$net"; }
     [ -n "$POSTGRES_PASSWORD" ] && echo "set" > "$S/run-env-$name"
     exit 0 ;;
-  rm|stop|start|kill|pause|unpause) [ "$1" = rm ] && for arg in "$@"; do rm -f "$S/c/$arg"; done; exit 0 ;;
+  rm|stop|start|kill|pause|unpause) [ "$1" = rm ] && for arg in "$@"; do rm -f "$S/c/$arg"; rm -rf "$S/att/$arg"; done; exit 0 ;;
   ps)
     case "$*" in
       *network=*"label=dev.berth.managed=true"*)
@@ -127,7 +130,7 @@ case "$1" in
           [ -f "$f" ] || continue
           printf '%s"%s":{"Aliases":[' "$sep" "$(basename "$f")"; asep=""
           while read -r a; do printf '%s"%s"' "$asep" "$a"; asep=","; done < "$f"
-          printf ',"%s","0123456789ab"]}' "$name"; sep=","
+          printf '%s"%s","0123456789ab"]}' "$asep" "$name"; sep=","
         done
         printf '}' ;;
       *dev.berth.shared.fingerprint*)
@@ -195,9 +198,12 @@ impl Host {
         for dir in ["bin", "state/c", "home", "user-home"] {
             std::fs::create_dir_all(base.join(dir)).expect("fixture dir");
         }
-        let docker = base.join("bin/docker");
-        std::fs::write(&docker, FAKE_DOCKER).expect("fake docker");
-        std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        // The same fake answers as `podman`, for runs with BERTH_ENGINE=podman.
+        for engine in ["docker", "podman"] {
+            let path = base.join("bin").join(engine);
+            std::fs::write(&path, FAKE_DOCKER).expect("fake engine");
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        }
         Self {
             base,
             ports: free_ports(),
@@ -1466,5 +1472,106 @@ fn commands_of_the_callers_choosing_never_run_in_a_shared_server() {
             && line.contains("psql")),
         "{}",
         host.calls()
+    );
+}
+
+#[test]
+fn on_podman_the_server_and_gateway_start_on_a_network_instances_can_join() {
+    // Rootless Podman gives a container started without `--network` its
+    // own slirp4netns or pasta stack, and `network connect` then fails
+    // ("slirp4netns" is not supported: invalid network mode).
+    let host = Host::new("podman-net");
+    let a = host.checkout("a", PROJECT);
+    let up = host
+        .command(&a, &["up", "--no-wait"], "", "")
+        .env("BERTH_ENGINE", "podman")
+        .output()
+        .expect("run berth");
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    let calls = host.calls();
+    for (what, marker) in [
+        ("shared server", "berth_shared_postgres_"),
+        ("gateway", "caddy run"),
+    ] {
+        let run = calls
+            .lines()
+            .find(|line| line.starts_with("run ") && line.contains(marker));
+        assert!(
+            run.is_some_and(|run| run.contains("--network podman")),
+            "{what}: {calls}"
+        );
+    }
+    let docker = Host::new("docker-net");
+    let b = docker.checkout("b", PROJECT);
+    docker.ok(&b, &["up", "--no-wait"]);
+    assert!(
+        !docker.calls().contains("--network podman"),
+        "{}",
+        docker.calls()
+    );
+}
+
+#[test]
+fn on_podman_a_server_created_without_its_network_is_recreated_keeping_its_volume() {
+    // A server an earlier berth started with no `--network` keeps rootless
+    // Podman's private stack and can never be attached to an instance.
+    let host = Host::new("podman-heal");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    // On its private stack it reports no networks: every attach failed.
+    std::fs::remove_dir_all(host.base.join("state/att").join(&server)).expect("detach");
+    host.clear();
+    let up = host
+        .command(&a, &["up", "--no-wait"], "", "")
+        .env("BERTH_ENGINE", "podman")
+        .output()
+        .expect("run berth");
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    let calls = host.calls();
+    let lines: Vec<&str> = calls.lines().collect();
+    let removed = lines
+        .iter()
+        .position(|line| line.starts_with("rm -f") && line.split(' ').any(|word| word == server));
+    let recreated = lines.iter().position(|line| {
+        line.starts_with("run -d") && line.contains(&server) && line.contains("--network podman")
+    });
+    assert!(
+        removed.is_some() && recreated.is_some() && removed < recreated,
+        "{calls}"
+    );
+    assert!(
+        !calls.lines().any(|line| line.starts_with("volume rm")),
+        "the server's data survives: {calls}"
+    );
+    assert!(
+        !calls
+            .lines()
+            .any(|line| line.starts_with("volume create") && line.contains(&server)),
+        "an existing volume is reused, not created again: {calls}"
+    );
+}
+
+#[test]
+fn on_podman_a_server_on_any_network_is_kept() {
+    // A server on a bridge (even one not named `podman`) attaches fine;
+    // recreating it would detach every other instance.
+    let host = Host::new("podman-keep");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    host.clear();
+    let up = host
+        .command(&a, &["up", "--no-wait"], "", "")
+        .env("BERTH_ENGINE", "podman")
+        .output()
+        .expect("run berth");
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    let calls = host.calls();
+    assert!(
+        !calls
+            .lines()
+            .any(|line| line.starts_with("rm -f") && line.split(' ').any(|word| word == server)),
+        "{calls}"
     );
 }

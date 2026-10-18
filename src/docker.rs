@@ -281,9 +281,13 @@ mod redact;
 mod secret_env;
 pub(crate) use mysql_program::{MysqlProgram, is_mariadb_image, mysql_program};
 pub(crate) use redact::{redact_known_secrets, register_secret};
+mod attachable_network;
+pub(crate) use attachable_network::{attachable_network_args, is_engine_default_network};
 mod scheduler;
 mod tmpfs_options;
+mod volume_exists;
 pub(crate) use tmpfs_options::engine_tmpfs_options;
+pub(crate) use volume_exists::volume_exists;
 mod up;
 
 pub(crate) use child_exit::{

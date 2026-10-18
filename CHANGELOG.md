@@ -17,6 +17,13 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- On Podman, shared servers and the gateway start on Podman's `podman`
+  bridge network: rootless Podman otherwise gives them a private
+  slirp4netns or pasta stack, and attaching them to an instance network
+  failed with `"slirp4netns" is not supported: invalid network mode`.
+  `berth gc` ignores that network when deciding whether a server is unused.
+  A server an earlier berth started without it is recreated by the next
+  `up`, keeping its data volume and admin secret.
 - Parallel `up`s that need the same missing derived app image build it once:
   the first process builds under a per-image host lock and the others reuse
   it, instead of every agent on a cold cache compiling the same PHP

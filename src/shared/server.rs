@@ -117,7 +117,14 @@ pub(super) fn ensure_running(target: &SharedTarget) -> Result<()> {
                     empty_dash(&state.fingerprint)
                 );
             }
-            if !state.running {
+            if super::server_network::needs_attachable_recreation(&target.server)? {
+                // Its data volume and admin secret are kept and reused.
+                docker(
+                    &["rm", "-f", &target.server],
+                    "failed to replace the shared server",
+                )?;
+                create(target, &installation)?;
+            } else if !state.running {
                 docker(
                     &["start", &target.server],
                     "failed to start the shared server",
@@ -150,13 +157,16 @@ fn create(target: &SharedTarget, installation: &str) -> Result<()> {
     ensure_image(&target.image)?;
     let secret = admin_secret(target)?;
     let volume = format!("{}-data", target.server);
-    let mut create_volume = vec!["volume".to_owned(), "create".to_owned()];
-    create_volume.extend(labels(target, installation));
-    create_volume.push(volume.clone());
-    docker_owned(
-        &create_volume,
-        "failed to create the shared server's volume",
-    )?;
+    // A recreated server keeps the volume it had.
+    if !crate::docker::volume_exists(&volume)? {
+        let mut create_volume = vec!["volume".to_owned(), "create".to_owned()];
+        create_volume.extend(labels(target, installation));
+        create_volume.push(volume.clone());
+        docker_owned(
+            &create_volume,
+            "failed to create the shared server's volume",
+        )?;
+    }
 
     let mut run = vec![
         "run".to_owned(),
@@ -167,6 +177,8 @@ fn create(target: &SharedTarget, installation: &str) -> Result<()> {
         "unless-stopped".to_owned(),
     ];
     run.extend(labels(target, installation));
+    // Instance networks are attached after it starts.
+    run.extend(crate::docker::attachable_network_args());
     let password_env = engine::server_password_env(target.engine);
     // The secret is passed by name from berth's environment, so it never
     // appears in berth's own argv or in `docker run`'s.
@@ -254,7 +266,8 @@ fn image_pgdata(image: &str, installation: &str) -> Result<String> {
 }
 
 /// Writes the server's initial ACL file (the admin's password hash) into
-/// its new volume, from stdin, before the server first starts.
+/// its volume, from stdin, before the server first starts; a volume that
+/// already holds one keeps it.
 fn seed_acl_file(
     target: &SharedTarget,
     volume: &str,
@@ -275,7 +288,7 @@ fn seed_acl_file(
         "sh".to_owned(),
         target.image.clone(),
         "-c".to_owned(),
-        format!("cat > {}", super::redis::ACL_FILE),
+        super::acl_seed_script::acl_seed_script(super::redis::ACL_FILE),
     ]);
     let mut child = Command::new(crate::docker::docker_command())
         .args(&args)

@@ -95,9 +95,9 @@ fn attached_networks(server: &str) -> Result<Vec<String>> {
         .as_object()
         .map(|map| {
             map.keys()
-                // The default bridge carries no instance; the server joins
-                // it when created.
-                .filter(|name| name.as_str() != "bridge")
+                // The engine's default network carries no instance; the
+                // server joins it when created.
+                .filter(|name| !crate::docker::is_engine_default_network(name))
                 .cloned()
                 .collect()
         })

@@ -20,7 +20,7 @@ pub(crate) const GATEWAY_IMAGE: &str =
 /// (8.x FI-40's compatibility revision).
 const SPEC_LABEL: &str = "dev.berth.gateway.spec";
 /// Bump when the gateway's `docker run` flags change.
-const SPEC_REVISION: u32 = 2;
+const SPEC_REVISION: u32 = 3;
 
 /// Gateway state directories under the berth home.
 pub(crate) struct GatewayDirs {
@@ -136,6 +136,8 @@ pub(crate) fn ensure_gateway(
     .map(|arg| (*arg).to_owned())
     .collect();
     args.extend(user);
+    // Instance networks are attached after it starts.
+    args.extend(crate::docker::attachable_network_args());
     args.extend(
         [
             "--cap-drop",

@@ -25,11 +25,7 @@ pub(super) fn ensure_labeled_volumes(service: &ServiceConfig, container_name: &s
                 "volume {volume} belongs to another berth installation; use another --instance"
             );
         }
-        let inspected = crate::docker::run_docker_output(
-            &["volume", "inspect", "--format", "{{.Name}}", &volume],
-            "failed to inspect a data volume",
-        )?;
-        if inspected.status.success() {
+        if crate::docker::volume_exists(&volume)? {
             continue;
         }
         let mut args = vec!["volume".to_owned(), "create".to_owned()];
