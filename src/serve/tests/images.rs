@@ -53,6 +53,8 @@ fn derived_dockerfile_can_include_js_tooling() {
     assert!(rendered.contains("ghostscript"));
     assert!(rendered.contains("/usr/local/bin/mysqldump"));
     assert!(rendered.contains("/usr/local/bin/mysql"));
+    // Podman 4.9's builder has no heredoc support.
+    assert!(!rendered.contains("<<"), "{rendered}");
     assert!(rendered.contains("--column-statistics=0|--set-gtid-purged=OFF"));
     assert!(rendered.contains("--ssl-mode=DISABLED"));
     assert!(rendered.contains("postgresql-client"));

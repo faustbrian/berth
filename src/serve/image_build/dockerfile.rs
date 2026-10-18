@@ -46,14 +46,19 @@ pub(super) fn render_derived_dockerfile(
         );
     }
 
-    dockerfile.push_str(
-        &format!(
-            "RUN cat <<'EOF' >/usr/local/bin/mysqldump\n#!/usr/bin/env bash\nset -euo pipefail\n\nBERTH_SQL_CLIENT_FLAVOR={sql_client_flavor}\nreal_mysqldump=\"/usr/bin/mysqldump\"\nif [[ ! -x \"$real_mysqldump\" ]]; then\n  real_mysqldump=\"$(command -v mariadb-dump || command -v mysqldump)\"\nfi\n\nsanitized=()\nresult_file=\"\"\nfor arg in \"$@\"; do\n  case \"$arg\" in\n    --column-statistics=0|--set-gtid-purged=OFF)\n      continue\n      ;;\n    --result-file=*)\n      result_file=\"${{arg#--result-file=}}\"\n      ;;\n  esac\n  sanitized+=(\"$arg\")\ndone\n\nstderr_file=\"$(mktemp)\"\nif \"$real_mysqldump\" \"${{sanitized[@]}}\" 2>\"$stderr_file\"; then\n  if [[ \"$BERTH_SQL_CLIENT_FLAVOR\" == \"mysql\" && -n \"$result_file\" && -f \"$result_file\" ]]; then\n    sed -i '/^\\/\\*M\\!.*\\*\\/;*$/d' \"$result_file\"\n  fi\n  rm -f \"$stderr_file\"\n  exit 0\nfi\nstatus=$?\n\nif grep -qi \"self-signed certificate in certificate chain\" \"$stderr_file\"; then\n  if \"$real_mysqldump\" --help 2>/dev/null | grep -q -- \"--ssl-mode\"; then\n    \"$real_mysqldump\" --ssl-mode=DISABLED \"${{sanitized[@]}}\"\n  else\n    \"$real_mysqldump\" --skip-ssl \"${{sanitized[@]}}\"\n  fi\n  retry_status=$?\n  if [[ \"$BERTH_SQL_CLIENT_FLAVOR\" == \"mysql\" && -n \"$result_file\" && -f \"$result_file\" ]]; then\n    sed -i '/^\\/\\*M\\!.*\\*\\/;*$/d' \"$result_file\"\n  fi\n  rm -f \"$stderr_file\"\n  exit \"$retry_status\"\nfi\n\ncat \"$stderr_file\" >&2\nrm -f \"$stderr_file\"\nexit \"$status\"\nEOF\nRUN chmod +x /usr/local/bin/mysqldump\n"
-        ),
-    );
-    dockerfile.push_str(
-        "RUN cat <<'EOF' >/usr/local/bin/mysql\n#!/usr/bin/env bash\nset -euo pipefail\n\nreal_mysql=\"/usr/bin/mysql\"\nif [[ ! -x \"$real_mysql\" ]]; then\n  real_mysql=\"$(command -v mariadb || command -v mysql)\"\nfi\n\nstderr_file=\"$(mktemp)\"\nif \"$real_mysql\" \"$@\" 2>\"$stderr_file\"; then\n  rm -f \"$stderr_file\"\n  exit 0\nfi\nstatus=$?\n\nif grep -qi \"self-signed certificate in certificate chain\" \"$stderr_file\"; then\n  if \"$real_mysql\" --help 2>/dev/null | grep -q -- \"--ssl-mode\"; then\n    \"$real_mysql\" --ssl-mode=DISABLED \"$@\"\n  else\n    \"$real_mysql\" --skip-ssl \"$@\"\n  fi\n  retry_status=$?\n  rm -f \"$stderr_file\"\n  exit \"$retry_status\"\nfi\n\ncat \"$stderr_file\" >&2\nrm -f \"$stderr_file\"\nexit \"$status\"\nEOF\nRUN chmod +x /usr/local/bin/mysql\n",
-    );
+    // No heredocs: Podman 4.9's builder (Buildah 1.33, Ubuntu 24.04) reads
+    // each heredoc line as an instruction (`Unknown instruction: "SET"`).
+    dockerfile.push_str(&format!(
+        "RUN {}\n",
+        install_script_command(
+            "/usr/local/bin/mysqldump",
+            &mysqldump_wrapper(sql_client_flavor)
+        )
+    ));
+    dockerfile.push_str(&format!(
+        "RUN {}\n",
+        install_script_command("/usr/local/bin/mysql", MYSQL_WRAPPER)
+    ));
 
     if !extensions.is_empty() {
         dockerfile.push_str(&format!(
@@ -211,4 +216,60 @@ fn extract_node_major(version: &str) -> Option<&str> {
     let numeric = trimmed.get(..prefix_len)?;
     let major = numeric.split('.').next()?;
     (!major.is_empty()).then_some(major)
+}
+
+/// The `mysqldump` wrapper: drops options the installed client rejects and
+/// retries without TLS against a self-signed server.
+fn mysqldump_wrapper(sql_client_flavor: &str) -> String {
+    format!(
+        "#!/usr/bin/env bash\nset -euo pipefail\n\nBERTH_SQL_CLIENT_FLAVOR={sql_client_flavor}\nreal_mysqldump=\"/usr/bin/mysqldump\"\nif [[ ! -x \"$real_mysqldump\" ]]; then\n  real_mysqldump=\"$(command -v mariadb-dump || command -v mysqldump)\"\nfi\n\nsanitized=()\nresult_file=\"\"\nfor arg in \"$@\"; do\n  case \"$arg\" in\n    --column-statistics=0|--set-gtid-purged=OFF)\n      continue\n      ;;\n    --result-file=*)\n      result_file=\"${{arg#--result-file=}}\"\n      ;;\n  esac\n  sanitized+=(\"$arg\")\ndone\n\nstderr_file=\"$(mktemp)\"\nif \"$real_mysqldump\" \"${{sanitized[@]}}\" 2>\"$stderr_file\"; then\n  if [[ \"$BERTH_SQL_CLIENT_FLAVOR\" == \"mysql\" && -n \"$result_file\" && -f \"$result_file\" ]]; then\n    sed -i '/^\\/\\*M\\!.*\\*\\/;*$/d' \"$result_file\"\n  fi\n  rm -f \"$stderr_file\"\n  exit 0\nfi\nstatus=$?\n\nif grep -qi \"self-signed certificate in certificate chain\" \"$stderr_file\"; then\n  if \"$real_mysqldump\" --help 2>/dev/null | grep -q -- \"--ssl-mode\"; then\n    \"$real_mysqldump\" --ssl-mode=DISABLED \"${{sanitized[@]}}\"\n  else\n    \"$real_mysqldump\" --skip-ssl \"${{sanitized[@]}}\"\n  fi\n  retry_status=$?\n  if [[ \"$BERTH_SQL_CLIENT_FLAVOR\" == \"mysql\" && -n \"$result_file\" && -f \"$result_file\" ]]; then\n    sed -i '/^\\/\\*M\\!.*\\*\\/;*$/d' \"$result_file\"\n  fi\n  rm -f \"$stderr_file\"\n  exit \"$retry_status\"\nfi\n\ncat \"$stderr_file\" >&2\nrm -f \"$stderr_file\"\nexit \"$status\"\n"
+    )
+}
+
+/// The `mysql` wrapper: retries without TLS against a self-signed server.
+const MYSQL_WRAPPER: &str = "#!/usr/bin/env bash\nset -euo pipefail\n\nreal_mysql=\"/usr/bin/mysql\"\nif [[ ! -x \"$real_mysql\" ]]; then\n  real_mysql=\"$(command -v mariadb || command -v mysql)\"\nfi\n\nstderr_file=\"$(mktemp)\"\nif \"$real_mysql\" \"$@\" 2>\"$stderr_file\"; then\n  rm -f \"$stderr_file\"\n  exit 0\nfi\nstatus=$?\n\nif grep -qi \"self-signed certificate in certificate chain\" \"$stderr_file\"; then\n  if \"$real_mysql\" --help 2>/dev/null | grep -q -- \"--ssl-mode\"; then\n    \"$real_mysql\" --ssl-mode=DISABLED \"$@\"\n  else\n    \"$real_mysql\" --skip-ssl \"$@\"\n  fi\n  retry_status=$?\n  rm -f \"$stderr_file\"\n  exit \"$retry_status\"\nfi\n\ncat \"$stderr_file\" >&2\nrm -f \"$stderr_file\"\nexit \"$status\"\n";
+
+/// A shell command that writes `content` to `path` as an executable, one
+/// single-quoted `printf` argument per line, so the Dockerfile instruction
+/// stays on one line.
+fn install_script_command(path: &str, content: &str) -> String {
+    let lines: Vec<String> = content
+        .lines()
+        .map(|line| format!("'{}'", line.replace('\'', r"'\''")))
+        .collect();
+    format!(
+        "printf '%s\\n' {} > {path} && chmod +x {path}",
+        lines.join(" ")
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MYSQL_WRAPPER, install_script_command, mysqldump_wrapper};
+
+    #[test]
+    fn scripts_install_byte_for_byte_without_heredocs() {
+        let dir = std::env::temp_dir().join(format!("berth-install-script-{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&dir));
+        std::fs::create_dir_all(&dir).expect("dir");
+        for (name, content) in [
+            ("mysqldump", mysqldump_wrapper("mysql")),
+            ("mysql", MYSQL_WRAPPER.to_owned()),
+        ] {
+            let path = dir.join(name);
+            let command = install_script_command(&path.display().to_string(), &content);
+            assert!(!command.contains('\n'), "one Dockerfile line: {command}");
+            let status = std::process::Command::new("sh")
+                .args(["-c", &command])
+                .status()
+                .expect("sh");
+            assert!(status.success());
+            assert_eq!(std::fs::read_to_string(&path).expect("script"), content);
+            let mode = std::os::unix::fs::PermissionsExt::mode(
+                &std::fs::metadata(&path).expect("meta").permissions(),
+            );
+            assert_eq!(mode & 0o111, 0o111, "{name} is executable");
+        }
+        drop(std::fs::remove_dir_all(&dir));
+    }
 }

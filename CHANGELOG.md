@@ -17,6 +17,10 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Derived app images build with Podman 4.9 (Ubuntu 24.04's Buildah 1.33),
+  which has no heredoc support and failed with `Unknown instruction: "SET"`:
+  the MySQL client wrapper scripts are written with one-line `printf`
+  commands instead.
 - On Podman, shared servers and the gateway start on Podman's `podman`
   bridge network: rootless Podman otherwise gives them a private
   slirp4netns or pasta stack, and attaching them to an instance network
