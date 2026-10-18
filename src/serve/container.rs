@@ -10,11 +10,9 @@ mod checkout_ownership;
 mod container_user;
 mod least_privilege;
 mod lifecycle;
-mod peer_names;
 pub(crate) use container_user::user_args_for;
 pub(crate) use least_privilege::least_privilege_run_args;
 pub(crate) use lifecycle::container_env_pairs;
-pub(crate) use peer_names::wait_for_peer_names;
 mod run_config;
 
 /// Ensures the serve container is running for a target.

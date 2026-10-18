@@ -64,16 +64,23 @@ pub(super) fn interactive_client_args(service: &ServiceConfig) -> Vec<String> {
                 .unwrap_or_else(|| "postgres".to_owned()),
             service.database.clone().unwrap_or_else(|| "app".to_owned()),
         ],
-        Driver::Mysql => vec![
-            crate::docker::mysql_program(&service.image, crate::docker::MysqlProgram::Client)
-                .to_owned(),
-            "-u".to_owned(),
-            service
-                .username
-                .clone()
-                .unwrap_or_else(|| "root".to_owned()),
-            service.database.clone().unwrap_or_else(|| "app".to_owned()),
-        ],
+        Driver::Mysql => {
+            [
+                crate::docker::mysql_program(&service.image, crate::docker::MysqlProgram::Client)
+                    .to_owned(),
+            ]
+            .into_iter()
+            .chain(crate::docker::MYSQL_LOCAL_TCP.map(ToOwned::to_owned))
+            .chain([
+                "-u".to_owned(),
+                service
+                    .username
+                    .clone()
+                    .unwrap_or_else(|| "root".to_owned()),
+                service.database.clone().unwrap_or_else(|| "app".to_owned()),
+            ])
+            .collect()
+        }
         Driver::Redis | Driver::Valkey | Driver::Dragonfly => {
             let mut command = vec![
                 "redis-cli".to_owned(),
@@ -135,16 +142,23 @@ pub(super) fn piped_client_args(service: &ServiceConfig) -> Result<Vec<String>> 
                 .unwrap_or_else(|| "postgres".to_owned()),
             service.database.clone().unwrap_or_else(|| "app".to_owned()),
         ]),
-        Driver::Mysql => Ok(vec![
-            crate::docker::mysql_program(&service.image, crate::docker::MysqlProgram::Client)
-                .to_owned(),
-            "-u".to_owned(),
-            service
-                .username
-                .clone()
-                .unwrap_or_else(|| "root".to_owned()),
-            service.database.clone().unwrap_or_else(|| "app".to_owned()),
-        ]),
+        Driver::Mysql => {
+            Ok([
+                crate::docker::mysql_program(&service.image, crate::docker::MysqlProgram::Client)
+                    .to_owned(),
+            ]
+            .into_iter()
+            .chain(crate::docker::MYSQL_LOCAL_TCP.map(ToOwned::to_owned))
+            .chain([
+                "-u".to_owned(),
+                service
+                    .username
+                    .clone()
+                    .unwrap_or_else(|| "root".to_owned()),
+                service.database.clone().unwrap_or_else(|| "app".to_owned()),
+            ])
+            .collect())
+        }
         Driver::Sqlserver => Ok(vec![
             "sqlcmd".to_owned(),
             "-S".to_owned(),
@@ -278,6 +292,9 @@ mod tests {
             interactive_client_args(&mysql),
             vec![
                 "mysql".to_owned(),
+                "--protocol=tcp".to_owned(),
+                "-h".to_owned(),
+                "127.0.0.1".to_owned(),
                 "-u".to_owned(),
                 "root".to_owned(),
                 "db".to_owned()

@@ -281,7 +281,7 @@ mod ops;
 mod policy;
 mod redact;
 mod secret_env;
-pub(crate) use mysql_program::{MysqlProgram, is_mariadb_image, mysql_program};
+pub(crate) use mysql_program::{MYSQL_LOCAL_TCP, MysqlProgram, is_mariadb_image, mysql_program};
 pub(crate) use redact::{redact_known_secrets, register_secret};
 mod attachable_network;
 pub(crate) use attachable_network::{attachable_network_args, is_engine_default_network};

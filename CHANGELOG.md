@@ -37,11 +37,10 @@ All notable changes to this project are documented in this file.
 
 - `berth gc` removes a shared MariaDB server nothing uses: the official
   image's own `healthcheck` user no longer counts as a tenant.
-- On Podman, an app container runs its command only once the service names
-  it was given (`DB_HOST`, `REDIS_HOST` …) that are already attached to its
-  network resolve inside it, so a first connection no longer fails with
-  "Temporary failure in name resolution" while Podman's DNS server catches
-  up; after 30 s `up` fails naming them.
+- Health checks, `exec`, `dump` and `restore` reach MySQL and MariaDB over
+  TCP on the container's loopback instead of the default socket: on
+  rootless Docker and Podman mysqld ran without the image's `/etc/my.cnf`,
+  so its socket was elsewhere and `up --wait` timed out.
 - The MariaDB tenant client no longer warns of an "insecure passwordless
   login" (its password comes from `MYSQL_PWD`; the server's certificate is
   self-signed either way).

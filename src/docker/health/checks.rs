@@ -90,7 +90,20 @@ fn health_check_mysql(service: &ServiceConfig, container_name: &str) -> Result<b
 }
 
 fn mysql_ping(service: &ServiceConfig, container_name: &str) -> Result<bool> {
-    let args = vec![
+    docker_exec_succeeds_owned(
+        &mysql_ping_args(service, container_name),
+        "mysql health check command failed",
+    )
+}
+
+/// `mysqladmin ping` over TCP to the container's own loopback, as berth's
+/// admin connection does: the server's socket path is not fixed (on rootless
+/// Docker and Podman in CI, mysqld ignored the image's `/etc/my.cnf` and
+/// listened on `/var/lib/mysql/mysql.sock`, not the client's default), and
+/// the image's temporary init server listens on the socket only, so TCP
+/// never mistakes it for the real one.
+fn mysql_ping_args(service: &ServiceConfig, container_name: &str) -> Vec<String> {
+    vec![
         "exec".to_owned(),
         "-e".to_owned(),
         format!(
@@ -100,11 +113,13 @@ fn mysql_ping(service: &ServiceConfig, container_name: &str) -> Result<bool> {
         container_name.to_owned(),
         crate::docker::mysql_program(&service.image, crate::docker::MysqlProgram::Admin).to_owned(),
         "ping".to_owned(),
+        crate::docker::MYSQL_LOCAL_TCP[0].to_owned(),
+        crate::docker::MYSQL_LOCAL_TCP[1].to_owned(),
+        crate::docker::MYSQL_LOCAL_TCP[2].to_owned(),
         "-u".to_owned(),
         service.username.as_deref().unwrap_or("root").to_owned(),
         "--silent".to_owned(),
-    ];
-    docker_exec_succeeds_owned(&args, "mysql health check command failed")
+    ]
 }
 
 fn health_check_horizon(container_name: &str) -> Result<bool> {
@@ -330,6 +345,15 @@ mod tests {
             let service = service(Driver::Mongodb, 3306);
             assert!(!check_service_health(&service, "app-container").expect("failed mongo check"));
         });
+    }
+
+    #[test]
+    fn mysql_is_pinged_over_tcp_whatever_its_socket_path() {
+        let args = super::mysql_ping_args(&service(Driver::Mysql, 3306), "db").join(" ");
+        assert!(
+            args.contains("ping --protocol=tcp -h 127.0.0.1 -u"),
+            "{args}"
+        );
     }
 
     #[test]

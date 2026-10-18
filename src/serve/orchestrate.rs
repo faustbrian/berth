@@ -53,7 +53,6 @@ pub fn run(options: RunServeOptions<'_>) -> Result<()> {
         options.project_root,
         options.injected_env,
     )?;
-    crate::serve::container::wait_for_peer_names(options.target, options.injected_env)?;
     if options.trust_container_ca {
         trust_inner_container_ca(options.target, options.detached)?;
     }

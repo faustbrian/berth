@@ -92,9 +92,9 @@ pub(super) fn run_mysql_exec(
         format!("MYSQL_PWD={}", ctx.password),
         ctx.container_name.clone(),
         crate::docker::mysql_program(&ctx.image, program).to_owned(),
-        "-u".to_owned(),
-        ctx.username.clone(),
     ];
+    command.extend(crate::docker::MYSQL_LOCAL_TCP.map(ToOwned::to_owned));
+    command.extend(["-u".to_owned(), ctx.username.clone()]);
     command.extend(args.iter().cloned());
     run_docker_command_owned(&command, context)
 }
@@ -267,7 +267,7 @@ mod tests {
 
         assert_eq!(
             String::from_utf8_lossy(&output.stdout).trim(),
-            "exec -e MYSQL_PWD app mysql -u root -e select 1",
+            "exec -e MYSQL_PWD app mysql --protocol=tcp -h 127.0.0.1 -u root -e select 1",
             "the password never reaches an argument"
         );
     }

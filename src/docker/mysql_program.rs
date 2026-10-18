@@ -59,6 +59,13 @@ pub(crate) fn is_mariadb_image(image: &str) -> bool {
         .is_some_and(|name| name.contains("mariadb"))
 }
 
+/// How a MySQL-family client inside a server's own container reaches it:
+/// over TCP to the loopback. The socket path is not fixed (rootless Docker
+/// and Podman in CI ran mysqld without the image's `/etc/my.cnf`, on
+/// `/var/lib/mysql/mysql.sock` instead of the clients' default), and the
+/// image's temporary init server listens on the socket only.
+pub(crate) const MYSQL_LOCAL_TCP: [&str; 3] = ["--protocol=tcp", "-h", "127.0.0.1"];
+
 #[cfg(test)]
 mod tests {
     use super::{MysqlProgram, is_mariadb_image, mysql_program};
