@@ -187,6 +187,20 @@ cleanup() {
   stop_background
   local id attempt
   id="$(installation)"
+  if [[ -n "$id" ]] && (( status != 0 )); then
+    # What a failed run leaves for diagnosis: every labeled container's
+    # state and last log lines, and each network's members.
+    mkdir -p "$OUTPUT/engine"
+    "$ENGINE" ps -a --filter "label=dev.berth.installation=$id" --format '{{.Names}}' |
+      while read -r container; do
+        "$ENGINE" inspect --format '{{json .State}}' "$container" > "$OUTPUT/engine/$container.state" 2>&1
+        "$ENGINE" logs --tail 200 "$container" > "$OUTPUT/engine/$container.log" 2>&1
+      done
+    "$ENGINE" network ls -q --filter "label=dev.berth.installation=$id" |
+      while read -r network; do
+        "$ENGINE" network inspect "$network" > "$OUTPUT/engine/network-$network.json" 2>&1
+      done
+  fi
   if [[ -n "$id" ]]; then
     # Containers first (they hold networks and volumes); repeat until
     # nothing labeled is left or a few passes did not help.
