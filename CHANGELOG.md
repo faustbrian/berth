@@ -52,6 +52,8 @@ All notable changes to this project are documented in this file.
   five).
 - A socket-policy test no longer treats the shared temp directory as its
   project, which failed while Podman's machine API socket lived there.
+- The remaining exit-code tests run berth under a berth home of their own;
+  two of them wrote lock files into the developer's `~/.berth`.
 
 ### Removed
 
