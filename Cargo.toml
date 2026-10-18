@@ -1,10 +1,10 @@
 [package]
 name = "berth"
-version = "6.0.0"
+version = "9.0.0"
 edition = "2024"
-description = "Zero-BS Laravel workspace orchestrator"
+description = "Disposable, isolated Docker environments for every checkout, built for AI agents"
 license = "MIT"
-repository = "https://github.com/faustbrian/stackctl"
+repository = "https://github.com/faustbrian/berth"
 readme = "README.md"
 keywords = ["laravel", "docker", "workspace", "orchestrator", "cli"]
 categories = ["command-line-utilities", "development-tools"]
