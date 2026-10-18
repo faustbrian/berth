@@ -196,7 +196,10 @@ fn exec_against_a_stopped_or_missing_instance_is_a_berth_failure() {
             .env("FAKE_STATUS", status)
             .env("FAKE_MODE", "exit")
             .env("FAKE_CODE", "1")
-            .env("BERTH_HOME", fixture.root.parent().expect("base").join("home"))
+            .env(
+                "BERTH_HOME",
+                fixture.root.parent().expect("base").join("home"),
+            )
             .env_remove("BERTH_INSTANCE")
             .env_remove("BERTH_ENGINE")
             .output()
@@ -242,7 +245,10 @@ fn a_failing_setup_shim_is_a_berth_failure_not_the_commands_exit() {
         .env("FAKE_MODE", "exit")
         .env("FAKE_CODE", "0")
         .env("FAKE_SHIM_FAIL", "1")
-        .env("BERTH_HOME", fixture.root.parent().expect("base").join("home"))
+        .env(
+            "BERTH_HOME",
+            fixture.root.parent().expect("base").join("home"),
+        )
         .env_remove("BERTH_INSTANCE")
         .env_remove("BERTH_ENGINE")
         .output()
