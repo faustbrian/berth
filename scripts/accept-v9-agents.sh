@@ -470,7 +470,8 @@ sample_memory() {
   set +e
   : > "$OUTPUT/memory-samples.txt"
   while true; do
-    memory_bytes >> "$OUTPUT/memory-samples.txt"
+    # `{epoch seconds} {bytes}`: the time shows the sampler covered the run.
+    printf '%s %s\n' "$(date +%s)" "$(memory_bytes)" >> "$OUTPUT/memory-samples.txt"
     sleep 2
   done
 }
@@ -775,11 +776,21 @@ check "berth gc" "$gc_status" 0
 check "objects left after gc" "$(count_labeled_objects)" 0
 
 # The sampler must have covered the run, or the peak below is not the run's
-# peak. A sample takes 2 s plus however long the engine's `stats` needs, which grows
-# with the container count; one per 20 s (and at least three) is the floor.
+# peak. A sample takes 2 s plus however long the engine's `stats` needs, which
+# grows with the container count and while cold image builds load the
+# engine; no stretch of the run may go 120 s without a sample.
 run_seconds="$(sed -n 's/^parallel_run_seconds=//p' "$OUTPUT/metadata.txt")"
-if (( samples < 3 || samples * 20 < run_seconds )); then
-  log "  only $samples memory samples over ${run_seconds}s"
+largest_gap="$(awk -v start="$run_started" -v end="$((run_started + run_seconds))" '
+  { if ($1 >= start && $1 <= end) times[++n] = $1 }
+  END {
+    if (n == 0) { print end - start; exit }
+    gap = times[1] - start; if (end - times[n] > gap) gap = end - times[n]
+    for (i = 2; i <= n; i++) if (times[i] - times[i - 1] > gap) gap = times[i] - times[i - 1]
+    print gap
+  }' "$OUTPUT/memory-samples.txt")"
+printf 'memory_sample_largest_gap_seconds=%s\n' "$largest_gap" >> "$OUTPUT/metadata.txt"
+if (( samples < 3 || largest_gap > 120 )); then
+  log "  memory samples left a ${largest_gap}s gap in a ${run_seconds}s run ($samples samples)"
   failures=$((failures + 1))
 fi
 
@@ -791,7 +802,7 @@ percentile() {
 {
   printf 'time_to_ready_p50_ms=%s\n' "$(percentile 50)"
   printf 'time_to_ready_p95_ms=%s\n' "$(percentile 95)"
-  printf 'peak_memory_bytes=%s\n' "$(sort -n "$OUTPUT/memory-samples.txt" | tail -n 1)"
+  printf 'peak_memory_bytes=%s\n' "$(awk '{ print $2 }' "$OUTPUT/memory-samples.txt" | sort -n | tail -n 1)"
   printf 'failures=%s\n' "$failures"
 } | tee "$OUTPUT/results.txt"
 

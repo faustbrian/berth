@@ -18,7 +18,10 @@ All notable changes to this project are documented in this file.
   capability set, serving HTTPS on its published port, writing the
   checkout). It also runs each tenant client (PostgreSQL, MySQL, MariaDB,
   Redis, Valkey) for real. CI runs it on Linux against rootful Docker,
-  rootless Docker and rootless Podman 4.9, and all three pass.
+  rootless Docker and rootless Podman 4.9, and all three pass. Its memory
+  sampler records when each sample was taken and fails a run only when a
+  stretch of it went 120 s unsampled, not when cold image builds slow the
+  engine's `stats` down.
 
 ### Changed
 
