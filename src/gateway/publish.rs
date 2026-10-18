@@ -102,7 +102,7 @@ pub(crate) fn publish_routes(mode: PublishMode<'_>) -> Result<()> {
         for (network, hosts) in &plan.aliases {
             attach(&gateway, network, hosts, attached.get(network))?;
         }
-        if let Err(error) = reload(&gateway, "/etc/berth/caddy.next.json") {
+        if let Err(error) = reload(&gateway, &rendered) {
             drop(std::fs::remove_file(&candidate));
             return Err(error);
         }
@@ -477,26 +477,45 @@ pub(super) fn parse_aliases(json: &[u8]) -> Result<BTreeMap<String, BTreeSet<Str
         .collect())
 }
 
+/// Loads `config` (rendered JSON) into the running gateway.
+///
+/// It goes to Caddy on stdin rather than as a path in the shared config
+/// directory: Podman's macOS VM (libkrun virtiofs, Podman 5.7) keeps a
+/// stale entry for a file the host renamed away, so a recreated
+/// `caddy.next.json` stayed invisible inside the container (18 of 20
+/// write-reload-rename cycles, 2026-10-18).
 fn reload(gateway: &str, config: &str) -> Result<()> {
-    let output = crate::docker::run_docker_output_owned(
+    use std::io::Write as _;
+
+    let mut child = crate::docker::spawn_docker_stdin_stdout_stderr_piped(
         &[
-            "exec".to_owned(),
-            gateway.to_owned(),
-            "caddy".to_owned(),
-            "reload".to_owned(),
-            "--config".to_owned(),
-            config.to_owned(),
-            "--address".to_owned(),
-            "localhost:2019".to_owned(),
+            "exec",
+            "-i",
+            gateway,
+            "caddy",
+            "reload",
+            "--config",
+            "/dev/stdin",
+            "--address",
+            "localhost:2019",
         ],
         "failed to reload the berth gateway",
     )?;
+    let written = child
+        .stdin
+        .take()
+        .context("the gateway reload has no stdin")?
+        .write_all(config.as_bytes());
+    let output = child
+        .wait_with_output()
+        .context("failed to reload the berth gateway")?;
     if !output.status.success() {
         anyhow::bail!(
             "the berth gateway rejected its new configuration: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
+    written.context("failed to send the gateway its new configuration")?;
     Ok(())
 }
 

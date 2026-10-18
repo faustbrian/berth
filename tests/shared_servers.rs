@@ -21,6 +21,8 @@ use std::process::{Command, Output};
 /// (one alias per line). `FAKE_NAMES` lists the databases and roles a server
 /// holds; `FAKE_OWNED` lists `database:owner` pairs on top.
 const FAKE_DOCKER: &str = r#"#!/bin/sh
+# The gateway reload sends its config on stdin; take it all.
+case "$*" in *"caddy reload"*) cat > /dev/null ;; esac
 S="$FAKE_STATE"
 echo "$*" >> "$S/log"
 case "$1 $2" in
@@ -160,7 +162,12 @@ fn free_ports() -> (u16, u16) {
             .create_new(true)
             .open(claims.join(port.to_string()))
             .is_ok();
-        if claimed && std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+        // A connect probe, not a bind: macOS sets close-on-exec on a new socket
+        // only after creating it, so a listener bound here can leak into a
+        // `berth` another test thread spawns at that instant and keep the
+        // port bound, failing that fixture's gateway with "port in use".
+        // A refused connection means nothing listens there.
+        if claimed && std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
             return port;
         }
     };
@@ -242,8 +249,20 @@ impl Host {
             .env("FAKE_OWNED", owned)
             .env("FAKE_KEYS", names)
             .env_remove("BERTH_INSTANCE")
+            .env_remove("BERTH_ENGINE")
             .stdin(std::process::Stdio::null());
         command
+    }
+
+    /// Runs berth and fails the test with its stderr unless it succeeded.
+    fn ok(&self, checkout: &Path, args: &[&str]) -> Output {
+        let output = self.berth(checkout, args);
+        assert!(
+            output.status.success(),
+            "{args:?} failed: {}",
+            text(&output.stderr)
+        );
+        output
     }
 
     fn calls(&self) -> String {
@@ -437,7 +456,7 @@ fn secrets_stay_private_and_out_of_every_docker_argument() {
 fn down_stop_and_rm_leave_the_server_running_for_other_instances() {
     let host = Host::new("down");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let server = host.servers().pop().expect("server");
     for args in [&["stop"][..], &["rm", "--force"][..], &["down"][..]] {
         host.clear();
@@ -472,8 +491,8 @@ fn purge_drops_only_the_instance_tenants_and_their_test_databases() {
     let host = Host::new("purge");
     let a = host.checkout("a", PROJECT);
     let longer = host.checkout("a-b", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
-    assert!(host.berth(&longer, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
+    host.ok(&longer, &["up", "--no-wait"]);
     let mine = env_json(&host, &a)["environment"]["DB_DATABASE"]
         .as_str()
         .expect("tenant")
@@ -532,7 +551,7 @@ fn purge_drops_only_the_instance_tenants_and_their_test_databases() {
 fn a_runtime_environment_gets_its_own_tenant() {
     let host = Host::new("env");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let staging = host.berth(&a, &["up", "--no-wait", "--env", "staging"]);
     assert!(staging.status.success(), "{}", text(&staging.stderr));
     let output = host.berth(&a, &["env", "--json", "--env", "staging"]);
@@ -621,7 +640,7 @@ fn dedicated_isolation_keeps_a_container_of_the_instance_own() {
 fn a_foreign_container_under_the_server_name_is_never_adopted() {
     let host = Host::new("foreign");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let server = host.servers().pop().expect("server");
     std::fs::write(
         host.base.join("state/c").join(&server),
@@ -696,7 +715,7 @@ fn two_shared_services_answer_under_both_names_and_survive_each_other() {
         Some(serde_json::json!("exited")),
         "{rows}"
     );
-    assert!(host.berth(&a, &["down"]).status.success());
+    host.ok(&a, &["down"]);
     assert!(attachment(&host, "berth_shop_a-").is_empty());
 }
 
@@ -704,7 +723,7 @@ fn two_shared_services_answer_under_both_names_and_survive_each_other() {
 fn kill_pause_and_attach_never_reach_the_server() {
     let host = Host::new("kill");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let server = host.servers().pop().expect("server");
     for verb in ["pause", "unpause"] {
         let output = host.berth(&a, &[verb, "--service", "db"]);
@@ -734,7 +753,7 @@ fn kill_pause_and_attach_never_reach_the_server() {
 fn a_whole_purge_detaches_the_server_from_every_environment_network() {
     let host = Host::new("env-purge");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let staging = host.berth(&a, &["up", "--no-wait", "--env", "staging"]);
     assert!(staging.status.success(), "{}", text(&staging.stderr));
     let purge = host.berth(&a, &["down", "--purge"]);
@@ -760,7 +779,7 @@ fn a_whole_purge_detaches_the_server_from_every_environment_network() {
 fn a_purge_drops_databases_the_tenant_made_outside_its_namespace() {
     let host = Host::new("owned");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let tenant = env_json(&host, &a)["environment"]["DB_DATABASE"]
         .as_str()
         .expect("tenant")
@@ -835,7 +854,7 @@ fn commands_before_the_server_exists_do_not_fail_on_it() {
 fn pausing_the_whole_instance_skips_the_shared_server() {
     let host = Host::new("pause-all");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let server = host.servers().pop().expect("server");
     for verb in ["pause", "unpause"] {
         let output = host.berth(&a, &[verb]);
@@ -943,8 +962,8 @@ fn a_mysql_purge_drops_the_instance_schemas_and_users_only() {
     let host = Host::new("mysql-purge");
     let a = host.checkout("a", &mysql_project("mysql:8.4"));
     let b = host.checkout("b", &mysql_project("mysql:8.4"));
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
-    assert!(host.berth(&b, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
+    host.ok(&b, &["up", "--no-wait"]);
     let mine = env_json(&host, &a)["environment"].clone();
     let theirs = env_json(&host, &b)["environment"].clone();
     let (my_db, my_user) = (
@@ -1067,8 +1086,8 @@ fn a_redis_purge_deletes_the_instance_users_and_their_keys_only() {
     let host = Host::new("redis-purge");
     let a = host.checkout("a", REDIS_PROJECT);
     let b = host.checkout("b", REDIS_PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
-    assert!(host.berth(&b, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
+    host.ok(&b, &["up", "--no-wait"]);
     let mine = env_json(&host, &a)["environment"]["REDIS_USERNAME"]
         .as_str()
         .expect("user")
@@ -1118,7 +1137,7 @@ fn a_redis_purge_deletes_the_instance_users_and_their_keys_only() {
 fn each_test_lease_gets_a_tenant_of_its_own() {
     let host = Host::new("lease");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let tenant = env_json(&host, &a)["environment"]["DB_DATABASE"]
         .as_str()
         .expect("tenant")
@@ -1152,7 +1171,7 @@ fn a_killed_test_run_frees_its_slot_for_the_next_run_at_once() {
     use std::os::unix::process::CommandExt;
     let host = Host::new("killed");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let args = ["artisan", "--no-tty", "--non-interactive", "test"];
     let mut first = host.command(&a, &args, "", "");
     first
@@ -1202,9 +1221,9 @@ fn gc(host: &Host, cwd: &Path, names: &str) -> serde_json::Value {
 fn gc_removes_a_shared_server_no_instance_uses_with_its_volume_and_secret() {
     let host = Host::new("gc");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let server = host.servers().pop().expect("server");
-    assert!(host.berth(&a, &["down", "--purge"]).status.success());
+    host.ok(&a, &["down", "--purge"]);
     host.clear();
     let document = gc(&host, &host.base, "");
     assert_eq!(document["servers"][0]["server"], server.as_str());
@@ -1236,8 +1255,8 @@ fn gc_removes_a_shared_server_no_instance_uses_with_its_volume_and_secret() {
 fn gc_refuses_dry_run_and_removes_nothing() {
     let host = Host::new("gc-dry");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
-    assert!(host.berth(&a, &["down", "--purge"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
+    host.ok(&a, &["down", "--purge"]);
     host.clear();
     let output = host.berth_with(&host.base, &["--dry-run", "gc", "--json"], "");
     assert_eq!(output.status.code(), Some(125));
@@ -1251,8 +1270,8 @@ fn gc_keeps_servers_an_instance_uses_or_that_hold_tenants() {
     let host = Host::new("gc-keep");
     let a = host.checkout("a", PROJECT);
     let b = host.checkout("b", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
-    assert!(host.berth(&b, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
+    host.ok(&b, &["up", "--no-wait"]);
     let attached = gc(&host, &host.base, "");
     assert_eq!(attached["servers"][0]["removed"], false);
 
@@ -1267,8 +1286,8 @@ fn gc_keeps_servers_an_instance_uses_or_that_hold_tenants() {
         .as_str()
         .expect("tenant")
         .to_owned();
-    assert!(host.berth(&a, &["down"]).status.success());
-    assert!(host.berth(&b, &["down"]).status.success());
+    host.ok(&a, &["down"]);
+    host.ok(&b, &["down"]);
     let holding = gc(&host, &host.base, &tenant);
     assert_eq!(
         holding["servers"][0]["removed"], false,
@@ -1287,9 +1306,9 @@ fn gc_keeps_servers_an_instance_uses_or_that_hold_tenants() {
 fn gc_keeps_a_stopped_server_it_cannot_inspect_and_never_starts_it() {
     let host = Host::new("gc-stopped");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let server = host.servers().pop().expect("server");
-    assert!(host.berth(&a, &["down", "--purge"]).status.success());
+    host.ok(&a, &["down", "--purge"]);
     std::fs::write(
         host.base.join("state").join(format!("stopped-{server}")),
         b"",
@@ -1319,7 +1338,7 @@ fn a_tenant_that_fails_to_provision_names_its_instance_and_leaves_others_up() {
     let host = Host::new("tenant-fails");
     let a = host.checkout("a", PROJECT);
     let b = host.checkout("b", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let instance_b = env_json(&host, &b)["environment"]["DB_DATABASE"]
         .as_str()
         .expect("tenant of b")
@@ -1347,8 +1366,8 @@ fn a_reset_restore_reprovisions_only_the_instance_tenant() {
     let host = Host::new("reset");
     let a = host.checkout("a", PROJECT);
     let b = host.checkout("b", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
-    assert!(host.berth(&b, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
+    host.ok(&b, &["up", "--no-wait"]);
     let tenant_a = env_json(&host, &a)["environment"]["DB_DATABASE"]
         .as_str()
         .expect("tenant a")
@@ -1401,7 +1420,7 @@ fn a_reset_restore_reprovisions_only_the_instance_tenant() {
 fn commands_of_the_callers_choosing_never_run_in_a_shared_server() {
     let host = Host::new("exec-shared");
     let a = host.checkout("a", PROJECT);
-    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    host.ok(&a, &["up", "--no-wait"]);
     let server = host.servers().pop().expect("server");
     host.clear();
     let attempts: [&[&str]; 4] = [

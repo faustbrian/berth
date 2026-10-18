@@ -113,8 +113,12 @@ jobs:
         run: cargo test --locked --all-targets --all-features -- --test-threads=1
 
   agent-acceptance:
-    name: Agent Acceptance (linux-x86_64, real Docker)
+    name: Agent Acceptance (linux-x86_64, ${{ matrix.engine }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [docker, docker-rootless, podman-rootless]
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
@@ -125,17 +129,46 @@ jobs:
       - name: Build release binary
         run: cargo build --release --locked
 
+      # Ubuntu 24.04 confines unprivileged user namespaces with AppArmor;
+      # rootless engines need them.
+      - name: Allow unprivileged user namespaces
+        if: matrix.engine != 'docker'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      # The runner's rootful daemon stops; the runner user gets its own
+      # daemon, which the acceptance reaches through DOCKER_HOST.
+      - name: Start rootless Docker
+        if: matrix.engine == 'docker-rootless'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y uidmap docker-ce-rootless-extras
+          sudo systemctl disable --now docker.service docker.socket
+          sudo rm -f /var/run/docker.sock
+          dockerd-rootless-setuptool.sh install
+          echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
+
+      - name: Show the rootless engines
+        if: matrix.engine != 'docker'
+        run: |
+          if [ "${{ matrix.engine }}" = podman-rootless ]; then
+            podman info --format '{{.Version.Version}} rootless={{.Host.Security.Rootless}}'
+          else
+            docker info --format '{{.ServerVersion}} {{json .SecurityOptions}}'
+          fi
+
       # A hosted runner is far smaller than a workstation: four parallel
       # agents exercise every step; the 30-agent run is recorded in
       # docs/v9/benchmarks.md.
-      - name: Run parallel agents against Docker
+      - name: Run parallel agents
+        env:
+          BERTH_ENGINE: ${{ matrix.engine == 'podman-rootless' && 'podman' || 'docker' }}
         run: ./scripts/accept-v9-agents.sh target/release/berth target/agent-acceptance 4
 
       - name: Publish the acceptance record
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: agent-acceptance-linux-x86_64
+          name: agent-acceptance-linux-x86_64-${{ matrix.engine }}
           path: target/agent-acceptance
           if-no-files-found: error
           retention-days: 30

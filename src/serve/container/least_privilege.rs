@@ -107,7 +107,9 @@ pub(crate) fn least_privilege_run_args(target: &ServiceConfig) -> Result<Vec<Str
         ("/home/berth", "rw,nosuid", HOME_TMPFS_BYTES),
     ] {
         args.push("--tmpfs".to_owned());
-        args.push(format!("{target}:{options},mode=1777,size={size}"));
+        args.push(crate::docker::engine_tmpfs_options(&format!(
+            "{target}:{options},mode=1777,size={size}"
+        )));
     }
     args.push("--env".to_owned());
     args.push("HOME=/home/berth".to_owned());
@@ -197,6 +199,32 @@ mod tests {
         for driver in [Driver::Horizon, Driver::Scheduler, Driver::Reverb] {
             assert!(runs_least_privileged(&service(driver)), "{driver:?}");
         }
+    }
+
+    #[test]
+    fn podman_tmpfs_mounts_start_empty_instead_of_copying_the_image() {
+        // Podman copies the image's directory into a tmpfs by default; the
+        // FrankenPHP image's root-owned `/data/caddy` then denies the
+        // invoking user its CA (`mkdir /data/caddy/pki: permission denied`).
+        let args =
+            crate::docker::with_container_engine(crate::config::ContainerEngine::Podman, || {
+                least_privilege_run_args(&service(Driver::Frankenphp)).expect("args")
+            });
+        let tmpfs: Vec<&String> = args
+            .iter()
+            .zip(args.iter().skip(1))
+            .filter(|(flag, _)| flag.as_str() == "--tmpfs")
+            .map(|(_, value)| value)
+            .collect();
+        assert_eq!(tmpfs.len(), 3, "{args:?}");
+        for value in tmpfs {
+            assert!(value.ends_with(",notmpcopyup"), "{value}");
+        }
+        let docker = least_privilege_run_args(&service(Driver::Frankenphp)).expect("args");
+        assert!(
+            !docker.iter().any(|arg| arg.contains("notmpcopyup")),
+            "Docker rejects the Podman-only option: {docker:?}"
+        );
     }
 
     #[test]

@@ -79,7 +79,7 @@ pub(crate) struct Cli {
     #[arg(global = true, long, value_name = "ID", env = "BERTH_INSTANCE")]
     pub(crate) instance: Option<String>,
     /// Container runtime engine (`docker` or `podman`)
-    #[arg(global = true, long, value_name = "ENGINE")]
+    #[arg(global = true, long, value_name = "ENGINE", env = "BERTH_ENGINE")]
     pub(crate) engine: Option<ContainerEngine>,
     /// Max concurrent heavy Docker operations
     #[arg(global = true, long, value_name = "N")]

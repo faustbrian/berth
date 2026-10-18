@@ -2,6 +2,49 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Added `BERTH_ENGINE` (`docker` or `podman`), the environment form of
+  `--engine`.
+- `scripts/accept-v9-agents.sh` runs against Podman with
+  `BERTH_ENGINE=podman` and against rootless Docker, and checks an app that
+  terminates TLS itself on container port 443 (root with the reduced
+  capability set, serving HTTPS on its published port, writing the
+  checkout). CI runs
+  it on Linux against rootful Docker, rootless Docker and rootless Podman.
+
+### Fixed
+
+- Parallel `up`s that need the same missing derived app image build it once:
+  the first process builds under a per-image host lock and the others reuse
+  it, instead of every agent on a cold cache compiling the same PHP
+  extensions at once.
+- PHP app containers start on Podman: their `/data`, `/config` and `HOME`
+  tmpfs mounts get `notmpcopyup`, because Podman otherwise copies the
+  image's root-owned `/data/caddy` into the tmpfs and the app, running as
+  the invoking user, exited with `mkdir /data/caddy/pki: permission denied`.
+- The gateway receives each new route configuration on stdin instead of
+  reading `caddy.next.json` from its mounted config directory. On Podman's
+  macOS VM the container kept a stale entry for that file once it had been
+  renamed away, so every `up` after the first failed with "the berth
+  gateway rejected its new configuration".
+- Test fixtures that pick gateway ports probe them with a connection
+  instead of a bind: on macOS a listener bound by one test thread could be
+  inherited by a `berth` another thread spawned and keep the port, failing
+  that test's `up` with "gateway port … is in use" (about one suite run in
+  five).
+- A socket-policy test no longer treats the shared temp directory as its
+  project, which failed while Podman's machine API socket lived there.
+
+### Removed
+
+- Removed the `minio` preset and driver: MinIO's community edition is no
+  longer fully open source and no longer publishes images. A project file
+  or `config migrate` input that uses it fails and names `rustfs` and
+  `garage`, which are S3-compatible.
+
 ## [9.0.0] - 2026-10-18
 
 ### Added

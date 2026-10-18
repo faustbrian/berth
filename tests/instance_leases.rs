@@ -17,6 +17,8 @@ use std::process::{Command, Output};
 /// labels (`label=key` or `label=key=value`) and renders the catalog
 /// format from them.
 const FAKE_DOCKER: &str = r#"#!/bin/sh
+# The gateway reload sends its config on stdin; take it all.
+case "$*" in *"caddy reload"*) cat > /dev/null ;; esac
 S="$FAKE_STATE"
 echo "$*" >> "$S/log"
 case "$1 $2" in
@@ -103,7 +105,12 @@ fn free_ports() -> (u16, u16) {
             .create_new(true)
             .open(claims.join(port.to_string()))
             .is_ok();
-        if claimed && std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+        // A connect probe, not a bind: macOS sets close-on-exec on a new socket
+        // only after creating it, so a listener bound here can leak into a
+        // `berth` another test thread spawns at that instant and keep the
+        // port bound, failing that fixture's gateway with "port in use".
+        // A refused connection means nothing listens there.
+        if claimed && std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
             return port;
         }
     };
@@ -206,7 +213,8 @@ fn run_berth(
         .env("BERTH_GATEWAY_HTTPS_PORT", ports.0.to_string())
         .env("BERTH_GATEWAY_HTTP_PORT", ports.1.to_string())
         .env("FAKE_STATE", base.join("state"))
-        .env_remove("BERTH_INSTANCE");
+        .env_remove("BERTH_INSTANCE")
+        .env_remove("BERTH_ENGINE");
     // Test-specific variables win over the defaults above.
     for &(key, value) in env {
         command.env(key, value);

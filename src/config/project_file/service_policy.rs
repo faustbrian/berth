@@ -179,7 +179,12 @@ mod tests {
     #[test]
     fn named_volumes_and_project_paths_are_not_host_sockets() {
         use super::validate_volume;
-        let project = std::env::temp_dir();
+        // A project of its own: the shared temp directory can hold a real
+        // engine socket (Podman's machine API socket lives there on macOS).
+        let project =
+            std::env::temp_dir().join(format!("berth-socket-project-{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&project));
+        std::fs::create_dir_all(project.join("storage")).expect("project");
         for volume in ["data:/var/lib/data", ".:/app", "./storage:/app/storage:ro"] {
             validate_volume("app", volume, &project)
                 .unwrap_or_else(|error| panic!("{volume}: {error}"));
@@ -188,5 +193,6 @@ mod tests {
             let error = validate_volume("app", volume, &project).expect_err(volume);
             assert!(error.to_string().contains("engine socket"), "{error}");
         }
+        drop(std::fs::remove_dir_all(&project));
     }
 }

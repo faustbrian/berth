@@ -26,7 +26,8 @@ These apply to every command.
 - `--instance <ID>`: use this instance ID instead of the one derived from the
   checkout path (`BERTH_INSTANCE` sets it too).
 - `--engine <docker|podman>`: the container engine for this invocation
-  (default: `container_engine` from the project file, then `docker`).
+  (`BERTH_ENGINE` sets it too, and either wins over `container_engine` from
+  the project file; the default is `docker`).
 - `--repro`: reproducible mode (checks the lock file).
 - `--non-interactive`: no prompts, no browser, no TTY.
 - `--docker-max-heavy-ops <N>`, `--docker-max-build-ops <N>`,
@@ -154,7 +155,7 @@ consumer's containers; sources must be in `depends_on` and running.
 
 - `KIND`: `database`, `cache`, `object-store`, `search`, `app`.
 - `DRIVER`: `postgres`, `mongodb`, `mysql`, `sqlserver`, `redis`, `valkey`,
-  `dragonfly`, `memcached`, `minio`, `garage`, `localstack`, `rustfs`,
+  `dragonfly`, `memcached`, `garage`, `localstack`, `rustfs`,
   `opensearch`, `elasticsearch`, `meilisearch`, `typesense`, `frankenphp`,
   `reverb`, `horizon`, `scheduler`, `dusk`, `gotenberg`, `mailhog`,
   `rabbitmq`, `soketi`.
@@ -728,7 +729,6 @@ Options:
   - `redis`: `Redis`
   - `valkey`: `Valkey`
   - `dragonfly`: `Dragonfly`
-  - `minio`: `MinIO`
   - `garage`: `Garage`
   - `rustfs`: `RustFS`
   - `localstack`: `LocalStack`
@@ -805,7 +805,6 @@ Options:
   - `redis`: `Redis`
   - `valkey`: `Valkey`
   - `dragonfly`: `Dragonfly`
-  - `minio`: `MinIO`
   - `garage`: `Garage`
   - `rustfs`: `RustFS`
   - `localstack`: `LocalStack`
@@ -1727,7 +1726,6 @@ Options:
   - `redis`: `Redis`
   - `valkey`: `Valkey`
   - `dragonfly`: `Dragonfly`
-  - `minio`: `MinIO`
   - `garage`: `Garage`
   - `rustfs`: `RustFS`
   - `localstack`: `LocalStack`

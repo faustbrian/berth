@@ -45,6 +45,19 @@ pub(crate) fn spawn_docker_stdin_stderr_piped(args: &[&str], context: &str) -> R
         .with_context(|| context.to_owned())
 }
 
+/// Spawns `docker` with stdin, stdout and stderr piped.
+pub(crate) fn spawn_docker_stdin_stdout_stderr_piped(
+    args: &[&str],
+    context: &str,
+) -> Result<Child> {
+    super::secret_env::docker_process(args)?
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| context.to_owned())
+}
+
 /// Spawns `docker` with stdout/stderr piped.
 pub(crate) fn spawn_docker_stdout_stderr_piped(args: &[&str], context: &str) -> Result<Child> {
     super::secret_env::docker_process(args)?

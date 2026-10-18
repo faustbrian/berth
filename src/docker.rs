@@ -282,6 +282,8 @@ mod secret_env;
 pub(crate) use mysql_program::{MysqlProgram, is_mariadb_image, mysql_program};
 pub(crate) use redact::{redact_known_secrets, register_secret};
 mod scheduler;
+mod tmpfs_options;
+pub(crate) use tmpfs_options::engine_tmpfs_options;
 mod up;
 
 pub(crate) use child_exit::{
@@ -290,7 +292,7 @@ pub(crate) use child_exit::{
 pub(crate) use cmd::{
     docker_arg_refs, ensure_docker_output_success, run_docker_output, run_docker_output_owned,
     run_docker_status, run_docker_status_owned, spawn_docker_stdin_stderr_piped,
-    spawn_docker_stdout_stderr_piped,
+    spawn_docker_stdin_stdout_stderr_piped, spawn_docker_stdout_stderr_piped,
 };
 pub(crate) use engine::RuntimeDiagnosticCheck;
 pub(crate) use exec::build_exec_args;

@@ -56,6 +56,7 @@ impl Scratch {
             .env("PATH", path)
             .env("BERTH_HOME", self.0.join("home"))
             .env_remove("BERTH_INSTANCE")
+            .env_remove("BERTH_ENGINE")
             .output()
             .expect("run berth")
     }

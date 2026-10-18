@@ -17,6 +17,8 @@ use std::process::{Command, Output};
 /// Networks are `n-{name}` files; `network connect` records `att-{network}`
 /// lines naming the container, and fails for a network that does not exist.
 const FAKE_DOCKER: &str = r#"#!/bin/sh
+# The gateway reload sends its config on stdin; take it all.
+case "$*" in *"caddy reload"*) cat > /dev/null ;; esac
 S="$FAKE_STATE"
 echo "$*" >> "$S/log"
 case "$1 $2" in
@@ -118,6 +120,7 @@ impl Workspace {
             .env("BERTH_HOME", self.base.join("home"))
             .env("FAKE_STATE", self.base.join("state"))
             .env_remove("BERTH_INSTANCE")
+            .env_remove("BERTH_ENGINE")
             .stdin(std::process::Stdio::null())
             .output()
             .expect("run berth")

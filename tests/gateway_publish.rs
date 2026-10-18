@@ -71,7 +71,9 @@ case "$1" in
     exit 0 ;;
   exec)
     case "$*" in
-      *"caddy reload"*) [ -n "$FAKE_RELOAD_FAIL" ] && { echo "invalid config" >&2; exit 1; } ;;
+      *"caddy reload"*)
+        cat > "$S/reload-stdin"
+        [ -n "$FAKE_RELOAD_FAIL" ] && { echo "invalid config" >&2; exit 1; } ;;
     esac
     exit 0 ;;
   ps)
@@ -134,7 +136,8 @@ impl Fixture {
             .env("FAKE_STATE", self.base.join("state"))
             .env("BERTH_GATEWAY_HTTPS_PORT", self.https_port.to_string())
             .env("BERTH_GATEWAY_HTTP_PORT", (self.https_port - 1).to_string())
-            .env_remove("BERTH_INSTANCE");
+            .env_remove("BERTH_INSTANCE")
+            .env_remove("BERTH_ENGINE");
         if reload_fails {
             command.env("FAKE_RELOAD_FAIL", "1");
         }
@@ -158,6 +161,7 @@ impl Fixture {
             .env("BERTH_GATEWAY_HTTPS_PORT", https_port.to_string())
             .env_remove("BERTH_GATEWAY_HTTP_PORT")
             .env_remove("BERTH_INSTANCE")
+            .env_remove("BERTH_ENGINE")
             .output()
             .expect("run berth")
     }
@@ -225,7 +229,12 @@ fn free_port() -> u16 {
     loop {
         let step = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let candidate = 10_001 + ((base + step) % 4995) * 2;
-        let free = |port: u16| std::net::TcpListener::bind(("127.0.0.1", port)).is_ok();
+        // A connect probe, not a bind: macOS sets close-on-exec on a new socket
+        // only after creating it, so a listener bound here can leak into a
+        // `berth` another test thread spawns at that instant and keep the
+        // port bound, failing that fixture's gateway with "port in use".
+        // A refused connection means nothing listens there.
+        let free = |port: u16| std::net::TcpStream::connect(("127.0.0.1", port)).is_err();
         if free(candidate) && free(candidate - 1) {
             return candidate;
         }
@@ -250,6 +259,16 @@ fn up_starts_the_gateway_and_applies_the_route_through_a_validated_reload() {
         .position(|call| call.starts_with("run") && call.contains("caddy run"));
     let reload = calls.iter().position(|call| call.contains("caddy reload"));
     assert!(app_run < gateway_run && gateway_run < reload, "{calls:#?}");
+    // The new config reaches Caddy on stdin, never through the shared
+    // config directory: Podman's macOS VM keeps a stale entry for a file the
+    // host renamed away and does not show the recreated one.
+    let reload_call = &calls[reload.expect("reload")];
+    assert!(
+        reload_call.starts_with("exec -i ") && reload_call.contains("--config /dev/stdin"),
+        "{reload_call}"
+    );
+    let sent = std::fs::read_to_string(fixture.base.join("state/reload-stdin")).expect("stdin");
+    assert!(sent.contains("-shop.berth.localhost"), "{sent}");
     // The gateway publishes on loopback only (FI-40).
     let gateway_call = &calls[gateway_run.expect("gateway run")];
     assert!(
@@ -440,6 +459,7 @@ fn a_process_without_port_variables_uses_the_recorded_gateway_ports() {
         .env_remove("BERTH_GATEWAY_HTTPS_PORT")
         .env_remove("BERTH_GATEWAY_HTTP_PORT")
         .env_remove("BERTH_INSTANCE")
+        .env_remove("BERTH_ENGINE")
         .output()
         .expect("run berth");
     assert!(output.status.success(), "{}", stderr(&output));

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Agent acceptance for berth 9.x against real Docker (BERTH.md "Verification").
+# Agent acceptance for berth 9.x against a real engine (BERTH.md
+# "Verification"): Docker by default, Podman with BERTH_ENGINE=podman.
 #
 # Creates N parallel git worktrees of a pinned public Laravel fixture. Every
 # worktree, in parallel, runs what an agent runs: `berth up --wait --json`,
@@ -37,6 +38,31 @@ BERTH="$(cd "$(dirname "$BERTH_INPUT")" && pwd)/$(basename "$BERTH_INPUT")"
 readonly BERTH
 readonly OUTPUT_INPUT="$2"
 readonly AGENTS="${3:-${BERTH_ACCEPT_AGENTS:-30}}"
+# The engine berth drives and this script inspects with.
+ENGINE="${BERTH_ENGINE:-docker}"
+case "$ENGINE" in
+  docker|podman) ;;
+  *) printf 'BERTH_ENGINE must be docker or podman, got %s\n' "$ENGINE" >&2; exit 64 ;;
+esac
+export BERTH_ENGINE="$ENGINE"
+readonly ENGINE
+# Rootless Docker maps the daemon's root to the invoking user, so berth sets
+# no --user there; rootful Docker and Podman (keep-id) run apps as UID:GID.
+if [[ "$ENGINE" == docker ]] && docker info --format '{{json .SecurityOptions}}' | grep -q rootless; then
+  APP_USER=""
+else
+  APP_USER="$(id -u):$(id -g)"
+fi
+readonly APP_USER
+# How this script runs its own one-off container as the invoking user.
+if [[ -z "$APP_USER" ]]; then
+  RUN_AS=()
+elif [[ "$ENGINE" == podman ]]; then
+  RUN_AS=(--userns=keep-id --user "$APP_USER")
+else
+  RUN_AS=(--user "$APP_USER")
+fi
+readonly RUN_AS
 if ! [[ "$AGENTS" =~ ^[1-9][0-9]*$ ]]; then
   printf 'N must be a positive integer, got %s\n' "$AGENTS" >&2
   exit 64
@@ -50,7 +76,7 @@ readonly COMPOSER_IMAGE="composer@sha256:5946476338742b200bb9ff88f8be56275ddae4b
 FIXTURE_FILES="$(pwd)/scripts/fixtures/accept-v9"
 readonly FIXTURE_FILES
 
-for tool in curl docker git jq perl; do
+for tool in curl "$ENGINE" git jq perl; do
   command -v "$tool" >/dev/null || { printf 'required tool is unavailable: %s\n' "$tool" >&2; exit 69; }
 done
 if [[ -e "$OUTPUT_INPUT" ]]; then
@@ -109,6 +135,21 @@ fail() { log "FAIL: $*"; exit 1; }
 
 installation() { cat "$BERTH_HOME/installation-id" 2>/dev/null || true; }
 
+# A container's user, effective capabilities (sorted, without `CAP_`) and
+# security options, as one line: `USER ["CAP",…] ["OPT",…]`. Docker reports
+# `--cap-drop ALL --cap-add X` as given; Podman reports both relative to its
+# default set, so its `EffectiveCaps` is the comparable value.
+security_of() {
+  if [[ "$ENGINE" == podman ]]; then
+    podman inspect --format '{{.Config.User}}|{{json .EffectiveCaps}}|{{json .HostConfig.SecurityOpt}}' "$1"
+  else
+    docker inspect --format '{{.Config.User}}|{{json .HostConfig.CapDrop}}|{{json .HostConfig.CapAdd}}|{{json .HostConfig.SecurityOpt}}' "$1" |
+      awk -F'|' '{ if ($2 ~ /"(CAP_)?ALL"/) print $1 "|" $3 "|" $4; else print $1 "|dropped " $2 "|" $4 }'
+  fi 2>&1 | awk -F'|' '{print $1; print $2; print $3}' |
+    { read -r user; read -r caps; read -r options
+      printf '%s %s %s' "$user" "$(jq -c 'map(sub("^CAP_"; "")) | sort' <<< "$caps" 2>/dev/null || printf '%s' "$caps")" "$options"; }
+}
+
 # Every Docker object this run created carries its installation label.
 # Fails (rather than printing nothing) when the ID or Docker is unavailable,
 # so a leftover check can never pass vacuously.
@@ -116,9 +157,9 @@ labeled_objects() {
   local id containers volumes networks
   id="$(installation)"
   [[ -n "$id" ]] || { printf 'no installation ID under %s\n' "$BERTH_HOME" >&2; return 1; }
-  containers="$(docker ps -aq --filter "label=dev.berth.installation=$id")" || return 1
-  volumes="$(docker volume ls -q --filter "label=dev.berth.installation=$id")" || return 1
-  networks="$(docker network ls -q --filter "label=dev.berth.installation=$id")" || return 1
+  containers="$("$ENGINE" ps -aq --filter "label=dev.berth.installation=$id")" || return 1
+  volumes="$("$ENGINE" volume ls -q --filter "label=dev.berth.installation=$id")" || return 1
+  networks="$("$ENGINE" network ls -q --filter "label=dev.berth.installation=$id")" || return 1
   [[ -z "$containers" ]] || printf 'container %s\n' $containers
   [[ -z "$volumes" ]] || printf 'volume %s\n' $volumes
   [[ -z "$networks" ]] || printf 'network %s\n' $networks
@@ -139,9 +180,9 @@ cleanup() {
     # Containers first (they hold networks and volumes); repeat until
     # nothing labeled is left or a few passes did not help.
     for attempt in 1 2 3; do
-      docker ps -aq --filter "label=dev.berth.installation=$id" | xargs -r docker rm -f -v >/dev/null 2>&1
-      docker network ls -q --filter "label=dev.berth.installation=$id" | xargs -r docker network rm >/dev/null 2>&1
-      docker volume ls -q --filter "label=dev.berth.installation=$id" | xargs -r docker volume rm >/dev/null 2>&1
+      "$ENGINE" ps -aq --filter "label=dev.berth.installation=$id" | xargs -r "$ENGINE" rm -f -v >/dev/null 2>&1
+      "$ENGINE" network ls -q --filter "label=dev.berth.installation=$id" | xargs -r "$ENGINE" network rm >/dev/null 2>&1
+      "$ENGINE" volume ls -q --filter "label=dev.berth.installation=$id" | xargs -r "$ENGINE" volume rm >/dev/null 2>&1
       [[ "$(count_labeled_objects)" == 0 ]] && break
     done
     printf 'cleanup_leftover_objects=%s\n' "$(count_labeled_objects)" >> "$OUTPUT/metadata.txt"
@@ -159,9 +200,18 @@ trap cleanup EXIT
 {
   printf 'agents=%s\n' "$AGENTS"
   printf 'berth=%s\n' "$("$BERTH" --version)"
-  printf 'docker=%s\n' "$(docker version --format '{{.Server.Version}}')"
-  printf 'docker_cpus=%s\n' "$(docker info --format '{{.NCPU}}')"
-  printf 'docker_memory_bytes=%s\n' "$(docker info --format '{{.MemTotal}}')"
+  if [[ "$ENGINE" == podman ]]; then
+    # A local (non-remote) Podman has no server section.
+    printf 'engine=podman %s\n' "$(podman info --format '{{.Version.Version}}')"
+    printf 'engine_cpus=%s\n' "$(podman info --format '{{.Host.CPUs}}')"
+    printf 'engine_memory_bytes=%s\n' "$(podman info --format '{{.Host.MemTotal}}')"
+    printf 'engine_rootless=%s\n' "$(podman info --format '{{.Host.Security.Rootless}}')"
+  else
+    printf 'engine=docker %s\n' "$(docker version --format '{{.Server.Version}}')"
+    printf 'engine_cpus=%s\n' "$(docker info --format '{{.NCPU}}')"
+    printf 'engine_memory_bytes=%s\n' "$(docker info --format '{{.MemTotal}}')"
+    printf 'engine_rootless=%s\n' "$([[ -z "$APP_USER" ]] && echo true || echo false)"
+  fi
   printf 'laravel_skeleton_commit=%s\ncomposer_image=%s\n' "$LARAVEL_COMMIT" "$COMPOSER_IMAGE"
   printf 'laravel_framework=%s\n' "$(jq -r '.packages[] | select(.name == "laravel/framework") | .version' "$FIXTURE_FILES/composer.lock")"
   printf 'composer_lock_sha256=%s\n' "$(sha256 "$FIXTURE_FILES/composer.lock")"
@@ -181,7 +231,7 @@ git -C "$FIXTURE" fetch --quiet --depth 1 origin "$LARAVEL_COMMIT"
 git -C "$FIXTURE" checkout --quiet --detach FETCH_HEAD
 git -C "$FIXTURE" checkout --quiet -b acceptance
 cp "$FIXTURE_FILES/composer.json" "$FIXTURE_FILES/composer.lock" "$FIXTURE/"
-docker run --rm --user "$(id -u):$(id -g)" --env COMPOSER_HOME=/tmp/composer \
+"$ENGINE" run --rm ${RUN_AS[@]+"${RUN_AS[@]}"} --env COMPOSER_HOME=/tmp/composer \
   --volume "$FIXTURE:/app" --workdir /app "$COMPOSER_IMAGE" \
   install --no-interaction --prefer-dist \
   > "$OUTPUT/fixture.txt" 2>&1 || fail "composer could not install the fixture (see fixture.txt)"
@@ -374,14 +424,14 @@ make_worktree "agent-killed"
 
 # --- Memory sampler ----------------------------------------------------------
 # Prints the summed memory of this run's running containers, or nothing when
-# none runs or `docker stats` failed (a container removed between listing and
-# sampling); without IDs `docker stats` would report every container on the
+# none runs or `"$ENGINE" stats` failed (a container removed between listing and
+# sampling); without IDs `"$ENGINE" stats` would report every container on the
 # host.
 memory_bytes() {
   local ids usage
-  ids="$(docker ps -q --filter "label=dev.berth.installation=$(installation)")" || return 0
+  ids="$("$ENGINE" ps -q --filter "label=dev.berth.installation=$(installation)")" || return 0
   [[ -n "$ids" ]] || return 0
-  usage="$(docker stats --no-stream --format '{{.MemUsage}}' $ids 2>/dev/null)" || return 0
+  usage="$("$ENGINE" stats --no-stream --format '{{.MemUsage}}' $ids 2>/dev/null)" || return 0
   printf '%s\n' "$usage" \
     | awk '{
         value=$1; unit=value; sub(/[0-9.]+/, "", unit); sub(/[A-Za-z]+/, "", value);
@@ -423,8 +473,7 @@ agent() {
   # The app container as Docker runs it: user and capability sets (L022).
   local app
   app="$(jq -r '.services[] | select(.name == "app") | .container' "$out/up.json" 2>/dev/null)"
-  docker inspect --format '{{.Config.User}} {{json .HostConfig.CapDrop}} {{json .HostConfig.CapAdd}} {{json .HostConfig.SecurityOpt}}' \
-    "$app" > "$out/app-security.txt" 2>&1
+  security_of "$app" > "$out/app-security.txt"
   url="$(jq -r '.urls[0] // empty' "$out/up.json" 2>/dev/null)"
   # Verified against the gateway's CA, not `-k`.
   local ca="$BERTH_HOME/gateway/data/caddy/pki/authorities/local/root.crt"
@@ -498,9 +547,8 @@ for _ in $(seq 1 900); do
 done
 [[ -e "$KILLED_MARKER" ]] || fail "the agent to kill never started its slow test (see killed-agent.out)"
 # Its test-lease app container, as Docker runs it, while the test runs.
-lease="$(docker ps --filter "label=dev.berth.installation=$(installation)" --format '{{.Names}}' | grep 'agent-killed' | grep '_app-testing-pool' | head -n 1)"
-docker inspect --format '{{.Config.User}} {{json .HostConfig.CapDrop}} {{json .HostConfig.CapAdd}}' "$lease" \
-  2>&1 | sed 's/CAP_//g' > "$OUTPUT/lease-security.txt"
+lease="$("$ENGINE" ps --filter "label=dev.berth.installation=$(installation)" --format '{{.Names}}' | grep 'agent-killed' | grep '_app-testing-pool' | head -n 1)"
+security_of "$lease" > "$OUTPUT/lease-security.txt"
 log "SIGKILLing the agent mid-test"
 abrupt_kill "$killed_pid"
 wait "$killed_pid" 2>/dev/null || true
@@ -540,9 +588,8 @@ for index in $(seq 1 "$AGENTS"); do
   check "$name route reaches its own instance" "$(cat "$out/route.body")" \
     "$(jq -r '.environment.DB_DATABASE' "$out/up.json")"
   check "$name exit code 3 passes through artisan" "$(cat "$out/exit3.status")" 3
-  # Docker may report capabilities with or without the `CAP_` prefix.
-  check "$name app runs least-privileged" "$(sed 's/CAP_//g' "$out/app-security.txt")" \
-    "$(id -u):$(id -g) [\"ALL\"] [\"NET_BIND_SERVICE\"] [\"no-new-privileges\"]"
+  check "$name app runs least-privileged" "$(cat "$out/app-security.txt")" \
+    "$APP_USER [\"NET_BIND_SERVICE\"] [\"no-new-privileges\"]"
   check "$name migrate" "$(cat "$out/migrate.status")" 0
   check "$name markers" "$(cat "$out/markers.status")" 0
   # Its development database holds only its own marker: no other agent's
@@ -567,7 +614,7 @@ for index in $(seq 1 "$AGENTS"); do
 done
 
 check "test-lease app runs least-privileged" "$(cat "$OUTPUT/lease-security.txt")" \
-  "$(id -u):$(id -g) [\"ALL\"] [\"NET_BIND_SERVICE\"]"
+  "$APP_USER [\"NET_BIND_SERVICE\"] [\"no-new-privileges\"]"
 
 log "checking that no two agents' runs shared a database"
 : > "$OUTPUT/db-names.txt"
@@ -598,22 +645,51 @@ grep -rqE "Reaped accept/agent-killed-[0-9a-f]+ because its owner process exited
   || { log "  no berth invocation reported reaping the killed agent"; failures=$((failures + 1)); }
 # Its instance containers and its interrupted test run's slot containers.
 check "killed agent's containers removed" \
-  "$(docker ps -a --filter "label=dev.berth.installation=$(installation)" --format '{{.Names}}' | grep -c 'agent-killed')" 0
+  "$("$ENGINE" ps -a --filter "label=dev.berth.installation=$(installation)" --format '{{.Names}}' | grep -c 'agent-killed')" 0
 
 log "checking the gateway"
-gateway="$(docker ps -q --filter "label=dev.berth.installation=$(installation)" --filter label=dev.berth.role=gateway)"
-check "gateway runs least-privileged" "$(
-  docker inspect --format '{{json .HostConfig.CapDrop}} {{json .HostConfig.CapAdd}} {{json .HostConfig.SecurityOpt}}' "$gateway" 2>&1 | sed 's/CAP_//g'
-)" '["ALL"] ["NET_BIND_SERVICE"] ["no-new-privileges"]'
+gateway="$("$ENGINE" ps -q --filter "label=dev.berth.installation=$(installation)" --filter label=dev.berth.role=gateway)"
+check "gateway runs least-privileged" "$(security_of "$gateway")" \
+  "$APP_USER [\"NET_BIND_SERVICE\"] [\"no-new-privileges\"]"
+
+log "checking an app that terminates TLS itself on container port 443"
+# The one case that runs as the container's root, with a reduced capability
+# set (L022): it must still bind 443, serve HTTPS on its published port and
+# write the checkout, on rootful Linux Docker as much as elsewhere. Such an
+# app is a direct TLS target: the gateway does not route it.
+make_worktree tls-443
+perl -0pi -e 's/  app:\n    preset: laravel\n/  app:\n    preset: laravel\n    container_port: 443\n    localhost_tls: true\n    publish: true\n/' \
+  "$WORKTREES/tls-443/.berth.yaml"
+tls_out="$OUTPUT/tls-443"
+mkdir -p "$tls_out"
+tls_status=0
+(cd "$WORKTREES/tls-443" && "$BERTH" up --wait --json > "$tls_out/up.json" 2> "$tls_out/up.err") || tls_status=$?
+check "443 app up" "$tls_status" 0
+tls_app="$(jq -r '.services[] | select(.name == "app") | .container' "$tls_out/up.json" 2>/dev/null)"
+check "443 app capabilities" "$(security_of "$tls_app")" \
+  ' ["CHOWN","DAC_OVERRIDE","FOWNER","FSETID","NET_BIND_SERVICE"] ["no-new-privileges"]'
+# Its certificate comes from the app's own Caddy CA, kept in the container.
+tls_url="$(jq -r '.services[] | select(.name == "app") | .url // empty' "$tls_out/up.json" 2>/dev/null)"
+check "443 app answers on its published port" "$(
+  curl -sk -o /dev/null -w '%{http_code}' --max-time 30 "$tls_url/up" 2>/dev/null || true
+)" 200
+tls_write=0
+(cd "$WORKTREES/tls-443" && "$BERTH" artisan --no-tty --non-interactive tinker \
+  --execute="file_put_contents(storage_path('app/tls-probe'), 'root with reduced capabilities');" \
+  > "$tls_out/write.out" 2>&1) || tls_write=$?
+check "443 app writes the checkout" "$tls_write $([[ -s "$WORKTREES/tls-443/storage/app/tls-probe" ]] && echo written)" "0 written"
+tls_down=0
+(cd "$WORKTREES/tls-443" && "$BERTH" down --purge > "$tls_out/down.out" 2>&1) || tls_down=$?
+check "443 app down --purge" "$tls_down" 0
 
 log "checking leftovers"
 leftover_instances="$(jq '.instances | length' "$OUTPUT/ls-after-kill.json")"
 check "instances left" "$leftover_instances" 0
 non_shared="unknown"
 if id="$(installation)" && [[ -n "$id" ]] && listing="$(
-  docker ps -a --filter "label=dev.berth.installation=$id" --format '{{.Names}} {{.Label "dev.berth.role"}}' &&
-  docker volume ls --filter "label=dev.berth.installation=$id" --format '{{.Name}} {{.Label "dev.berth.role"}}' &&
-  docker network ls --filter "label=dev.berth.installation=$id" --format '{{.Name}} {{.Label "dev.berth.role"}}'
+  "$ENGINE" ps -a --filter "label=dev.berth.installation=$id" --format '{{.Names}} {{.Label "dev.berth.role"}}' &&
+  "$ENGINE" volume ls --filter "label=dev.berth.installation=$id" --format '{{.Name}} {{.Label "dev.berth.role"}}' &&
+  "$ENGINE" network ls --filter "label=dev.berth.installation=$id" --format '{{.Name}} {{.Label "dev.berth.role"}}'
 )"; then
   printf '%s\n' "$listing" > "$OUTPUT/objects-before-gc.txt"
   non_shared="$(printf '%s\n' "$listing" | awk 'NF && $2 != "shared-server" && $2 != "gateway"' | wc -l | tr -d ' ')"
@@ -625,7 +701,7 @@ check "berth gc" "$gc_status" 0
 check "objects left after gc" "$(count_labeled_objects)" 0
 
 # The sampler must have covered the run, or the peak below is not the run's
-# peak. A sample takes 2 s plus however long `docker stats` needs, which grows
+# peak. A sample takes 2 s plus however long the engine's `stats` needs, which grows
 # with the container count; one per 20 s (and at least three) is the floor.
 run_seconds="$(sed -n 's/^parallel_run_seconds=//p' "$OUTPUT/metadata.txt")"
 if (( samples < 3 || samples * 20 < run_seconds )); then

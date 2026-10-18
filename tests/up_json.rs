@@ -16,6 +16,8 @@ use std::process::{Command, Output};
 /// `FAKE_BOOT=ok|fatal|exit`: how `php artisan about` answers (`exit` stops
 /// the app container). `FAKE_DB_RUN=busy` makes the database's `run` fail.
 const FAKE_DOCKER: &str = r#"#!/bin/sh
+# The gateway reload sends its config on stdin; take it all.
+case "$*" in *"caddy reload"*) cat > /dev/null ;; esac
 S="$FAKE_STATE"
 echo "$*" >> "$S/log"
 case "$1 $2" in
@@ -26,9 +28,13 @@ case "$1 $2" in
   "network create") touch "$S/network"; exit 0 ;;
   "network rm") rm -f "$S/network"; exit 0 ;;
   "network connect"|"network disconnect") exit 0 ;;
-  "image inspect") [ -n "$FAKE_COLD" ] && [ ! -f "$S/pulled" ] && exit 1; exit 0 ;;
+  "image inspect")
+    # With FAKE_DERIVED, a derived image exists only once a build made it.
+    case "$*" in *berth/serve-*) [ -n "$FAKE_DERIVED" ] && [ ! -f "$S/built" ] && exit 1 ;; esac
+    [ -n "$FAKE_COLD" ] && [ ! -f "$S/pulled" ] && exit 1; exit 0 ;;
 esac
 case "$1" in
+  build) [ -n "$FAKE_DERIVED" ] && { echo build >> "$S/builds"; sleep 1; touch "$S/built"; }; exit 0 ;;
   pull) echo "17-alpine: Pulling from library/postgres"; echo "Status: Downloaded newer image"; touch "$S/pulled"; exit 0 ;;
   run)
     name=""; prev=""
@@ -87,7 +93,12 @@ fn free_ports() -> (u16, u16) {
             .create_new(true)
             .open(claims.join(port.to_string()))
             .is_ok();
-        if claimed && std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+        // A connect probe, not a bind: macOS sets close-on-exec on a new socket
+        // only after creating it, so a listener bound here can leak into a
+        // `berth` another test thread spawns at that instant and keep the
+        // port bound, failing that fixture's gateway with "port in use".
+        // A refused connection means nothing listens there.
+        if claimed && std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
             return port;
         }
     };
@@ -147,7 +158,8 @@ impl Fixture {
             .env("BERTH_GATEWAY_HTTPS_PORT", self.ports.0.to_string())
             .env("BERTH_GATEWAY_HTTP_PORT", self.ports.1.to_string())
             .env("FAKE_STATE", self.base.join("state"))
-            .env_remove("BERTH_INSTANCE");
+            .env_remove("BERTH_INSTANCE")
+            .env_remove("BERTH_ENGINE");
         for pair in env {
             command.env(pair.0, pair.1);
         }
@@ -617,4 +629,31 @@ fn logs_all_skips_services_without_a_container_but_a_named_one_stays_strict() {
         !named.status.success(),
         "a named service without a container fails"
     );
+}
+
+#[test]
+fn parallel_ups_build_a_missing_derived_image_once() {
+    // Thirty agents on a cold cache would otherwise all compile the same PHP
+    // extensions at once (a 2 GiB Podman VM OOM-killed the second build).
+    let fixture = Fixture::new("derived");
+    let env = [("FAKE_DERIVED", "1")];
+    let outputs = std::thread::scope(|scope| {
+        let runs: Vec<_> = ["a", "b"]
+            .into_iter()
+            .map(|instance| {
+                let fixture = &fixture;
+                scope.spawn(move || {
+                    fixture.berth(&["up", "--no-wait", "--instance", instance], &env)
+                })
+            })
+            .collect();
+        runs.into_iter()
+            .map(|run| run.join().expect("berth thread"))
+            .collect::<Vec<_>>()
+    });
+    for output in &outputs {
+        assert!(output.status.success(), "{}", text(&output.stderr));
+    }
+    let builds = std::fs::read_to_string(fixture.base.join("state/builds")).unwrap_or_default();
+    assert_eq!(builds.lines().count(), 1, "{builds}");
 }

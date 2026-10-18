@@ -15,6 +15,8 @@ use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
 const FAKE_DOCKER: &str = r#"#!/bin/sh
+# The gateway reload sends its config on stdin; take it all.
+case "$*" in *"caddy reload"*) cat > /dev/null ;; esac
 # Reports every container as running and runs `exec` according to FAKE_MODE.
 case "$1" in
   inspect)
@@ -79,6 +81,7 @@ impl Fixture {
             // Never the developer's own berth home.
             .env("BERTH_HOME", self.root.parent().expect("base").join("home"))
             .env_remove("BERTH_INSTANCE")
+            .env_remove("BERTH_ENGINE")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -148,6 +151,7 @@ fn berths_own_failures_exit_125_on_stderr_only() {
         .current_dir(&base)
         .args(["ps"])
         .env_remove("BERTH_INSTANCE")
+        .env_remove("BERTH_ENGINE")
         .output()
         .expect("run berth");
     assert_eq!(output.status.code(), Some(125), "{output:?}");
@@ -192,6 +196,7 @@ fn exec_against_a_stopped_or_missing_instance_is_a_berth_failure() {
             .env("FAKE_MODE", "exit")
             .env("FAKE_CODE", "1")
             .env_remove("BERTH_INSTANCE")
+            .env_remove("BERTH_ENGINE")
             .output()
             .expect("run berth");
         assert_eq!(
@@ -236,6 +241,7 @@ fn a_failing_setup_shim_is_a_berth_failure_not_the_commands_exit() {
         .env("FAKE_CODE", "0")
         .env("FAKE_SHIM_FAIL", "1")
         .env_remove("BERTH_INSTANCE")
+        .env_remove("BERTH_ENGINE")
         .output()
         .expect("run berth");
     assert_eq!(output.status.code(), Some(125), "{output:?}");
@@ -289,6 +295,7 @@ fn without_a_terminal_commands_run_without_a_tty_by_default() {
             fixture.root.parent().expect("base").join("home"),
         )
         .env_remove("BERTH_INSTANCE")
+        .env_remove("BERTH_ENGINE")
         .stdin(Stdio::piped())
         .output()
         .expect("run berth");
