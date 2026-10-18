@@ -82,7 +82,12 @@ pub(crate) fn list_instances() -> Result<Vec<InstanceRecord>> {
             "--filter",
             "label=dev.berth.instance",
             "--format",
-            "{{.Label \"dev.berth.project\"}}\t{{.Label \"dev.berth.instance\"}}\t{{.Label \"dev.berth.root\"}}\t{{.State}}\t{{.Names}}",
+            &format!(
+                "{}\t{}\t{}\t{{{{.State}}}}\t{{{{.Names}}}}",
+                crate::docker::label_template("dev.berth.project"),
+                crate::docker::label_template("dev.berth.instance"),
+                crate::docker::label_template("dev.berth.root")
+            ),
         ],
         "failed to list instance containers",
     )?;
@@ -112,30 +117,16 @@ pub(crate) fn list_instances() -> Result<Vec<InstanceRecord>> {
             state: state.to_owned(),
         });
     }
-    let networks = crate::docker::run_docker_output(
+    let networks = crate::docker::labeled_networks(
         &[
-            "network",
-            "ls",
-            "--filter",
-            &format!("label=dev.berth.installation={installation}"),
-            "--filter",
-            "label=dev.berth.instance",
-            "--format",
-            "{{.Label \"dev.berth.project\"}}\t{{.Label \"dev.berth.instance\"}}\t{{.Name}}",
+            format!("label=dev.berth.installation={installation}"),
+            "label=dev.berth.instance".to_owned(),
         ],
-        "failed to list instance networks",
-    )?;
-    if !networks.status.success() {
-        anyhow::bail!(
-            "failed to list instance networks: {}",
-            String::from_utf8_lossy(&networks.stderr).trim()
-        );
-    }
-    for line in String::from_utf8_lossy(&networks.stdout).lines() {
-        let mut fields = line.split('\t');
-        let (Some(project), Some(instance), Some(name)) =
-            (fields.next(), fields.next(), fields.next())
-        else {
+        &["dev.berth.project", "dev.berth.instance"],
+    )
+    .context("failed to list instance networks")?;
+    for network in networks {
+        let [name, project, instance] = network.as_slice() else {
             continue;
         };
         // A swarm endpoint network outlives the source's `down` while a
@@ -147,7 +138,7 @@ pub(crate) fn list_instances() -> Result<Vec<InstanceRecord>> {
             continue;
         }
         records
-            .entry((project.to_owned(), instance.to_owned()))
+            .entry((project.clone(), instance.clone()))
             .or_insert_with(|| empty(project, instance))
             .networks += 1;
     }

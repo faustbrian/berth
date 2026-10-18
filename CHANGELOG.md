@@ -17,6 +17,10 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Container, volume and network listings read labels in a form Podman 4.9
+  accepts: its `ps` and `volume ls` templates have no `.Label` function, and
+  network labels are read through `network inspect`. `up` failed with
+  `failed to list routed containers … can't evaluate field Label`.
 - Derived app images build with Podman 4.9 (Ubuntu 24.04's Buildah 1.33),
   which has no heredoc support and failed with `Unknown instruction: "SET"`:
   the MySQL client wrapper scripts are written with one-line `printf`

@@ -100,7 +100,10 @@ pub(crate) fn purge_instance_objects(project: &str, instance: &str) -> Result<()
         "volume".to_owned(),
         "ls".to_owned(),
         "--format".to_owned(),
-        "{{.Name}}\t{{.Label \"dev.berth.installation\"}}".to_owned(),
+        format!(
+            "{{{{.Name}}}}\t{}",
+            super::label_template("dev.berth.installation")
+        ),
     ];
     for line in lines(&volumes)? {
         let (volume, owner) = line.split_once('\t').unwrap_or((line.as_str(), ""));

@@ -50,7 +50,11 @@ pub(super) fn installation_servers() -> Result<Vec<SharedTarget>> {
             "--filter",
             &format!("label=dev.berth.installation={installation}"),
             "--format",
-            "{{.Names}}\t{{.Label \"dev.berth.shared.engine\"}}\t{{.Label \"dev.berth.shared.fingerprint\"}}\t{{.Image}}",
+            &format!(
+                "{{{{.Names}}}}\t{}\t{}\t{{{{.Image}}}}",
+                crate::docker::label_template("dev.berth.shared.engine"),
+                crate::docker::label_template("dev.berth.shared.fingerprint")
+            ),
         ],
         "failed to list shared servers",
     )?;
@@ -117,7 +121,14 @@ pub(super) fn ensure_running(target: &SharedTarget) -> Result<()> {
                     empty_dash(&state.fingerprint)
                 );
             }
-            if super::server_network::needs_attachable_recreation(&target.server)? {
+            // Only a target from a project file can recreate the server: one
+            // read back from labels (by `gc` or a purge, which reach it with
+            // `exec` alone) has no run options, and every engine's options
+            // (`--aclfile`, connection limits) or an authored command make a
+            // project file's `command` non-empty.
+            if !target.command.is_empty()
+                && super::server_network::needs_attachable_recreation(&target.server)?
+            {
                 // Its data volume and admin secret are kept and reused.
                 docker(
                     &["rm", "-f", &target.server],

@@ -254,8 +254,12 @@ pub(crate) fn detach_network(network: &str) -> Result<()> {
 }
 
 fn discover_routes(installation: &str) -> Result<Vec<LabeledRoute>> {
+    let label = crate::docker::label_template;
     let format = format!(
-        "{{{{.Names}}}}\t{{{{.Label \"{ROUTE_HOSTS_LABEL}\"}}}}\t{{{{.Label \"{ROUTE_PORT_LABEL}\"}}}}\t{{{{.Label \"{NETWORK_LABEL}\"}}}}"
+        "{{{{.Names}}}}\t{}\t{}\t{}",
+        label(ROUTE_HOSTS_LABEL),
+        label(ROUTE_PORT_LABEL),
+        label(NETWORK_LABEL)
     );
     let output = crate::docker::run_docker_output_owned(
         &[

@@ -164,6 +164,17 @@ labeled_objects() {
   [[ -z "$volumes" ]] || printf 'volume %s\n' $volumes
   [[ -z "$networks" ]] || printf 'network %s\n' $networks
 }
+# The `--format` term for an object's dev.berth.role label in `ps` and
+# `volume ls`: Podman 4.9's listings have no `.Label` function. Networks are
+# inspected instead, where `.Labels` is a map on both engines.
+role_template() {
+  if [[ "$ENGINE" == podman ]]; then
+    printf '%s' '{{index .Labels "dev.berth.role"}}'
+  else
+    printf '%s' '{{.Label "dev.berth.role"}}'
+  fi
+}
+
 count_labeled_objects() {
   local objects
   objects="$(labeled_objects)" || { printf 'unknown'; return; }
@@ -687,9 +698,12 @@ leftover_instances="$(jq '.instances | length' "$OUTPUT/ls-after-kill.json")"
 check "instances left" "$leftover_instances" 0
 non_shared="unknown"
 if id="$(installation)" && [[ -n "$id" ]] && listing="$(
-  "$ENGINE" ps -a --filter "label=dev.berth.installation=$id" --format '{{.Names}} {{.Label "dev.berth.role"}}' &&
-  "$ENGINE" volume ls --filter "label=dev.berth.installation=$id" --format '{{.Name}} {{.Label "dev.berth.role"}}' &&
-  "$ENGINE" network ls --filter "label=dev.berth.installation=$id" --format '{{.Name}} {{.Label "dev.berth.role"}}'
+  "$ENGINE" ps -a --filter "label=dev.berth.installation=$id" --format "{{.Names}} $(role_template)" &&
+  "$ENGINE" volume ls --filter "label=dev.berth.installation=$id" --format "{{.Name}} $(role_template)" &&
+  "$ENGINE" network ls -q --filter "label=dev.berth.installation=$id" |
+    while read -r network; do
+      "$ENGINE" network inspect --format '{{.Name}} {{index .Labels "dev.berth.role"}}' "$network"
+    done
 )"; then
   printf '%s\n' "$listing" > "$OUTPUT/objects-before-gc.txt"
   non_shared="$(printf '%s\n' "$listing" | awk 'NF && $2 != "shared-server" && $2 != "gateway"' | wc -l | tr -d ' ')"

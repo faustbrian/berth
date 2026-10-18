@@ -1501,6 +1501,23 @@ fn on_podman_the_server_and_gateway_start_on_a_network_instances_can_join() {
             "{what}: {calls}"
         );
     }
+    // Podman 4.9's listings have no `.Label` function.
+    for line in calls.lines().filter(|line| line.contains("--format")) {
+        assert!(!line.contains(".Label \""), "{line}");
+    }
+    let listing = host
+        .command(&a, &["ls", "--json"], "", "")
+        .env("BERTH_ENGINE", "podman")
+        .output()
+        .expect("run berth");
+    assert!(listing.status.success(), "{}", text(&listing.stderr));
+    for line in host
+        .calls()
+        .lines()
+        .filter(|line| line.contains("--format"))
+    {
+        assert!(!line.contains(".Label \""), "{line}");
+    }
     let docker = Host::new("docker-net");
     let b = docker.checkout("b", PROJECT);
     docker.ok(&b, &["up", "--no-wait"]);
@@ -1574,4 +1591,38 @@ fn on_podman_a_server_on_any_network_is_kept() {
             .any(|line| line.starts_with("rm -f") && line.split(' ').any(|word| word == server)),
         "{calls}"
     );
+}
+
+#[test]
+fn on_podman_a_server_is_never_recreated_without_its_run_options() {
+    // A target read back from labels carries no run options (`--aclfile`,
+    // connection limits); recreating from it would start the server
+    // without them.
+    let host = Host::new("podman-labels");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    std::fs::remove_dir_all(host.base.join("state/att").join(&server)).expect("detach");
+    host.clear();
+    for args in [&["gc"][..], &["down", "--purge"][..]] {
+        let output = host
+            .command(&a, args, "", "")
+            .env("BERTH_ENGINE", "podman")
+            .output()
+            .expect("run berth");
+        assert!(
+            output.status.success(),
+            "{args:?}: {}",
+            text(&output.stderr)
+        );
+    }
+    // `down --purge` in the checkout knows the project's options and may
+    // repair the server; nothing may start it without them.
+    let calls = host.calls();
+    for run in calls
+        .lines()
+        .filter(|line| line.starts_with("run -d") && line.contains(&server))
+    {
+        assert!(run.ends_with("-c max_connections=1000"), "{run}");
+    }
 }
