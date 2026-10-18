@@ -227,6 +227,13 @@ must be in `depends_on` and running.
   instance at a time.
 - When an authored `domain` is another instance's route, the route serves
   that instance and the authored domain is withheld, with a warning.
+- On a Linux host with MySQL installed, AppArmor's `usr.sbin.mysqld`
+  profile attaches by path to every `/usr/sbin/mysqld`. Rootless Docker and
+  Podman cannot apply a profile of their own, so it also confines the mysqld
+  of berth's MySQL containers: the engine then cannot stop or remove them
+  ("could not kill: permission denied"). Unload it on such hosts (`sudo
+  apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld`) or use a rootful
+  engine.
 - The acceptance run (`BERTH_ENGINE=docker|podman`) passes on Docker
   Desktop and, in CI on Linux, on rootful Docker, rootless Docker and
   rootless Podman 4.9, including the app that terminates TLS on port 443.

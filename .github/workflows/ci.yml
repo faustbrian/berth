@@ -158,6 +158,19 @@ jobs:
           dockerd-rootless-setuptool.sh install
           echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
 
+      # The runner image ships MySQL with AppArmor's path-attached
+      # `usr.sbin.mysqld` profile. Rootless engines cannot apply their own
+      # profile, so the host's would confine every container's mysqld: it
+      # could not read the image's /etc/my.cnf, and the engine could not
+      # kill it. Unloaded here, as docs/v9/agents.md tells such hosts to.
+      - name: Keep the host's MySQL AppArmor profile off containers
+        if: matrix.engine != 'docker'
+        run: |
+          sudo aa-status | grep -i mysqld || echo "no mysqld profile loaded"
+          if [ -f /etc/apparmor.d/usr.sbin.mysqld ]; then
+            sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          fi
+
       - name: Show the rootless engines
         if: matrix.engine != 'docker'
         run: |
