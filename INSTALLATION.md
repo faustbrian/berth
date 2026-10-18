@@ -3,9 +3,9 @@
 ## Requirements
 
 - macOS or Linux.
-- Docker Desktop or Docker Engine (rootful or rootless). Podman works for the
-  core commands; the shared servers, gateway and acceptance run are verified
-  on Docker only.
+- Docker Desktop, Docker Engine (rootful or rootless) or Podman 4.9 and
+  later (`--engine podman`, `BERTH_ENGINE=podman` or `container_engine:
+  podman`). The agent acceptance run passes on all of them in CI on Linux.
 - A Rust toolchain with Cargo, to build berth.
 - `curl` on the host (readiness probes).
 

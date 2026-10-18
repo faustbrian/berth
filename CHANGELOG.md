@@ -12,8 +12,8 @@ All notable changes to this project are documented in this file.
   `BERTH_ENGINE=podman` and against rootless Docker, and checks an app that
   terminates TLS itself on container port 443 (root with the reduced
   capability set, serving HTTPS on its published port, writing the
-  checkout). CI runs
-  it on Linux against rootful Docker, rootless Docker and rootless Podman.
+  checkout). CI runs it on Linux against rootful Docker, rootless Docker
+  and rootless Podman 4.9, and all three pass.
 
 ### Fixed
 

@@ -228,7 +228,7 @@ must be in `depends_on` and running.
   gateway withhold that host from both until one goes.
 - Test-slot lock files (`~/.berth/locks/test-slots/`, at most the pool size
   per checkout, empty) are kept for reuse.
-- The 443 in-container TLS case is verified on Docker Desktop; on rootful
-  Linux Docker it relies on the file capabilities root keeps.
-- Podman and rootless Docker are supported for the user mapping but are not
-  exercised by the acceptance run, which uses Docker.
+- The acceptance run (`BERTH_ENGINE=docker|podman`) passes on Docker
+  Desktop and, in CI on Linux, on rootful Docker, rootless Docker and
+  rootless Podman 4.9, including the app that terminates TLS on port 443.
+  Rootful Podman on Linux is not part of that run.
