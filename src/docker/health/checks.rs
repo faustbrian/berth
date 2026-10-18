@@ -135,7 +135,6 @@ mod tests {
     use super::check_service_health;
     use crate::config::{Driver, Kind, ServiceConfig};
     use crate::docker;
-    use std::env;
     use std::fs;
     use std::io::{Read, Write};
     use std::net::TcpListener;
@@ -191,7 +190,7 @@ mod tests {
     where
         F: FnOnce() -> T,
     {
-        let bin_dir = env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-fake-health-docker-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

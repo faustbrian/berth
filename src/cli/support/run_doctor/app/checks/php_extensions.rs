@@ -38,7 +38,6 @@ pub(in crate::cli::support::run_doctor::app) fn check_php_extensions(
 #[cfg(test)]
 mod tests {
     use crate::{config::Driver, config::Kind, config::ServiceConfig, docker};
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -104,7 +103,7 @@ mod tests {
 
     #[test]
     fn check_php_extensions_returns_error_when_module_inspection_fails() {
-        let bin_dir = env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-php-extensions-fail-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

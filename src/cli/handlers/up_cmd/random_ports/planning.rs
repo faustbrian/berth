@@ -222,7 +222,8 @@ mod tests {
     }
 
     fn with_fake_docker<T>(script: &str, test: impl FnOnce(std::path::PathBuf) -> T) -> T {
-        let root = std::env::temp_dir().join(format!("berth-random-ports-{}", unique_suffix()));
+        let root = crate::test_support::temp_root()
+            .join(format!("berth-random-ports-{}", unique_suffix()));
         fs::create_dir_all(&root).expect("create temp root");
         let docker = root.join("docker");
         let mut file = fs::File::create(&docker).expect("create fake docker");

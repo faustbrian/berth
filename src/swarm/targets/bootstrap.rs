@@ -62,7 +62,7 @@ mod tests {
         let nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos();
-        let base = std::env::temp_dir().join(format!("berth-swarm-bootstrap-{nonce}"));
+        let base = crate::test_support::temp_root().join(format!("berth-swarm-bootstrap-{nonce}"));
         let source = base.join("source");
         let workspace = base.join("workspace");
         let target_root = workspace.join("rate");

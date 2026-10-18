@@ -119,7 +119,6 @@ pub fn prune_stopped_container(service: &ServiceConfig) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::time::SystemTime;
@@ -178,7 +177,7 @@ mod tests {
     where
         F: FnOnce() -> T,
     {
-        let bin_dir = env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-ops-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

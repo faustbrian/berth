@@ -111,6 +111,13 @@ case "$1" in
     exit 0 ;;
   exec)
     case "$*" in *"'php' 'artisan' 'test'"*) [ -n "$FAKE_TEST_SLEEP" ] && sleep "$FAKE_TEST_SLEEP"; exit 0 ;; esac
+    # Name lookups in an app container: FAKE_DNS_MISSES fail first.
+    case "$*" in *"getent hosts"*)
+      echo "$*" >> "$S/lookups"
+      [ -n "$FAKE_EXEC_FAILS" ] && { echo "Error: container state improper" >&2; exit 125; }
+      [ "$(wc -l < "$S/lookups")" -le "${FAKE_DNS_MISSES:-0}" ] && exit 2
+      exit 0 ;;
+    esac
     cat > "$S/last-sql"; cat "$S/last-sql" >> "$S/sql"
     [ -f "$S/tenant-fails" ] && grep -q 'CREATE ROLE' "$S/last-sql" && { echo 'ERROR:  permission denied to create role' >&2; exit 1; }
     case "$*" in *psql*|*" mysql "*|*" mariadb "*|*redis-cli*) ;; *) exit 0 ;; esac
@@ -123,7 +130,12 @@ case "$1" in
     tail -n 1 "$S/sql" | grep -q '^CONFIG GET databases' && { printf 'databases\n16\n'; exit 0; }
     tail -n 1 "$S/sql" | grep -q '^INFO server' && { printf '# Server\nredis_version:7.2.4\n'; exit 0; }
     tail -n 3 "$S/sql" | grep -q 'server_version_num' && { echo 170004; exit 0; }
-    if tail -n 3 "$S/sql" | grep -q 'FROM pg_roles\|FROM mysql.user'; then
+    # MySQL's listing has no database owners (`list_names_sql`).
+    if tail -n 3 "$S/sql" | grep -q 'FROM mysql.user'; then
+      for n in $FAKE_NAMES; do printf 'd\t%s\t\nr\t%s\t\n' "$n" "$n"; done
+      exit 0
+    fi
+    if tail -n 3 "$S/sql" | grep -q 'FROM pg_roles'; then
       for n in $FAKE_NAMES; do printf 'd\t%s\tberth_admin\nr\t%s\t\n' "$n" "$n"; done
       for pair in $FAKE_OWNED; do printf 'd\t%s\t%s\n' "${pair%%:*}" "${pair#*:}"; done
       exit 0
@@ -1965,4 +1977,95 @@ fn each_engines_tenant_client_reaches_its_server_by_name_with_its_password_in_th
             std::fs::read_to_string(host.base.join("state/client-env")).unwrap_or_default();
         assert_eq!(client_env.trim(), password_env, "{label}");
     }
+}
+
+#[test]
+fn gc_removes_a_mariadb_server_whose_only_users_are_the_images_own() {
+    // The official image creates `healthcheck` for its healthcheck script;
+    // it is nobody's tenant.
+    let host = Host::new("gc-maria");
+    let a = host.checkout(
+        "a",
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: mariadb\n",
+    );
+    host.ok(&a, &["up", "--no-wait"]);
+    host.ok(&a, &["down", "--purge"]);
+    let document = gc(
+        &host,
+        &host.base,
+        "root mariadb.sys healthcheck mysql information_schema performance_schema sys",
+    );
+    let server = &document["servers"][0];
+    assert_eq!(server["engine"], "mariadb", "{document}");
+    assert_eq!(server["removed"], true, "{document}");
+}
+
+#[test]
+fn on_podman_an_app_starts_its_command_only_once_its_service_names_resolve() {
+    // Rootless Podman's DNS server can briefly miss a name it was just
+    // given (`getaddrinfo for cache failed: Temporary failure`).
+    let host = Host::new("podman-dns");
+    let a = host.checkout("a", PROJECT);
+    let up = host
+        .command(&a, &["up", "--no-wait"], "", "")
+        .env("BERTH_ENGINE", "podman")
+        .env("FAKE_DNS_MISSES", "2")
+        .output()
+        .expect("run berth");
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    let lookups = std::fs::read_to_string(host.base.join("state/lookups")).unwrap_or_default();
+    assert!(
+        lookups.lines().count() >= 3,
+        "it waited out the misses: {lookups}"
+    );
+    assert!(lookups.contains("getent hosts db"), "{lookups}");
+
+    let docker = Host::new("docker-dns");
+    let b = docker.checkout("b", PROJECT);
+    docker.ok(&b, &["up", "--no-wait"]);
+    assert!(
+        !docker.base.join("state/lookups").exists(),
+        "Docker's resolver is synchronous: no lookups"
+    );
+}
+
+#[test]
+fn on_podman_an_app_listed_before_its_services_still_comes_up() {
+    // `berth init` lists the app first: its services start after it, so
+    // their names cannot resolve yet and are not waited for.
+    let host = Host::new("podman-order");
+    let a = host.checkout(
+        "a",
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  app:\n    preset: laravel\n  db:\n    preset: postgres\n",
+    );
+    let up = host
+        .command(&a, &["up", "--no-wait"], "", "")
+        .env("BERTH_ENGINE", "podman")
+        .env("FAKE_DNS_MISSES", "1000")
+        .output()
+        .expect("run berth");
+    assert!(up.status.success(), "{}", text(&up.stderr));
+}
+
+#[test]
+fn on_podman_a_failing_lookup_command_fails_up_at_once_with_its_error() {
+    let host = Host::new("podman-exec-fails");
+    let a = host.checkout("a", PROJECT);
+    let started = std::time::Instant::now();
+    let up = host
+        .command(&a, &["up", "--no-wait"], "", "")
+        .env("BERTH_ENGINE", "podman")
+        .env("FAKE_EXEC_FAILS", "1")
+        .output()
+        .expect("run berth");
+    assert_eq!(up.status.code(), Some(125), "{}", text(&up.stderr));
+    assert!(
+        text(&up.stderr).contains("container state improper"),
+        "{}",
+        text(&up.stderr)
+    );
+    assert!(
+        started.elapsed().as_secs() < 20,
+        "it did not wait out a DNS timeout"
+    );
 }

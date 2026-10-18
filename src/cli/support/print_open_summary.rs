@@ -105,7 +105,7 @@ mod tests {
     where
         F: FnOnce(&Path, &Path) -> T,
     {
-        let marker_dir = std::env::temp_dir().join(format!(
+        let marker_dir = crate::test_support::temp_root().join(format!(
             "berth-print-open-summary-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

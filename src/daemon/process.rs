@@ -99,7 +99,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_log_path(name: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(format!(
+        crate::test_support::temp_root().join(format!(
             "berth-daemon-log-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -109,7 +109,7 @@ mod tests {
     }
 
     fn mock_binary(name: &str, script: &str) -> String {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-daemon-binary-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

@@ -27,7 +27,6 @@ mod tests {
     use crate::cli::support::probe_http_status::with_curl_command;
     use crate::config::{Driver, Kind, ServiceConfig};
     use serde_json::Value;
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -81,7 +80,7 @@ mod tests {
     where
         F: FnOnce() -> T,
     {
-        let bin_dir = env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-summary-json-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

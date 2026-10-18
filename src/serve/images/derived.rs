@@ -179,7 +179,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_root(name: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-derived-browser-audit-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

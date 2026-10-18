@@ -51,7 +51,8 @@ mod tests {
 
     #[test]
     fn keeps_a_saved_acl_file_and_replaces_anything_without_an_admin_password() {
-        let dir = std::env::temp_dir().join(format!("berth-acl-seed-{}", std::process::id()));
+        let dir =
+            crate::test_support::temp_root().join(format!("berth-acl-seed-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&dir));
         std::fs::create_dir_all(&dir).expect("dir");
         let file = dir.join("users.acl");

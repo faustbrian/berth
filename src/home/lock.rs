@@ -24,12 +24,18 @@ impl HostLock {
     pub(crate) fn try_acquire(name: &str) -> Result<Option<Self>> {
         let dir = super::private_dir(Path::new("locks"))?;
         let path = dir.join(format!("{name}.lock"));
-        let file = open_lock_file(&path)?;
-        match file.try_lock() {
-            Ok(()) => Ok(Some(Self { _file: file })),
-            Err(TryLockError::WouldBlock) => Ok(None),
-            Err(TryLockError::Error(error)) => {
-                Err(error).with_context(|| format!("failed to lock {}", path.display()))
+        loop {
+            let file = open_lock_file(&path)?;
+            match file.try_lock() {
+                // `berth gc` deletes unused lock files while holding them; a
+                // lock on a deleted file guards nothing, so take the new one.
+                Ok(()) if super::same_file(&file, &path)? => return Ok(Some(Self { _file: file })),
+                Ok(()) => {}
+                Err(TryLockError::WouldBlock) => return Ok(None),
+                Err(TryLockError::Error(error)) => {
+                    return Err(error)
+                        .with_context(|| format!("failed to lock {}", path.display()));
+                }
             }
         }
     }
@@ -43,30 +49,29 @@ impl HostLock {
     pub(crate) fn acquire(name: &str, timeout: Duration) -> Result<Self> {
         let dir = super::private_dir(Path::new("locks"))?;
         let path = dir.join(format!("{name}.lock"));
-        let file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .mode(0o600)
-            .open(&path)
-            .with_context(|| format!("failed to open {}", path.display()))?;
         let started = Instant::now();
         loop {
-            match file.try_lock() {
-                Ok(()) => return Ok(Self { _file: file }),
-                Err(TryLockError::WouldBlock) if started.elapsed() < timeout => {
-                    std::thread::sleep(Duration::from_millis(50));
+            let file = open_lock_file(&path)?;
+            loop {
+                match file.try_lock() {
+                    Ok(()) => break,
+                    Err(TryLockError::WouldBlock) if started.elapsed() < timeout => {
+                        std::thread::sleep(Duration::from_millis(50));
+                    }
+                    Err(TryLockError::WouldBlock) => anyhow::bail!(
+                        "timed out after {}s waiting for {}; another berth process holds it",
+                        timeout.as_secs(),
+                        path.display()
+                    ),
+                    Err(TryLockError::Error(error)) => {
+                        return Err(error)
+                            .with_context(|| format!("failed to lock {}", path.display()));
+                    }
                 }
-                Err(TryLockError::WouldBlock) => anyhow::bail!(
-                    "timed out after {}s waiting for {}; another berth process holds it",
-                    timeout.as_secs(),
-                    path.display()
-                ),
-                Err(TryLockError::Error(error)) => {
-                    return Err(error)
-                        .with_context(|| format!("failed to lock {}", path.display()));
-                }
+            }
+            // As in `try_acquire`: only the file at the path now counts.
+            if super::same_file(&file, &path)? {
+                return Ok(Self { _file: file });
             }
         }
     }

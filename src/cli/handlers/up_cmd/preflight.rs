@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn prepare_up_context_resolves_injected_env_even_without_dependencies() -> anyhow::Result<()> {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-up-preflight-no-deps-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

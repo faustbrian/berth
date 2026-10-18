@@ -89,7 +89,7 @@ mod tests {
 
     impl TempDoctorRepairFixture {
         fn new(unhealthy_status: &str, healthy_status: &str) -> Self {
-            let root = std::env::temp_dir().join(format!(
+            let root = crate::test_support::temp_root().join(format!(
                 "berth-doctor-repair-{}",
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)

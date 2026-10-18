@@ -127,7 +127,6 @@ mod tests {
     use super::{find_connection_name, resolve_post_restore_connection};
     use crate::config::{Driver, Kind, ServiceConfig};
     use std::collections::HashMap;
-    use std::env;
     use std::fs;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -181,7 +180,7 @@ mod tests {
     where
         F: FnOnce(&Path) -> T,
     {
-        let root = env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-post-restore-connection-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

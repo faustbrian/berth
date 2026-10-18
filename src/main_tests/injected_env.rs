@@ -3,7 +3,8 @@ use super::*;
 #[test]
 fn project_dependency_injected_env_resolves_base_url_from_domain() -> Result<()> {
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let workspace = std::env::temp_dir().join(format!("berth-project-deps-env-{nonce}"));
+    let workspace =
+        crate::test_support::temp_root().join(format!("berth-project-deps-env-{nonce}"));
     let api_root = workspace.join("api");
     let location_root = workspace.join("location");
     std::fs::create_dir_all(&api_root)?;
@@ -58,7 +59,8 @@ root = "location"
 #[test]
 fn project_dependency_injected_env_resolves_when_workspace_config_is_project_root() -> Result<()> {
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let api_root = std::env::temp_dir().join(format!("berth-project-root-workspace-{nonce}"));
+    let api_root =
+        crate::test_support::temp_root().join(format!("berth-project-root-workspace-{nonce}"));
     let location_root = api_root.join("location");
     std::fs::create_dir_all(&location_root)?;
 
@@ -134,7 +136,7 @@ fn injected_tokens_name_the_source_container_on_its_network() -> Result<()> {
 #[test]
 fn project_dependency_injected_env_is_empty_outside_swarm_workspace() -> Result<()> {
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let root = std::env::temp_dir().join(format!("berth-project-no-workspace-{nonce}"));
+    let root = crate::test_support::temp_root().join(format!("berth-project-no-workspace-{nonce}"));
     std::fs::create_dir_all(&root)?;
     crate::config::project_file::write_test_config_file(
         root.join(".berth.yaml"),
@@ -151,7 +153,8 @@ fn project_dependency_injected_env_is_empty_outside_swarm_workspace() -> Result<
 #[test]
 fn project_dependency_runner_is_noop_outside_swarm_workspace() -> Result<()> {
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let root = std::env::temp_dir().join(format!("berth-project-deps-runner-noop-{nonce}"));
+    let root =
+        crate::test_support::temp_root().join(format!("berth-project-deps-runner-noop-{nonce}"));
     std::fs::create_dir_all(&root)?;
     crate::config::project_file::write_test_config_file(
         root.join(".berth.yaml"),

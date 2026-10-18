@@ -105,7 +105,8 @@ mod tests {
 
     #[test]
     fn a_secret_is_private_and_concurrent_first_uses_agree() {
-        let dir = std::env::temp_dir().join(format!("berth-secret-file-{}", std::process::id()));
+        let dir = crate::test_support::temp_root()
+            .join(format!("berth-secret-file-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&dir));
         std::fs::create_dir_all(&dir).expect("dir");
         let values: Vec<String> = std::thread::scope(|scope| {

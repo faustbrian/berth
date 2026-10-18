@@ -90,7 +90,7 @@ mod tests {
     }
 
     fn temp_config_path() -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::test_support::temp_root().join(format!(
             "berth-project-runtime-context-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

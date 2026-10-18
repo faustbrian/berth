@@ -137,7 +137,7 @@ mod tests {
     where
         F: FnOnce(&Path, &str) -> T,
     {
-        let bin_dir = std::env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-open-after-start-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

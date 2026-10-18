@@ -702,6 +702,43 @@ tls_down=0
 (cd "$WORKTREES/tls-443" && "$BERTH" down --purge > "$tls_out/down.out" 2>&1) || tls_down=$?
 check "443 app down --purge" "$tls_down" 0
 
+log "checking the MySQL, MariaDB and Valkey tenant clients"
+# Each runs in a throwaway container on the instance network and logs in
+# as the tenant (agents cover PostgreSQL and Redis).
+make_worktree clients
+cat > "$WORKTREES/clients/.berth.yaml" <<'YAML'
+schema_version: 9
+project: clients
+project_type: project
+services:
+  my:
+    preset: mysql
+  maria:
+    preset: mariadb
+  kv:
+    preset: valkey
+YAML
+clients_out="$OUTPUT/clients"
+mkdir -p "$clients_out"
+clients_status=0
+(cd "$WORKTREES/clients" && "$BERTH" up --wait > "$clients_out/up.out" 2>&1) || clients_status=$?
+check "tenant-client instance up" "$clients_status" 0
+for service in my maria; do
+  status=0
+  (cd "$WORKTREES/clients" && printf 'select current_user();\n' |
+    "$BERTH" exec --no-tty --service "$service" > "$clients_out/$service.out" 2>&1) || status=$?
+  check "$service client as its tenant" \
+    "$status $(grep -cE '^[0-9a-f]{12}_[0-9a-f]+@%$' "$clients_out/$service.out")" "0 1"
+  check "$service client prints no warning" "$(grep -ci warning "$clients_out/$service.out")" 0
+done
+status=0
+(cd "$WORKTREES/clients" && printf 'PING\n' |
+  "$BERTH" exec --no-tty --service kv > "$clients_out/kv.out" 2>&1) || status=$?
+check "kv client as its tenant" "$status $(tr -d '\r' < "$clients_out/kv.out" | grep -cx PONG)" "0 1"
+clients_down=0
+(cd "$WORKTREES/clients" && "$BERTH" down --purge > "$clients_out/down.out" 2>&1) || clients_down=$?
+check "tenant-client instance down --purge" "$clients_down" 0
+
 log "checking leftovers"
 leftover_instances="$(jq '.instances | length' "$OUTPUT/ls-after-kill.json")"
 check "instances left" "$leftover_instances" 0

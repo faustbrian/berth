@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn execute_hook_runs_script() {
-        let bin_dir = std::env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-hook-script-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

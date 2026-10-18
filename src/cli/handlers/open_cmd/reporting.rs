@@ -113,7 +113,6 @@ mod tests {
     use crate::cli::support::with_curl_command;
     use crate::config::{Config, Driver, Kind, ServiceConfig};
     use crate::docker;
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::path::Path;
@@ -188,7 +187,7 @@ mod tests {
     where
         F: FnOnce() -> T,
     {
-        let dir = env::temp_dir().join(format!(
+        let dir = crate::test_support::temp_root().join(format!(
             "berth-open-reporting-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -222,7 +221,7 @@ mod tests {
     where
         F: FnOnce(&Path) -> T,
     {
-        let marker_dir = env::temp_dir().join(format!(
+        let marker_dir = crate::test_support::temp_root().join(format!(
             "berth-open-reporting-open-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

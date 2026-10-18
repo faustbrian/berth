@@ -69,8 +69,8 @@ mod tests {
     fn generates_a_new_private_file_and_never_replaces_one() {
         // Other tests toggle the process-wide dry-run flag.
         crate::docker::with_dry_run_state(false, || {
-            let dir =
-                std::env::temp_dir().join(format!("berth-env-generate-{}", std::process::id()));
+            let dir = crate::test_support::temp_root()
+                .join(format!("berth-env-generate-{}", std::process::id()));
             drop(std::fs::remove_dir_all(&dir));
             std::fs::create_dir_all(&dir).expect("dir");
             let path = dir.join("env.berth");

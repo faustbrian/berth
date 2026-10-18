@@ -119,7 +119,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_home(name: &str) -> std::path::PathBuf {
-        let home = std::env::temp_dir().join(format!(
+        let home = crate::test_support::temp_root().join(format!(
             "berth-daemon-state-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -132,7 +132,7 @@ mod tests {
     }
 
     fn temp_project_root(name: &str) -> std::path::PathBuf {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-daemon-project-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

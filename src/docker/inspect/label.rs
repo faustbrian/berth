@@ -23,7 +23,6 @@ pub(super) fn inspect_label(container_name: &str, key: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::time::SystemTime;
@@ -40,7 +39,7 @@ mod tests {
 
     #[test]
     fn inspect_label_reads_value_from_inspect_output() {
-        let bin_dir = env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-inspect-label-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

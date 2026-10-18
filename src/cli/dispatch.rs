@@ -154,7 +154,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system clock")
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!(
+        let dir = crate::test_support::temp_root().join(format!(
             "berth-dispatch-run-{}-{}",
             std::process::id(),
             nanos

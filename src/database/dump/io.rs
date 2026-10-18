@@ -61,7 +61,7 @@ mod tests {
     use super::{is_gzip_path, write_dump_file};
 
     fn temp_file_path(prefix: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!(
+        let dir = crate::test_support::temp_root().join(format!(
             "berth-dump-io-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()

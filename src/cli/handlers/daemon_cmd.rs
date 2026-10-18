@@ -232,7 +232,7 @@ mod tests {
     };
 
     fn temp_project_root(name: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-daemon-handler-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -250,7 +250,7 @@ mod tests {
     }
 
     fn temp_home(name: &str) -> PathBuf {
-        let home = std::env::temp_dir().join(format!(
+        let home = crate::test_support::temp_root().join(format!(
             "berth-daemon-home-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

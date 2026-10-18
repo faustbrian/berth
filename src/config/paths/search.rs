@@ -104,7 +104,7 @@ mod tests {
 
     fn temp_tree() -> std::path::PathBuf {
         let sequence = TEMP_TREE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!(
+        let dir = crate::test_support::temp_root().join(format!(
             "berth-path-search-{}-{}-{sequence}",
             std::process::id(),
             std::time::SystemTime::now()

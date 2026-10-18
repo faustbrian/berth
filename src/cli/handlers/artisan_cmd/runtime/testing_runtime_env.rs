@@ -261,14 +261,16 @@ fn workspace_pool_key(workspace_root: &Path) -> String {
 /// The workspace's slot locks, under the berth home (unit tests use a
 /// private temporary directory instead of the developer's home).
 fn pool_lock_root(workspace_key: &str) -> Result<std::path::PathBuf> {
-    if cfg!(test) {
-        let root = std::env::temp_dir()
-            .join(format!("berth-test-slots-{}", std::process::id()))
+    #[cfg(test)]
+    {
+        let root = crate::test_support::temp_root()
+            .join("test-slots")
             .join(workspace_key);
         std::fs::create_dir_all(&root)
             .with_context(|| format!("failed to create {}", root.display()))?;
-        return Ok(root);
+        Ok(root)
     }
+    #[cfg(not(test))]
     crate::home::private_dir(&Path::new("locks").join("test-slots").join(workspace_key))
 }
 
@@ -290,7 +292,7 @@ mod tests {
     };
 
     fn temp_root(name: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-test-runtime-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

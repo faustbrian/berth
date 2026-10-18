@@ -249,7 +249,8 @@ mod tests {
 
     #[test]
     fn scripts_install_byte_for_byte_without_heredocs() {
-        let dir = std::env::temp_dir().join(format!("berth-install-script-{}", std::process::id()));
+        let dir = crate::test_support::temp_root()
+            .join(format!("berth-install-script-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&dir));
         std::fs::create_dir_all(&dir).expect("dir");
         for (name, content) in [

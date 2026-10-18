@@ -122,7 +122,7 @@ mod tests {
     #[test]
     fn resolve_app_runtime_context_with_workspace_root_builds_context() {
         let cfg = config();
-        let workspace_root = std::env::temp_dir().join(format!(
+        let workspace_root = crate::test_support::temp_root().join(format!(
             "berth-workspace-root-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn resolve_app_runtime_context_uses_config_path() -> anyhow::Result<()> {
-        let dir = std::env::temp_dir().join(format!(
+        let dir = crate::test_support::temp_root().join(format!(
             "berth-app-runtime-context-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -189,7 +189,7 @@ mod tests {
     #[test]
     fn resolve_app_runtime_context_with_workspace_root_merges_swarm_injected_env()
     -> anyhow::Result<()> {
-        let workspace_root = std::env::temp_dir().join(format!(
+        let workspace_root = crate::test_support::temp_root().join(format!(
             "berth-app-runtime-context-injected-env-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

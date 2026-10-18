@@ -35,7 +35,6 @@ mod tests {
     use super::*;
     use crate::cli::support::probe_http_status::with_curl_command;
     use crate::config::{Driver, Kind, ServiceConfig};
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -93,7 +92,7 @@ mod tests {
         F: FnOnce() -> T,
     {
         let id = SUMMARY_FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let bin_dir = env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-summary-{}-{}-{}",
             std::process::id(),
             id,

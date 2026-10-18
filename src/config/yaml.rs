@@ -205,7 +205,8 @@ mod tests {
 
     #[test]
     fn bounded_reads_refuse_symlinks_and_oversized_files() -> anyhow::Result<()> {
-        let dir = std::env::temp_dir().join(format!("berth-yaml-bounds-{}", std::process::id()));
+        let dir = crate::test_support::temp_root()
+            .join(format!("berth-yaml-bounds-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&dir));
         std::fs::create_dir_all(&dir)?;
         let real = dir.join("real.yaml");
@@ -232,7 +233,8 @@ mod tests {
 
     #[test]
     fn atomic_writes_refuse_a_symlinked_destination() -> anyhow::Result<()> {
-        let dir = std::env::temp_dir().join(format!("berth-yaml-write-{}", std::process::id()));
+        let dir = crate::test_support::temp_root()
+            .join(format!("berth-yaml-write-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&dir));
         std::fs::create_dir_all(&dir)?;
         let victim = dir.join("victim.txt");

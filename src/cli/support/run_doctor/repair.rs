@@ -147,7 +147,7 @@ mod tests {
 
     impl TempDoctorRepairFixture {
         fn new(restart_recovers: bool) -> Self {
-            let root = std::env::temp_dir().join(format!(
+            let root = crate::test_support::temp_root().join(format!(
                 "berth-doctor-repair-all-{}",
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)

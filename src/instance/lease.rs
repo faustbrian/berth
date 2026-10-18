@@ -166,7 +166,8 @@ mod tests {
 
     #[test]
     fn a_lock_on_a_deleted_file_is_not_the_lock_at_the_path() {
-        let dir = std::env::temp_dir().join(format!("berth-lease-inode-{}", std::process::id()));
+        let dir = crate::test_support::temp_root()
+            .join(format!("berth-lease-inode-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");
         let path = dir.join("instance_shop_a.lock");
         let first = std::fs::File::create(&path).expect("lock file");

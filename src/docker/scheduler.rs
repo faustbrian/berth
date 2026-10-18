@@ -165,7 +165,7 @@ mod tests {
     static PATH_MUTEX: Mutex<()> = Mutex::new(());
 
     fn temp_root(name: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-docker-scheduler-{name}-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

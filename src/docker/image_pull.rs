@@ -92,7 +92,6 @@ fn backoff(attempt: u32) -> Duration {
 #[cfg(test)]
 mod tests {
     use crate::docker;
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::time::SystemTime;
@@ -102,7 +101,7 @@ mod tests {
     where
         F: FnOnce() -> T,
     {
-        let bin_dir = env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-image-pull-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -141,7 +140,8 @@ mod tests {
 
     #[test]
     fn transient_failures_are_retried_then_succeed() {
-        let counter = env::temp_dir().join(format!("berth-pull-count-{}", std::process::id()));
+        let counter = crate::test_support::temp_root()
+            .join(format!("berth-pull-count-{}", std::process::id()));
         fs::remove_file(&counter).ok();
         let script = format!(
             "n=$(cat {c} 2>/dev/null || echo 0); n=$((n+1)); echo $n > {c}\n\
@@ -158,7 +158,8 @@ mod tests {
 
     #[test]
     fn transient_failures_stop_after_three_attempts_with_the_last_error() {
-        let counter = env::temp_dir().join(format!("berth-pull-give-up-{}", std::process::id()));
+        let counter = crate::test_support::temp_root()
+            .join(format!("berth-pull-give-up-{}", std::process::id()));
         fs::remove_file(&counter).ok();
         let script = format!(
             "n=$(cat {c} 2>/dev/null || echo 0); n=$((n+1)); echo $n > {c}\n\
@@ -175,7 +176,8 @@ mod tests {
 
     #[test]
     fn permanent_failures_are_not_retried() {
-        let counter = env::temp_dir().join(format!("berth-pull-permanent-{}", std::process::id()));
+        let counter = crate::test_support::temp_root()
+            .join(format!("berth-pull-permanent-{}", std::process::id()));
         fs::remove_file(&counter).ok();
         let script = format!(
             "n=$(cat {c} 2>/dev/null || echo 0); n=$((n+1)); echo $n > {c}\n\

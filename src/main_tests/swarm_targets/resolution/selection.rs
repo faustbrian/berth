@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn resolve_swarm_targets_filters_only_and_validates_members() -> Result<()> {
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let base = std::env::temp_dir().join(format!("berth-swarm-test-{nonce}"));
+    let base = crate::test_support::temp_root().join(format!("berth-swarm-test-{nonce}"));
     std::fs::create_dir_all(base.join("api"))?;
     std::fs::create_dir_all(base.join("bill"))?;
     crate::config::project_file::write_test_config_file(

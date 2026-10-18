@@ -238,7 +238,8 @@ mod tests {
 
     #[test]
     fn the_record_must_hold_two_different_ports() {
-        let dir = std::env::temp_dir().join(format!("berth-ports-{}", std::process::id()));
+        let dir =
+            crate::test_support::temp_root().join(format!("berth-ports-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");
         let path = dir.join("ports");
         assert!(read_recorded(&path).expect("absent").is_none());

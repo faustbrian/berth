@@ -88,8 +88,8 @@ mod tests {
     use super::{handle_setup_commands, load_config_for_cli};
 
     fn minimal_config_dir() -> PathBuf {
-        let dir =
-            std::env::temp_dir().join(format!("berth-dispatch-bootstrap-{}", std::process::id()));
+        let dir = crate::test_support::temp_root()
+            .join(format!("berth-dispatch-bootstrap-{}", std::process::id()));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).expect("create temp dir");
         let config_path = dir.join(".berth.yaml");
@@ -126,8 +126,8 @@ mod tests {
 
     #[test]
     fn config_migrate_runs_before_loading_a_legacy_only_directory() {
-        let dir =
-            std::env::temp_dir().join(format!("berth-dispatch-migrate-{}", std::process::id()));
+        let dir = crate::test_support::temp_root()
+            .join(format!("berth-dispatch-migrate-{}", std::process::id()));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).expect("create temp dir");
         fs::write(dir.join(".helm.toml"), "container_prefix = \"api\"\n").expect("seed legacy");

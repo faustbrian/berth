@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn resolve_swarm_targets_includes_dependencies_by_default() -> Result<()> {
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let base = std::env::temp_dir().join(format!("berth-swarm-deps-test-{nonce}"));
+    let base = crate::test_support::temp_root().join(format!("berth-swarm-deps-test-{nonce}"));
     std::fs::create_dir_all(base.join("api"))?;
     std::fs::create_dir_all(base.join("bill"))?;
     std::fs::create_dir_all(base.join("postal"))?;

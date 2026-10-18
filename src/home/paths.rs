@@ -126,7 +126,8 @@ mod tests {
 
     #[test]
     fn symlinked_directories_are_refused() {
-        let base = std::env::temp_dir().join(format!("berth-home-link-{}", std::process::id()));
+        let base = crate::test_support::temp_root()
+            .join(format!("berth-home-link-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&base));
         std::fs::create_dir_all(base.join("target")).expect("target");
         std::os::unix::fs::symlink(base.join("target"), base.join("home")).expect("link");

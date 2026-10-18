@@ -76,7 +76,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn with_fake_binary<F: FnOnce(&Path, &str)>(name: &str, body: F) {
-        let base = std::env::temp_dir();
+        let base = crate::test_support::temp_root();
         let stamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("time");
         let bin_dir = base.join(format!("berth-open-browser-{}", stamp.as_nanos()));
         fs::create_dir_all(&bin_dir).expect("create fake bin dir");

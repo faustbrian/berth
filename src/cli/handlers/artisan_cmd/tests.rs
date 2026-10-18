@@ -153,7 +153,7 @@ fn handle_artisan_rejects_library_project_type() {
 }
 
 fn temp_root(name: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!(
+    let root = crate::test_support::temp_root().join(format!(
         "berth-artisan-cfg-{name}-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)

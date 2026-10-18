@@ -650,7 +650,6 @@ fn now_unix() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::path::{Path, PathBuf};
@@ -685,7 +684,7 @@ mod tests {
     }
 
     fn share_home_path(prefix: &str) -> PathBuf {
-        let home = env::temp_dir().join(format!(
+        let home = crate::test_support::temp_root().join(format!(
             "berth-share-state-{}-{}",
             prefix,
             std::process::id()
@@ -770,7 +769,7 @@ mod tests {
 
     #[test]
     fn state_paths_respects_home() {
-        let home = env::temp_dir().join("berth-share-state-test-home");
+        let home = crate::test_support::temp_root().join("berth-share-state-test-home");
         drop(fs::remove_dir_all(&home));
         fs::create_dir_all(&home).expect("create test home");
         let expected = home.join(".config/berth/share/sessions.toml");
@@ -803,7 +802,7 @@ mod tests {
 
     #[test]
     fn read_and_write_state_round_trip() {
-        let temp_dir = env::temp_dir().join(format!(
+        let temp_dir = crate::test_support::temp_root().join(format!(
             "berth-share-state-roundtrip-{}",
             std::process::id()
         ));
@@ -872,7 +871,7 @@ mod tests {
 
     #[test]
     fn upsert_and_remove_session_update_state() {
-        let temp_dir = env::temp_dir().join(format!(
+        let temp_dir = crate::test_support::temp_root().join(format!(
             "berth-share-state-upsert-remove-{}",
             std::process::id()
         ));
@@ -914,8 +913,8 @@ mod tests {
 
     #[test]
     fn reads_public_url_from_tailscale_like_log_output() {
-        let temp_dir =
-            env::temp_dir().join(format!("berth-share-state-log-{}", std::process::id()));
+        let temp_dir = crate::test_support::temp_root()
+            .join(format!("berth-share-state-log-{}", std::process::id()));
         drop(fs::remove_dir_all(&temp_dir));
         fs::create_dir_all(&temp_dir).expect("create temp dir");
         let log_path = temp_dir.join("tailscale.log");
@@ -945,8 +944,8 @@ mod tests {
 
     #[test]
     fn wait_for_public_url_reads_when_log_file_populates() {
-        let temp_dir =
-            env::temp_dir().join(format!("berth-share-state-wait-{}", std::process::id()));
+        let temp_dir = crate::test_support::temp_root()
+            .join(format!("berth-share-state-wait-{}", std::process::id()));
         drop(fs::remove_dir_all(&temp_dir));
         fs::create_dir_all(&temp_dir).expect("create temp dir");
         let log_path = temp_dir.join("wait.log");
@@ -1116,8 +1115,8 @@ mod tests {
 
     #[test]
     fn append_command_output_appends_stdout_and_stderr() {
-        let temp_dir =
-            env::temp_dir().join(format!("berth-share-append-output-{}", std::process::id()));
+        let temp_dir = crate::test_support::temp_root()
+            .join(format!("berth-share-append-output-{}", std::process::id()));
         drop(fs::remove_dir_all(&temp_dir));
         fs::create_dir_all(&temp_dir).expect("create temp dir");
         let log = temp_dir.join("command.log");
@@ -1138,8 +1137,8 @@ mod tests {
         let binary = mock_binary(&home, "expose-detached", "#!/usr/bin/env sh\nsleep 60\n");
         set_test_provider_binary(ShareProvider::Expose, &binary);
 
-        let temp_dir =
-            env::temp_dir().join(format!("berth-share-state-spawn-{}", std::process::id()));
+        let temp_dir = crate::test_support::temp_root()
+            .join(format!("berth-share-state-spawn-{}", std::process::id()));
         drop(fs::remove_dir_all(&temp_dir));
         fs::create_dir_all(&temp_dir).expect("create temp dir");
         let log_path = temp_dir.join("detached.log");

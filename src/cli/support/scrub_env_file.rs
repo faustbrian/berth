@@ -51,7 +51,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn temp_env_file(contents: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::test_support::temp_root().join(format!(
             "berth-scrub-env-{}-{}.env",
             std::process::id(),
             contents.len()

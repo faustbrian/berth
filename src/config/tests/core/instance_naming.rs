@@ -10,7 +10,7 @@ fn worktree(base: &std::path::Path, name: &str) -> std::path::PathBuf {
 }
 
 fn base(label: &str) -> std::path::PathBuf {
-    let base = std::env::temp_dir().join(format!(
+    let base = crate::test_support::temp_root().join(format!(
         "berth-instance-naming-{label}-{}",
         std::process::id()
     ));

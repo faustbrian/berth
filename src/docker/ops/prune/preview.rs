@@ -88,7 +88,7 @@ mod tests {
     where
         F: FnOnce() -> T,
     {
-        let bin_dir = std::env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-prune-preview-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

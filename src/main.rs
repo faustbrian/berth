@@ -38,6 +38,8 @@ mod serve;
 mod share;
 mod shared;
 mod swarm;
+#[cfg(test)]
+mod test_support;
 
 /// Exit code for failures of berth itself (as opposed to a command berth ran),
 /// following the Docker CLI convention so agents can tell them apart.

@@ -104,7 +104,7 @@ mod tests {
     }
 
     fn temp_root() -> std::path::PathBuf {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-repro-tests-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

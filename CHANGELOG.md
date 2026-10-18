@@ -16,8 +16,9 @@ All notable changes to this project are documented in this file.
   `BERTH_ENGINE=podman` and against rootless Docker, and checks an app that
   terminates TLS itself on container port 443 (root with the reduced
   capability set, serving HTTPS on its published port, writing the
-  checkout). CI runs it on Linux against rootful Docker, rootless Docker
-  and rootless Podman 4.9, and all three pass.
+  checkout). It also runs each tenant client (PostgreSQL, MySQL, MariaDB,
+  Redis, Valkey) for real. CI runs it on Linux against rootful Docker,
+  rootless Docker and rootless Podman 4.9, and all three pass.
 
 ### Changed
 
@@ -34,6 +35,22 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- `berth gc` removes a shared MariaDB server nothing uses: the official
+  image's own `healthcheck` user no longer counts as a tenant.
+- On Podman, an app container runs its command only once the service names
+  it was given (`DB_HOST`, `REDIS_HOST` …) that are already attached to its
+  network resolve inside it, so a first connection no longer fails with
+  "Temporary failure in name resolution" while Podman's DNS server catches
+  up; after 30 s `up` fails naming them.
+- The MariaDB tenant client no longer warns of an "insecure passwordless
+  login" (its password comes from `MYSQL_PWD`; the server's certificate is
+  self-signed either way).
+- `berth gc` removes the lock files of instances that no longer exist (a
+  checkout where only `env` or `config validate` ran leaves one), and host
+  locks are only ever held on the lock file at their path.
+- Unit tests keep their fixtures under one per-process directory
+  (`$TMPDIR/berth-ut-{pid}`) and remove those of finished test processes, instead
+  of leaving about 70 entries in the system temp directory per run.
 - Every command (`env` and `config validate` included) marks its instance
   in use before reading anything of it from the berth home, and keeps it
   marked until it ends. A concurrent reap could otherwise delete the credentials

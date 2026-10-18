@@ -121,7 +121,6 @@ mod tests {
     use crate::config::{Driver, Kind, ServiceConfig};
     use crate::database::PostRestoreOptions;
     use std::collections::HashMap;
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::path::{Path, PathBuf};
@@ -131,7 +130,7 @@ mod tests {
     where
         F: FnOnce(&Path) -> T,
     {
-        let root = env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-post-restore-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -155,7 +154,7 @@ mod tests {
     where
         F: FnOnce() -> T,
     {
-        let bin_dir = env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-post-restore-docker-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -266,7 +265,7 @@ return [
     }
 
     fn capture_path() -> PathBuf {
-        env::temp_dir().join(format!(
+        crate::test_support::temp_root().join(format!(
             "berth-post-restore-capture-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

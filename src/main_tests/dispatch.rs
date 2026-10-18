@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn temporary_project_root() -> PathBuf {
-    let root = std::env::temp_dir().join(format!(
+    let root = crate::test_support::temp_root().join(format!(
         "berth-main-test-dispatch-{}-{}",
         std::process::id(),
         SystemTime::now()
@@ -62,7 +62,7 @@ fn with_fake_curl<F, T>(output: &str, status_ok: bool, test: F) -> T
 where
     F: FnOnce() -> T,
 {
-    let dir = std::env::temp_dir().join(format!(
+    let dir = crate::test_support::temp_root().join(format!(
         "berth-dispatch-open-curl-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -99,7 +99,7 @@ fn with_fake_open_command<F, T>(test: F) -> T
 where
     F: FnOnce(&Path) -> T,
 {
-    let marker_dir = std::env::temp_dir().join(format!(
+    let marker_dir = crate::test_support::temp_root().join(format!(
         "berth-dispatch-open-browser-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)

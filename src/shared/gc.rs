@@ -133,6 +133,9 @@ fn tenants(target: &SharedTarget) -> Result<Vec<String>> {
                         | "sys"
                         | "root"
                         | "mariadb.sys"
+                        // The official MariaDB image's own user for its
+                        // `healthcheck.sh` (MARIADB_HEALTHCHECK_GRANTS).
+                        | "healthcheck"
                 ) || name.starts_with("mysql.")
             };
             let (databases, roles) =

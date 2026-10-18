@@ -79,13 +79,12 @@ pub(crate) fn probe_http_status(url: &str) -> Option<u16> {
 mod tests {
     use super::with_curl_command;
     use super::{probe_http_status, run_curl_command_with_body};
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn with_fake_curl(script_body: &str, test_url: &str) -> Option<u16> {
-        let tmp = env::temp_dir().join(format!(
+        let tmp = crate::test_support::temp_root().join(format!(
             "berth-curl-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -112,7 +111,7 @@ mod tests {
     }
 
     fn with_fake_curl_output(script_body: &str, test_url: &str) -> Option<std::process::Output> {
-        let tmp = env::temp_dir().join(format!(
+        let tmp = crate::test_support::temp_root().join(format!(
             "berth-curl-output-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

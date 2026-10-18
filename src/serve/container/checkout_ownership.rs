@@ -103,7 +103,8 @@ mod tests {
 
     #[test]
     fn paths_the_app_writes_must_belong_to_the_container_user() {
-        let root = std::env::temp_dir().join(format!("berth-ownership-{}", std::process::id()));
+        let root = crate::test_support::temp_root()
+            .join(format!("berth-ownership-{}", std::process::id()));
         std::fs::create_dir_all(root.join("storage/logs")).expect("storage");
         std::fs::write(root.join("storage/logs/laravel.log"), b"").expect("log");
         std::fs::create_dir_all(root.join("vendor/acme")).expect("vendor");

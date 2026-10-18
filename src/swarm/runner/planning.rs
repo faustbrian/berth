@@ -100,13 +100,13 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("time")
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("berth-swarm-planning-{nanos}"));
+        let path = crate::test_support::temp_root().join(format!("berth-swarm-planning-{nanos}"));
         std::fs::create_dir_all(&path).expect("create workspace");
         path
     }
 
     fn target(name: &str) -> SwarmTarget {
-        let root = std::env::temp_dir().join(format!("berth-swarm-target-{name}"));
+        let root = crate::test_support::temp_root().join(format!("berth-swarm-target-{name}"));
         std::fs::create_dir_all(&root).expect("create target root");
         crate::config::project_file::write_test_config_file(
             root.join(".berth.yaml"),

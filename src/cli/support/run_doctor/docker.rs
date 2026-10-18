@@ -33,7 +33,6 @@ fn run_runtime_check(check: &crate::docker::RuntimeDiagnosticCheck) -> bool {
 #[cfg(test)]
 mod tests {
     use super::check_runtime_availability;
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -42,7 +41,7 @@ mod tests {
     where
         F: FnOnce(std::path::PathBuf) -> T,
     {
-        let root = env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-doctor-runtime-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

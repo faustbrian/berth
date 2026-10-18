@@ -1,6 +1,7 @@
 //! Berth instances: isolated environments of one project, one per checkout.
 
 mod catalog;
+mod free_instance_locks;
 mod free_test_slots;
 mod identity;
 mod lease;

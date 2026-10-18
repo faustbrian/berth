@@ -155,7 +155,7 @@ mod tests {
     }
 
     fn project_root() -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::test_support::temp_root().join(format!(
             "berth-lock-cmd-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
@@ -182,7 +182,7 @@ mod tests {
     where
         F: FnOnce() -> T,
     {
-        let bin_dir = std::env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-lock-cmd-docker-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

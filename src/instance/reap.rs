@@ -127,6 +127,12 @@ pub(crate) fn reap(force: bool, keep: Option<(&str, &str)>) -> Result<ReapReport
             }
         }
         report.slot_locks = super::free_test_slots::remove_free_test_slot_locks(&occupied)?;
+        // Lock files of instances that have neither state nor containers.
+        let known = list_instances()?
+            .into_iter()
+            .map(|record| (record.project, record.instance))
+            .collect();
+        super::free_instance_locks::remove_orphan_instance_locks(&known)?;
     }
     Ok(report)
 }

@@ -1264,3 +1264,29 @@ fn prune_all_never_prunes_another_installations_containers() {
         calls(&host)
     );
 }
+
+#[test]
+fn gc_removes_lock_files_of_instances_that_never_existed_and_keeps_held_ones() {
+    let host = Host::new("orphan-locks");
+    let a = host.checkout("a");
+    // `env` marks the instance in use, though nothing else of it exists.
+    assert!(host.berth(&a, &["env", "--json"]).status.success());
+    let locks = host.base.join("home/locks");
+    let orphan: Vec<_> = std::fs::read_dir(&locks)
+        .expect("locks")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("instance_shop_"))
+        .collect();
+    assert_eq!(orphan.len(), 1, "{orphan:?}");
+    // Another instance a command is using right now keeps its lock.
+    let busy = locks.join("instance_shop_busy-0a0b0c.lock");
+    std::fs::write(&busy, b"").expect("busy lock");
+    let holder = std::fs::File::open(&busy).expect("open");
+    holder.lock_shared().expect("in use");
+    let gc = host.berth(&host.base, &["gc", "--json"]);
+    assert!(gc.status.success(), "{}", text(&gc.stderr));
+    assert!(!locks.join(&orphan[0]).exists(), "{orphan:?}");
+    assert!(busy.exists(), "a held lock stays");
+    drop(holder);
+}

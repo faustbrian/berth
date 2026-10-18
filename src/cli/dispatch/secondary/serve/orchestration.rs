@@ -118,7 +118,7 @@ mod tests {
     fn dispatch_share_command_forwards_start_status_stop() {
         // Share state lives under HOME; another test's sessions in the
         // developer's real home made this test fail intermittently.
-        let home = std::env::temp_dir().join(format!(
+        let home = crate::test_support::temp_root().join(format!(
             "berth-share-dispatch-{}-{:?}",
             std::process::id(),
             std::thread::current().id()

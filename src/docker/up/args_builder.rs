@@ -200,8 +200,8 @@ mod tests {
 
     #[test]
     fn migrated_8x_postgres_preset_mounts_the_postgres_18_data_directory() {
-        let dir =
-            std::env::temp_dir().join(format!("berth-migrated-postgres-{}", std::process::id()));
+        let dir = crate::test_support::temp_root()
+            .join(format!("berth-migrated-postgres-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&dir));
         std::fs::create_dir_all(&dir).expect("create temp dir");
         std::fs::write(dir.join("composer.json"), "{\"type\":\"project\"}").expect("composer");

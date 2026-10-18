@@ -7,7 +7,7 @@ fn load_config_with_parses_swarm_targets() {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock should be after unix epoch")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("berth-config-swarm-{nonce}"));
+    let root = crate::test_support::temp_root().join(format!("berth-config-swarm-{nonce}"));
     std::fs::create_dir_all(&root).expect("create temp config directory");
 
     let config_path = root.join(".berth.yaml");
@@ -44,7 +44,7 @@ fn load_config_with_parses_swarm_git_target() {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("clock should be after unix epoch")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("berth-config-swarm-git-{nonce}"));
+    let root = crate::test_support::temp_root().join(format!("berth-config-swarm-git-{nonce}"));
     std::fs::create_dir_all(&root).expect("create temp config directory");
 
     let config_path = root.join(".berth.yaml");

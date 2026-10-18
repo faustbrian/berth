@@ -81,7 +81,6 @@ pub(crate) fn ensure_docker_output_success(output: Output, error_prefix: &str) -
 mod tests {
     use super::*;
     use crate::docker;
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::time::SystemTime;
@@ -91,7 +90,7 @@ mod tests {
     where
         F: FnOnce() -> T,
     {
-        let bin_dir = env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-fake-docker-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

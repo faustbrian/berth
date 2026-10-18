@@ -150,8 +150,8 @@ mod tests {
     }
 
     fn root(label: &str) -> std::path::PathBuf {
-        let root =
-            std::env::temp_dir().join(format!("berth-managed-env-{label}-{}", std::process::id()));
+        let root = crate::test_support::temp_root()
+            .join(format!("berth-managed-env-{label}-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&root));
         std::fs::create_dir_all(&root).expect("root");
         root

@@ -130,7 +130,7 @@ mod tests {
     }
 
     fn temp_dir() -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!(
+        let path = crate::test_support::temp_root().join(format!(
             "berth-lockfile-tests-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

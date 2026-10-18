@@ -39,7 +39,6 @@ pub(super) fn docker_output(args: &[String], execution_context: &str) -> Result<
 mod tests {
     use super::run_or_log_docker;
     use crate::docker;
-    use std::env;
     use std::fs;
     use std::io::Write;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -48,7 +47,7 @@ mod tests {
     where
         F: FnOnce() -> T,
     {
-        let bin_dir = env::temp_dir().join(format!(
+        let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-fake-serve-exec-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

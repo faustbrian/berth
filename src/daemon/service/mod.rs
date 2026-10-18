@@ -410,7 +410,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_home(name: &str) -> std::path::PathBuf {
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-daemon-service-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

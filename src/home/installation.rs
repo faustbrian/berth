@@ -79,7 +79,8 @@ fn random_id() -> Result<String> {
 mod tests {
     #[test]
     fn concurrent_first_runs_agree_on_one_installation_id() {
-        let home = std::env::temp_dir().join(format!("berth-installation-{}", std::process::id()));
+        let home = crate::test_support::temp_root()
+            .join(format!("berth-installation-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&home));
         std::fs::create_dir_all(&home).expect("home");
         let path = home.join(super::FILE_NAME);

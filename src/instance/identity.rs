@@ -187,7 +187,8 @@ mod tests {
 
     #[test]
     fn symlinked_and_real_roots_resolve_to_the_same_instance() -> anyhow::Result<()> {
-        let base = std::env::temp_dir().join(format!("berth-instance-{}", std::process::id()));
+        let base =
+            crate::test_support::temp_root().join(format!("berth-instance-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&base));
         let real = base.join("real-checkout");
         std::fs::create_dir_all(real.join("nested"))?;

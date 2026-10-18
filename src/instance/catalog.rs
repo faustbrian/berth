@@ -244,7 +244,8 @@ mod tests {
     #[test]
     fn only_a_checkout_that_is_definitely_missing_is_gone() {
         use std::os::unix::fs::PermissionsExt;
-        let dir = std::env::temp_dir().join(format!("berth-catalog-locked-{}", std::process::id()));
+        let dir = crate::test_support::temp_root()
+            .join(format!("berth-catalog-locked-{}", std::process::id()));
         let checkout = dir.join("a");
         std::fs::create_dir_all(&checkout).expect("checkout");
         let mut deleted = record(&[]);

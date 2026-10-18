@@ -119,7 +119,7 @@ mod tests {
 
     fn temp_root() -> PathBuf {
         let sequence = TEMP_ROOT_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::test_support::temp_root().join(format!(
             "berth-config-paths-{}-{sequence}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

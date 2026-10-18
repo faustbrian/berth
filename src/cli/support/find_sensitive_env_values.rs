@@ -49,8 +49,7 @@ mod tests {
     #[test]
     fn find_sensitive_env_values_detects_known_keys_and_filters_values()
     -> Result<(), std::io::Error> {
-        let mut env_path = std::env::temp_dir();
-        env_path.push("berth-sensitive-env-test");
+        let env_path = crate::test_support::temp_root().join("berth-sensitive-env-test");
         let mut file = std::fs::File::create(&env_path)?;
         use std::io::Write;
         writeln!(

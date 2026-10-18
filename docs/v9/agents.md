@@ -150,7 +150,10 @@ does, any instance of this installation whose:
 - checkout no longer exists (moving or deleting a checkout purges its
   instance; run `berth down` before moving one).
 
-An instance a berth command is currently running in is never reaped. A reap
+An instance a berth command is currently running in is never reaped: every
+command in a project marks its instance in use (a lock file under
+`~/.berth/locks`, which `berth gc` removes once the instance is gone), so the
+berth home must be writable for all of them. A reap
 prints `Reaped {project}/{instance} because …` on stderr. Reap failures are
 warnings, except in `berth gc`, which exits 125.
 

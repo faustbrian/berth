@@ -142,7 +142,8 @@ mod tests {
     #[test]
     fn mounts_that_reach_an_engine_socket_are_refused() {
         use super::reaches_engine_socket;
-        let root = std::env::temp_dir().join(format!("berth-socket-policy-{}", std::process::id()));
+        // Short: the socket path must fit `SUN_LEN` (104 bytes on macOS).
+        let root = crate::test_support::temp_root().join("sp");
         drop(std::fs::remove_dir_all(&root));
         std::fs::create_dir_all(root.join("engine")).expect("dir");
         let socket = root.join("engine/docker.sock");
@@ -163,7 +164,8 @@ mod tests {
     #[test]
     fn a_bare_name_that_is_a_committed_symlink_to_the_socket_is_refused() {
         use super::validate_volume;
-        let root = std::env::temp_dir().join(format!("berth-socket-bare-{}", std::process::id()));
+        // Short: the socket path must fit `SUN_LEN` (104 bytes on macOS).
+        let root = crate::test_support::temp_root().join("sb");
         drop(std::fs::remove_dir_all(&root));
         std::fs::create_dir_all(root.join("project")).expect("project");
         let socket = root.join("engine.sock");
@@ -181,8 +183,8 @@ mod tests {
         use super::validate_volume;
         // A project of its own: the shared temp directory can hold a real
         // engine socket (Podman's machine API socket lives there on macOS).
-        let project =
-            std::env::temp_dir().join(format!("berth-socket-project-{}", std::process::id()));
+        let project = crate::test_support::temp_root()
+            .join(format!("berth-socket-project-{}", std::process::id()));
         drop(std::fs::remove_dir_all(&project));
         std::fs::create_dir_all(project.join("storage")).expect("project");
         for volume in ["data:/var/lib/data", ".:/app", "./storage:/app/storage:ro"] {

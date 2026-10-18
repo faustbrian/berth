@@ -52,16 +52,27 @@ pub(super) fn tenant_client_run_args(service: &ServiceConfig, tty: bool) -> Resu
         Driver::Mysql => (
             crate::docker::mysql_program(&service.image, crate::docker::MysqlProgram::Client),
             "MYSQL_PWD",
-            vec![
-                "-h".to_owned(),
-                host.to_owned(),
+            [
+                // The server's certificate is self-signed, so it cannot be
+                // verified; MariaDB's client (11.4+) would otherwise warn of
+                // an "insecure passwordless login", as it does not count
+                // `MYSQL_PWD` as a password.
+                crate::docker::is_mariadb_image(&service.image)
+                    .then(|| "--disable-ssl-verify-server-cert".to_owned()),
+                Some("-h".to_owned()),
+                Some(host.to_owned()),
+            ]
+            .into_iter()
+            .flatten()
+            .chain([
                 // `--port=`: berth's redaction treats `-P`'s value as a
                 // secret, as it is for some clients.
                 format!("--port={port}"),
                 "-u".to_owned(),
                 username.to_owned(),
                 database(service)?.to_owned(),
-            ],
+            ])
+            .collect(),
         ),
         Driver::Redis | Driver::Valkey => (
             "redis-cli",

@@ -96,6 +96,6 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("unix epoch")
             .as_nanos();
-        std::env::temp_dir().join(format!("berth-env-write-{suffix}-{nanos}.env"))
+        crate::test_support::temp_root().join(format!("berth-env-write-{suffix}-{nanos}.env"))
     }
 }

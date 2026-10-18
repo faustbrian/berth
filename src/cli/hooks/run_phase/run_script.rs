@@ -90,7 +90,6 @@ pub(super) fn resolve_script_path(path: &str, workspace_root: &Path) -> PathBuf 
 #[cfg(test)]
 mod tests {
     use super::{resolve_script_path, run_script_hook};
-    use std::env;
     use std::fs;
     use std::path::Path;
 
@@ -113,7 +112,8 @@ mod tests {
 
     #[test]
     fn run_script_hook_executes_resolved_script() {
-        let dir = env::temp_dir().join(format!("berth-run-script-{}", std::process::id()));
+        let dir = crate::test_support::temp_root()
+            .join(format!("berth-run-script-{}", std::process::id()));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).expect("create temp dir");
         let script = write_script(&dir.join("run.sh"), "printf '%s' ok; exit 0");
@@ -125,7 +125,8 @@ mod tests {
 
     #[test]
     fn run_script_hook_reports_non_zero_exit() {
-        let dir = env::temp_dir().join(format!("berth-run-script-{}", std::process::id() + 1));
+        let dir = crate::test_support::temp_root()
+            .join(format!("berth-run-script-{}", std::process::id() + 1));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).expect("create temp dir");
         let script = write_script(&dir.join("fail.sh"), "echo boom; exit 3");
@@ -138,7 +139,8 @@ mod tests {
 
     #[test]
     fn run_script_hook_times_out_and_kills_slow_script() {
-        let dir = env::temp_dir().join(format!("berth-run-script-{}", std::process::id() + 2));
+        let dir = crate::test_support::temp_root()
+            .join(format!("berth-run-script-{}", std::process::id() + 2));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).expect("create temp dir");
         let script = write_script(&dir.join("sleep.sh"), "trap 'exit 0' TERM INT; sleep 5");
@@ -159,8 +161,8 @@ mod tests {
     #[test]
     fn run_script_hook_dry_run_skips_execution() {
         let result = crate::docker::with_dry_run_lock(|| {
-            let dir =
-                env::temp_dir().join(format!("berth-run-script-dry-run-{}", std::process::id()));
+            let dir = crate::test_support::temp_root()
+                .join(format!("berth-run-script-dry-run-{}", std::process::id()));
             drop(fs::remove_dir_all(&dir));
             fs::create_dir_all(&dir).expect("create temp dir");
 

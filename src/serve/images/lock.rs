@@ -133,7 +133,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_path(name: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(format!(
+        crate::test_support::temp_root().join(format!(
             "berth-derived-lock-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

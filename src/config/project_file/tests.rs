@@ -6,7 +6,7 @@ use super::{convert_legacy_config, migrate_project_file, parse_project_file};
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn temp_dir(label: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
+    let dir = crate::test_support::temp_root().join(format!(
         "berth-project-file-{label}-{}-{}",
         std::process::id(),
         TEMP_COUNTER.fetch_add(1, Ordering::Relaxed)
