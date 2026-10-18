@@ -5,20 +5,22 @@
 - macOS or Linux.
 - Docker Desktop, Docker Engine (rootful or rootless) or Podman 4.9 and
   later (`--engine podman`, `BERTH_ENGINE=podman` or `container_engine:
-  podman`). The agent acceptance run passes on all of them in CI on Linux.
+  podman`). The agent acceptance run passes in CI on Linux with rootful
+  Docker, rootless Docker and rootless Podman, and locally on Docker
+  Desktop; rootful Podman on Linux is not tested.
 - A Rust toolchain with Cargo, to build berth.
 - `curl` on the host (readiness probes).
 
 ## Install a release
 
 ```bash
-cargo install --git https://github.com/faustbrian/berth.git --tag 9.0.0 --bin berth --locked
+cargo install --git https://github.com/faustbrian/berth.git --tag 10.0.0 --bin berth --locked
 ```
 
-## Install the 9.x branch
+## Install the 10.x branch
 
 ```bash
-cargo install --git https://github.com/faustbrian/berth.git --branch 9.x --bin berth --locked
+cargo install --git https://github.com/faustbrian/berth.git --branch 10.x --bin berth --locked
 ```
 
 ## Install from a checkout
@@ -55,9 +57,10 @@ not use it.
 
 ## Migrating from helm 6 or stackctl 7
 
-berth 9 is the successor of helm 6 and stackctl 7.0.0: the same explicit
-commands, selectors, `--env` namespaces, swarm, hooks, presets, lock file,
-`share`, `dump`/`restore` and `env-scrub`.
+berth is the successor of helm 6 and stackctl 7.0.0: the same explicit
+commands, selectors, `--env` namespaces, swarm, hooks, presets (except
+`minio`), lock file, `share` (for a published port), `dump`/`restore` and
+`env-scrub`.
 
 1. Install berth and remove the old `helm` or `stackctl` binary.
 2. Convert the project file once, in each project:
@@ -65,7 +68,9 @@ commands, selectors, `--env` namespaces, swarm, hooks, presets, lock file,
    `.stackctl.toml`, `.stackctl.yaml` or `.berth.toml` and writes
    `.berth.yaml` (schema 9), printing every value it derived or dropped.
    berth never reads the old files and fails with a message naming
-   `config migrate` while only an old file is present.
+   `config migrate` while only an old file is present. A checkout holding
+   both a helm and a stackctl file is refused: delete the one you no longer
+   use first.
 3. Rename environment variables to `BERTH_*`.
 
 What behaves differently:
@@ -94,10 +99,13 @@ What behaves differently:
   `berth ls --services`.
 - **`down --purge`** deletes an instance's data, and leases (`up --ttl`,
   `--owner-pid`) let berth reap abandoned instances.
+- **The `minio` preset is gone,** since MinIO no longer publishes open-source
+  images. Use `rustfs` or `garage`; `config migrate` refuses a `minio`
+  service.
 
 ## Migrating from stackctl 8
 
-stackctl 8 was built around a required daemon. berth 9 drops it and keeps
+stackctl 8 was built around a required daemon. berth drops it and keeps
 8's good parts: shared servers, the `.localhost` gateway, the managed
 environment, the strict schema, least-privilege containers and ownership
 labels.
@@ -121,5 +129,6 @@ What behaves differently:
   TTY; `artisan test` runs isolated, ParaTest included.
 - **Not carried over (yet):** host trust-store installation and the `trust`
   commands, the shared Mailpit server (the `mailhog` preset runs per
-  instance), the shared Gotenberg server, and the strict digest lock. See
+  instance), the shared Gotenberg server, the `minio` preset and the strict
+  digest lock. See
   [`docs/v9/ledger.md`](docs/v9/ledger.md) for every decision.
