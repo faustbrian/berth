@@ -171,6 +171,21 @@ jobs:
             sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
           fi
 
+      # Ubuntu 24.04's Podman ships aardvark-dns 1.4.0, which drops DNS
+      # replies under concurrent containers (containers/aardvark-dns#389):
+      # parallel agents saw `Temporary failure in name resolution`. The job
+      # tests berth, not that bug, so it uses a fixed release (pinned by
+      # checksum); docs/v9/agents.md tells such hosts the same.
+      - name: Install a fixed aardvark-dns
+        if: matrix.engine == 'podman-rootless'
+        run: |
+          curl -fsSL -o aardvark-dns.gz https://github.com/containers/aardvark-dns/releases/download/v1.17.1/aardvark-dns.gz
+          echo "4bfbc01eabd2f64a8228cf00b178885d927f68f7e24fdecc905dde39af8de7f6  aardvark-dns.gz" | sha256sum -c -
+          gunzip aardvark-dns.gz
+          sudo install -m 0755 aardvark-dns /usr/lib/podman/aardvark-dns
+          rm aardvark-dns
+          /usr/lib/podman/aardvark-dns --version
+
       - name: Show the rootless engines
         if: matrix.engine != 'docker'
         run: |

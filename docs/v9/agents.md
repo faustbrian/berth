@@ -234,6 +234,11 @@ must be in `depends_on` and running.
   ("could not kill: permission denied"). Unload it on such hosts (`sudo
   apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld`) or use a rootful
   engine.
+- Podman's DNS server aardvark-dns 1.4.0 (Ubuntu 24.04's) drops replies when
+  many containers run at once (containers/aardvark-dns#389): parallel agents
+  then see intermittent `Temporary failure in name resolution` for service
+  names. Use aardvark-dns 1.5 or later (the CI job installs 1.17.1), or
+  Docker.
 - The acceptance run (`BERTH_ENGINE=docker|podman`) passes on Docker
   Desktop and, in CI on Linux, on rootful Docker, rootless Docker and
   rootless Podman 4.9, including the app that terminates TLS on port 443.
