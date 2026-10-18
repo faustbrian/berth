@@ -136,12 +136,23 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       # The runner's rootful daemon stops; the runner user gets its own
-      # daemon, which the acceptance reaches through DOCKER_HOST.
+      # daemon, which the acceptance reaches through DOCKER_HOST. The image
+      # installs docker-ce from Docker's repository and then removes it, so
+      # the repository comes back (its key pinned by checksum, fingerprint
+      # 9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88) for the rootless
+      # extras of exactly the installed docker-ce version.
       - name: Start rootless Docker
         if: matrix.engine == 'docker-rootless'
         run: |
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o docker.asc
+          echo "1500c1f56fa9e26b9b8f42452a553675796ade0807cdce11975eb98170b3a570  docker.asc" | sha256sum -c -
+          sudo install -m 0644 docker.asc /etc/apt/keyrings/docker.asc
+          rm docker.asc
+          echo "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" \
+            | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
           sudo apt-get update
-          sudo apt-get install -y uidmap docker-ce-rootless-extras
+          version="$(dpkg-query -W -f='${Version}' docker-ce)"
+          sudo apt-get install -y uidmap "docker-ce-rootless-extras=$version"
           sudo systemctl disable --now docker.service docker.socket
           sudo rm -f /var/run/docker.sock
           dockerd-rootless-setuptool.sh install
