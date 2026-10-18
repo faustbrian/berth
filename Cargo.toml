@@ -1,6 +1,6 @@
 [package]
 name = "berth"
-version = "9.0.0"
+version = "10.0.0"
 edition = "2024"
 description = "Disposable, isolated Docker environments for every checkout, built for AI agents"
 license = "MIT"

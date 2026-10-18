@@ -2,14 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [10.0.0] - 2026-10-18
 
 ### Added
 
 - `berth up --ttl none` clears a TTL set earlier.
 - `berth gc` deletes test-slot lock files no test run holds and reports
   them as `removed_test_slot_locks`.
-
 - Added `BERTH_ENGINE` (`docker` or `podman`), the environment form of
   `--engine`.
 - `scripts/accept-v9-agents.sh` runs against Podman with
@@ -18,7 +17,7 @@ All notable changes to this project are documented in this file.
   capability set, serving HTTPS on its published port, writing the
   checkout). It also runs each tenant client (PostgreSQL, MySQL, MariaDB,
   Redis, Valkey) for real. CI runs it on Linux against rootful Docker,
-  rootless Docker and rootless Podman 4.9, and all three pass. Its memory
+  rootless Docker and rootless Podman 4.9. Its memory
   sampler records when each sample was taken and fails a run only when a
   stretch of it went 120 s unsampled, not when cold image builds slow the
   engine's `stats` down.
@@ -107,7 +106,8 @@ All notable changes to this project are documented in this file.
 - Removed the `minio` preset and driver: MinIO's community edition is no
   longer fully open source and no longer publishes images. A project file
   or `config migrate` input that uses it fails and names `rustfs` and
-  `garage`, which are S3-compatible.
+  `garage`, which are S3-compatible. To upgrade, change a `minio` service to
+  `preset: rustfs` (or `garage`) and point the app's S3 settings at it.
 
 ## [9.0.0] - 2026-10-18
 
