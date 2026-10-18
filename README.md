@@ -1,5 +1,14 @@
 # stackctl
 
+> **Deprecated.** stackctl 8 is superseded by **berth 9.0.0**, released from
+> the [`9.x` branch](https://github.com/faustbrian/berth/tree/9.x) (tag
+> [`9.0.0`](https://github.com/faustbrian/berth/releases/tag/9.0.0)). berth
+> continues helm 6 and stackctl 7 without a required daemon: one isolated
+> instance per checkout, shared database servers with a tenant per instance,
+> and an exact command and JSON contract for agents. 8.x receives no further
+> changes; see berth's `INSTALLATION.md` for migrating from stackctl 8
+> (`berth config migrate` converts `.stackctl.yaml`).
+
 Stackctl v8 is a clean-slate local development control plane for macOS and
 Linux. One per-user daemon reconciles strict `.stackctl.yaml` projects into
 Linux containers through the Engine API. It owns shared infrastructure, local
