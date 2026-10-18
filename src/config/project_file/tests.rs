@@ -175,6 +175,34 @@ fn converts_v8_yaml_and_rejects_unconvertible_fields() -> anyhow::Result<()> {
 }
 
 #[test]
+fn migration_refuses_minio_and_names_its_replacements() {
+    let dir = temp_dir("minio");
+    let v8 = convert_legacy_config(
+        "schema_version: 8\nproject: bill\nservices:\n  s3:\n    preset: minio\n",
+        &dir.join(".stackctl.yaml"),
+    )
+    .expect_err("an 8.x minio service cannot be migrated");
+    assert!(format!("{v8:#}").contains("'rustfs' or 'garage'"), "{v8:#}");
+
+    let v7 = convert_legacy_config(
+        "schema_version = 1\ncontainer_prefix = \"shipit-api\"\n\n[[service]]\npreset = \"minio\"\nname = \"s3\"\n",
+        &dir.join(".helm.toml"),
+    )
+    .expect_err("a 7.0/helm minio service cannot be migrated");
+    assert!(format!("{v7:#}").contains("'rustfs' or 'garage'"), "{v7:#}");
+
+    let driver = convert_legacy_config(
+        "schema_version = 1\ncontainer_prefix = \"shipit-api\"\n\n[[service]]\ndriver = \"minio\"\nkind = \"object-store\"\n",
+        &dir.join(".helm.toml"),
+    )
+    .expect_err("a minio driver cannot be migrated either");
+    assert!(
+        format!("{driver:#}").contains("'rustfs' or 'garage'"),
+        "{driver:#}"
+    );
+}
+
+#[test]
 fn derives_project_name_from_directory_when_prefix_is_missing() -> anyhow::Result<()> {
     let dir = temp_dir("derive").join("Shipit_API");
     std::fs::create_dir_all(&dir)?;

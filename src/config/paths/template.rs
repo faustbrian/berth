@@ -39,7 +39,7 @@ services:
 
   # Optional services:
   # s3:
-  #   preset: minio
+  #   preset: rustfs
   # search:
   #   preset: meilisearch
   # mailhog:

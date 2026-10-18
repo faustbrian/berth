@@ -81,7 +81,6 @@ fn uses_default_named_data_volume(service: &ServiceConfig) -> bool {
             | Driver::Redis
             | Driver::Valkey
             | Driver::Dragonfly
-            | Driver::Minio
             | Driver::Garage
             | Driver::Rustfs
             | Driver::Localstack

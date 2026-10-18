@@ -21,7 +21,7 @@ pub(super) fn apply_service_env(vars: &mut HashMap<String, String>, service: &Se
         Driver::Redis | Driver::Valkey | Driver::Dragonfly | Driver::Memcached => {
             cache::apply(&mut service_vars, service)
         }
-        Driver::Minio | Driver::Garage | Driver::Rustfs | Driver::Localstack => {
+        Driver::Garage | Driver::Rustfs | Driver::Localstack => {
             object_store::apply(&mut service_vars, service)
         }
         Driver::Opensearch | Driver::Elasticsearch | Driver::Meilisearch | Driver::Typesense => {

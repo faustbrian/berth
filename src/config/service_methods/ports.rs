@@ -15,7 +15,6 @@ impl ServiceConfig {
             Driver::Mysql => 3306,
             Driver::Sqlserver => 1433,
             Driver::Redis | Driver::Valkey | Driver::Dragonfly => 6379,
-            Driver::Minio => 9000,
             Driver::Garage => 3900,
             Driver::Rustfs => 9000,
             Driver::Localstack => 4566,
@@ -59,8 +58,7 @@ impl ServiceConfig {
             Driver::Mysql => Some("mysql"),
             Driver::Sqlserver => Some("sqlsrv"),
             Driver::Redis | Driver::Valkey | Driver::Dragonfly => Some("redis"),
-            Driver::Minio
-            | Driver::Garage
+            Driver::Garage
             | Driver::Memcached
             | Driver::Rustfs
             | Driver::Localstack

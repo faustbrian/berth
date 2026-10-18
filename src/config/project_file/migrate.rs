@@ -80,6 +80,12 @@ pub(crate) fn convert_legacy_config(
         },
     };
 
+    for (name, service) in &rendered.services {
+        if let Some(reason) = service.as_object().and_then(dropped_backend) {
+            anyhow::bail!("service '{name}' cannot be migrated: {reason}");
+        }
+    }
+
     let content =
         crate::config::yaml::to_string(&rendered).context("failed to render .berth.yaml")?;
     parse_project_file(&content, &legacy_path.with_file_name(PROJECT_FILE_NAME))
@@ -603,10 +609,22 @@ fn default_service_name(service: &Map<String, Value>) -> Result<String> {
         let driver = service.get("driver").ok_or_else(|| {
             anyhow::anyhow!("a service has neither `name`, `preset` nor `driver`")
         })?;
+        if let Some(reason) = dropped_backend(service) {
+            anyhow::bail!("{reason}");
+        }
         serde_json::from_value::<crate::config::Driver>(driver.clone())
             .with_context(|| format!("invalid service `driver` {driver}"))?
     };
     Ok(format!("{driver:?}").to_lowercase())
+}
+
+/// Why the backend a legacy service names (its `preset`, or a `driver` of
+/// the same name) is no longer offered, if it is not.
+fn dropped_backend(service: &Map<String, Value>) -> Option<&'static str> {
+    ["preset", "driver"]
+        .iter()
+        .filter_map(|key| service.get(*key).and_then(Value::as_str))
+        .find_map(crate::config::presets::dropped_preset)
 }
 
 /// Returns the image an 8.x preset resolved to, so a migrated preset-only
@@ -619,7 +637,11 @@ fn v8_catalog_image(preset: &str, requested: Option<&str>) -> Result<Option<Stri
         "mssql" => "sqlserver",
         other => other,
     };
-    if matches!(preset, "horizon" | "queue-worker" | "queue" | "scheduler") {
+    // Worker presets inherit the application image; a dropped preset is
+    // refused with its reason once the whole file is converted.
+    if matches!(preset, "horizon" | "queue-worker" | "queue" | "scheduler")
+        || crate::config::presets::dropped_preset(preset).is_some()
+    {
         return Ok(None);
     }
     let (default, pattern) = match preset {
@@ -639,7 +661,6 @@ fn v8_catalog_image(preset: &str, requested: Option<&str>) -> Result<Option<Stri
         ),
         "dragonfly" => ("1", "docker.dragonflydb.io/dragonflydb/dragonfly:v1.39.0"),
         "memcached" => ("1", "memcached:1.6-alpine"),
-        "minio" => ("1", "minio/minio:RELEASE.2025-09-07T16-13-09Z"),
         "garage" => ("2", "dxflrs/garage:v2.3.0"),
         "rustfs" => ("1", "rustfs/rustfs:1.0.0-beta.2"),
         "opensearch" => ("3", "opensearchproject/opensearch:3.6.0"),

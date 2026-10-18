@@ -7,16 +7,15 @@ use crate::config::{Driver, ServiceConfig};
 /// Appends append to the caller-provided command or collection.
 pub(super) fn append(args: &mut Vec<String>, service: &ServiceConfig) {
     match service.driver {
-        Driver::Minio => append_minio(args, service),
-        Driver::Garage => append_minio(args, service),
+        Driver::Garage => append_garage(args, service),
         Driver::Localstack => append_localstack(args, service),
         Driver::Rustfs => append_rustfs(args, service),
         _ => {}
     }
 }
 
-/// Appends minio to the caller-provided command or collection.
-fn append_minio(args: &mut Vec<String>, service: &ServiceConfig) {
+/// Appends garage's root credentials to the caller-provided command.
+fn append_garage(args: &mut Vec<String>, service: &ServiceConfig) {
     if let Some(access_key) = &service.access_key {
         args.push("-e".to_owned());
         args.push(format!("MINIO_ROOT_USER={access_key}"));

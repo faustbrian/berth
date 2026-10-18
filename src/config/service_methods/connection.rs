@@ -52,7 +52,7 @@ impl ServiceConfig {
                 }
             }
             Driver::Memcached => format!("memcached://{host}:{port}"),
-            Driver::Minio | Driver::Garage | Driver::Rustfs | Driver::Localstack => {
+            Driver::Garage | Driver::Rustfs | Driver::Localstack => {
                 format!("{scheme}://{host}:{port}")
             }
             Driver::Opensearch => format!("{scheme}://{host}:{port}"),

@@ -9,13 +9,18 @@ use super::{Driver, Kind};
 mod app;
 mod cache;
 mod database;
+mod dropped;
 mod object_store;
 mod preset_defaults;
 mod search;
 
+pub(in crate::config) use dropped::dropped_preset;
 pub(in crate::config) use preset_defaults::PresetDefaults;
 
 pub(super) fn preset_defaults(preset: &str) -> Result<PresetDefaults> {
+    if let Some(reason) = dropped_preset(preset) {
+        anyhow::bail!("{reason}");
+    }
     if let Some(defaults) = database::resolve(preset) {
         return Ok(defaults);
     }

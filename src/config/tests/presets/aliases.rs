@@ -38,7 +38,7 @@ fn preset_aliases_cover_all_primary_backends() {
             name = "mem"
 
             [[service]]
-            preset = "minio"
+            preset = "rustfs"
             name = "storage"
 
             [[service]]
@@ -177,7 +177,7 @@ fn preset_aliases_cover_all_primary_backends() {
         .iter()
         .find(|svc| svc.name == "storage")
         .expect("storage service");
-    assert_eq!(storage.driver, Driver::Minio);
+    assert_eq!(storage.driver, Driver::Rustfs);
 
     let garage = config
         .service
@@ -298,4 +298,23 @@ fn preset_aliases_cover_all_primary_backends() {
         .expect("mailpit service");
     assert_eq!(mailpit.driver, Driver::Mailhog);
     assert_eq!(mailpit.image, "axllent/mailpit:v1.30.0");
+}
+
+#[test]
+fn minio_preset_is_refused_with_its_replacements() {
+    let toml = r#"
+            container_prefix = "acme-api"
+
+            [[service]]
+            preset = "minio"
+            name = "storage"
+        "#;
+
+    let raw: RawConfig = toml::from_str(toml).expect("raw config parse");
+    let error = expansion::expand_raw_config(raw)
+        .expect_err("minio is no longer a preset")
+        .to_string();
+
+    assert!(error.contains("preset 'minio' was removed"), "{error}");
+    assert!(error.contains("'rustfs' or 'garage'"), "{error}");
 }

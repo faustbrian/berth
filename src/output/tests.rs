@@ -229,8 +229,7 @@ fn token_color_maps_brand_services() {
     assert!(matches!(token_color("mongodb"), TokenColor::Green));
     assert!(matches!(token_color("mysql"), TokenColor::MysqlBlue));
     assert!(matches!(token_color("mariadb"), TokenColor::MariaBlue));
-    assert!(matches!(token_color("minio"), TokenColor::MinioRed));
-    assert!(matches!(token_color("garage"), TokenColor::MinioRed));
+    assert!(matches!(token_color("garage"), TokenColor::ObjectStoreRed));
     assert!(matches!(token_color("rustfs"), TokenColor::RustOrange));
     assert!(matches!(
         token_color("meilisearch"),

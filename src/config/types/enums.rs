@@ -54,8 +54,6 @@ pub enum Driver {
     Valkey,
     /// `Dragonfly`.
     Dragonfly,
-    /// `MinIO`.
-    Minio,
     /// `Garage`.
     Garage,
     /// `RustFS`.

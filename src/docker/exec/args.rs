@@ -103,7 +103,6 @@ pub(super) fn interactive_client_args(service: &ServiceConfig) -> Vec<String> {
         ],
         Driver::Mongodb
         | Driver::Memcached
-        | Driver::Minio
         | Driver::Garage
         | Driver::Rustfs
         | Driver::Localstack
@@ -168,7 +167,6 @@ pub(super) fn piped_client_args(service: &ServiceConfig) -> Result<Vec<String>> 
         | Driver::Redis
         | Driver::Valkey
         | Driver::Dragonfly
-        | Driver::Minio
         | Driver::Garage
         | Driver::Rustfs
         | Driver::Localstack

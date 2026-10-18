@@ -59,10 +59,7 @@ pub(super) fn ensure_bucket_exists(service: &ServiceConfig) -> Result<()> {
 }
 
 fn is_object_store_driver(driver: Driver) -> bool {
-    matches!(
-        driver,
-        Driver::Minio | Driver::Garage | Driver::Rustfs | Driver::Localstack
-    )
+    matches!(driver, Driver::Garage | Driver::Rustfs | Driver::Localstack)
 }
 
 struct BucketBootstrapArgs {
@@ -403,7 +400,7 @@ fi
 exit 1
 "#,
             || {
-                ensure_bucket_exists(&service(Driver::Minio))
+                ensure_bucket_exists(&service(Driver::Garage))
                     .expect("already-owned bucket should not fail");
             },
         );

@@ -101,7 +101,7 @@ fn default_persistent_data_dir(service: &ServiceConfig) -> Option<&'static str> 
         Driver::Mysql => Some("/var/lib/mysql"),
         Driver::Sqlserver => Some("/var/opt/mssql"),
         Driver::Redis | Driver::Valkey | Driver::Dragonfly => Some("/data"),
-        Driver::Minio | Driver::Rustfs => Some("/data"),
+        Driver::Rustfs => Some("/data"),
         Driver::Garage => Some("/var/lib/garage"),
         Driver::Localstack => Some("/var/lib/localstack"),
         Driver::Opensearch => Some("/usr/share/opensearch/data"),

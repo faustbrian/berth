@@ -21,7 +21,7 @@ pub(super) fn base_map_for_driver(service: &ServiceConfig) -> HashMap<String, St
         Driver::Redis | Driver::Valkey | Driver::Dragonfly | Driver::Memcached => {
             cache::apply_cache_map(&mut map, service)
         }
-        Driver::Minio | Driver::Garage | Driver::Rustfs | Driver::Localstack => {
+        Driver::Garage | Driver::Rustfs | Driver::Localstack => {
             object_store::apply_object_store_map(&mut map, service)
         }
         Driver::Opensearch => search::apply_opensearch_map(&mut map, service),
@@ -131,7 +131,7 @@ mod tests {
         let service = build_service(
             "files",
             Kind::ObjectStore,
-            Driver::Minio,
+            Driver::Rustfs,
             "10.0.0.5",
             9000,
             None,

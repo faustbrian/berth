@@ -39,7 +39,6 @@ pub(super) fn sql_driver(service: &ServiceConfig) -> Result<Driver> {
         | Driver::Redis
         | Driver::Valkey
         | Driver::Dragonfly
-        | Driver::Minio
         | Driver::Garage
         | Driver::Rustfs
         | Driver::Localstack

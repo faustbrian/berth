@@ -40,7 +40,6 @@ pub(super) fn check_service_health(service: &ServiceConfig, container_name: &str
             "redis health check command failed",
         ),
         Driver::Memcached => health_check_tcp(service),
-        Driver::Minio => health_check_http(service, "/minio/health/ready"),
         Driver::Garage => health_check_tcp(service),
         Driver::Rustfs | Driver::Localstack => health_check_http(service, "/"),
         Driver::Opensearch => health_check_http(service, "/"),
@@ -287,7 +286,6 @@ mod tests {
     #[test]
     fn health_check_uses_http_for_http_style_services() {
         let drivers = [
-            Driver::Minio,
             Driver::Rustfs,
             Driver::Localstack,
             Driver::Opensearch,

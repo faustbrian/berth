@@ -64,7 +64,7 @@ const fn preferred_start_port(driver: Driver) -> u16 {
         Driver::Postgres => 54320,
         Driver::Sqlserver => 14330,
         Driver::Redis | Driver::Valkey | Driver::Dragonfly => 6380,
-        Driver::Minio | Driver::Rustfs => 9000,
+        Driver::Rustfs => 9000,
         Driver::Garage => 3900,
         Driver::Localstack => 4566,
         Driver::Opensearch | Driver::Elasticsearch => 9200,

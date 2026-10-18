@@ -230,7 +230,5 @@ must be in `depends_on` and running.
   per checkout, empty) are kept for reuse.
 - The 443 in-container TLS case is verified on Docker Desktop; on rootful
   Linux Docker it relies on the file capabilities root keeps.
-- MinIO no longer publishes images; the `minio` preset needs the image
-  locally (`rustfs` and `garage` are S3-compatible alternatives).
 - Podman and rootless Docker are supported for the user mapping but are not
   exercised by the acceptance run, which uses Docker.
