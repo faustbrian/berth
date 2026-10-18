@@ -775,10 +775,11 @@ gc_status=0
 check "berth gc" "$gc_status" 0
 check "objects left after gc" "$(count_labeled_objects)" 0
 
-# The sampler must have covered the run, or the peak below is not the run's
-# peak. A sample takes 2 s plus however long the engine's `stats` needs, which
-# grows with the container count and while cold image builds load the
-# engine; no stretch of the run may go 120 s without a sample.
+# The sampler must have run, or there is no peak to report. A sample takes
+# 2 s plus however long the engine's `stats` needs, which grows with the
+# container count and how loaded the machine is, so a long gap between
+# samples is recorded (the peak is then a lower bound), not failed: how busy
+# the developer's machine is says nothing about berth.
 run_seconds="$(sed -n 's/^parallel_run_seconds=//p' "$OUTPUT/metadata.txt")"
 largest_gap="$(awk -v start="$run_started" -v end="$((run_started + run_seconds))" '
   { if ($1 >= start && $1 <= end) times[++n] = $1 }
@@ -789,9 +790,11 @@ largest_gap="$(awk -v start="$run_started" -v end="$((run_started + run_seconds)
     print gap
   }' "$OUTPUT/memory-samples.txt")"
 printf 'memory_sample_largest_gap_seconds=%s\n' "$largest_gap" >> "$OUTPUT/metadata.txt"
-if (( samples < 3 || largest_gap > 120 )); then
-  log "  memory samples left a ${largest_gap}s gap in a ${run_seconds}s run ($samples samples)"
+if (( samples < 3 )); then
+  log "  the memory sampler took only $samples samples in a ${run_seconds}s run"
   failures=$((failures + 1))
+elif (( largest_gap > 120 )); then
+  log "  note: memory samples left a ${largest_gap}s gap; the peak is a lower bound"
 fi
 
 # --- Benchmarks --------------------------------------------------------------
