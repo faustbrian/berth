@@ -51,6 +51,7 @@ case "$1" in
       *dev.berth.shared.fingerprint*)
         fp=$(grep -o 'dev.berth.shared.fingerprint=[0-9a-f]*' "$S/run-$name" | cut -d= -f2)
         printf 'running\t%s\t%s' "$(cat "$BERTH_HOME/installation-id")" "$fp" ;;
+      *dev.berth.installation*) cat "$BERTH_HOME/installation-id" ;;
       *--format*) printf running ;;
       *) printf '[{"State":{"Status":"running"},"NetworkSettings":{"Ports":{}},"HostConfig":{"PortBindings":{}}}]' ;;
     esac

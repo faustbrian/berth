@@ -25,6 +25,7 @@ pub(super) fn recreate(service: &ServiceConfig) -> Result<()> {
         return Ok(());
     }
 
+    crate::docker::ensure_own_container(&container_name)?;
     try_docker_output(&["stop", &container_name]);
     try_docker_output(&["rm", "-v", &container_name]);
 

@@ -17,6 +17,7 @@ pub(super) fn remove_container(target: &ServiceConfig) -> Result<()> {
         return Ok(());
     }
 
+    crate::docker::ensure_own_container(&container_name)?;
     let stop_result = run_docker_step(["stop", &container_name], "stop", &container_name)?;
     let rm_result = run_docker_step(["rm", &container_name], "remove", &container_name)?;
 

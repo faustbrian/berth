@@ -18,7 +18,8 @@ pub(crate) struct PruneArgs {
     pub(crate) kind: Option<config::Kind>,
     #[arg(long, default_value_t = default_parallelism(), conflicts_with = "all")]
     pub(crate) parallel: usize,
-    /// Prune all stopped Docker containers (not only Berth-managed services)
+    /// Prune all stopped Docker containers (not only Berth-managed services),
+    /// except another berth installation's
     #[arg(long, default_value_t = false)]
     pub(crate) all: bool,
     /// Required with --all; confirms intentional global prune
@@ -30,7 +31,7 @@ pub(crate) struct PruneArgs {
         required_if_eq("all", "true")
     )]
     pub(crate) force: bool,
-    /// Additional Docker prune filters (global mode only)
+    /// Additional Docker prune filters (global mode only; `label=` and `until=` only)
     #[arg(long, requires = "all")]
     pub(crate) filter: Vec<String>,
 }

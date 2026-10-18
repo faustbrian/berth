@@ -33,6 +33,7 @@ pub(super) fn reset_service_runtime(service: &ServiceConfig) -> Result<()> {
         return Ok(());
     }
 
+    crate::docker::ensure_own_container(&container_name)?;
     try_remove_container_with_volumes(&container_name);
 
     for volume in named_volumes {
@@ -43,6 +44,13 @@ pub(super) fn reset_service_runtime(service: &ServiceConfig) -> Result<()> {
 }
 
 fn remove_named_volume(service: &ServiceConfig, volume_name: &str) -> Result<()> {
+    // Another installation with the same project and instance names derives
+    // the same volume names; its data is never this reset's.
+    if crate::docker::is_foreign_volume(volume_name)? {
+        anyhow::bail!(
+            "volume {volume_name} belongs to another berth installation; berth leaves it alone"
+        );
+    }
     let output = remove_named_volume_output(volume_name)?;
 
     if output.status.success() {

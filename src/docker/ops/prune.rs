@@ -6,8 +6,8 @@ use anyhow::Result;
 
 use crate::config::ServiceConfig;
 use crate::docker::{
-    LABEL_MANAGED, VALUE_MANAGED_TRUE, inspect_label, inspect_status, is_dry_run,
-    print_docker_command,
+    LABEL_INSTALLATION, LABEL_MANAGED, VALUE_MANAGED_TRUE, inspect_label, inspect_status,
+    is_dry_run, print_docker_command,
 };
 use crate::output::{self, LogLevel, Persistence};
 
@@ -19,23 +19,40 @@ use preview::preview_global_prune_candidates;
 mod docker_cmd;
 mod preview;
 
+/// Prunes every stopped container on the engine except another berth
+/// installation's: once those without an installation label, once this
+/// installation's own (`docker container prune` cannot exclude one label
+/// value).
 pub(super) fn prune(options: PruneOptions<'_>) -> Result<()> {
-    let mut args = vec!["container".to_owned(), "prune".to_owned()];
-    if options.force {
-        args.push("--force".to_owned());
-    }
-    for filter in options.filters {
-        args.push("--filter".to_owned());
-        args.push(filter.clone());
-    }
-
+    // A dry run writes nothing, so it does not create the installation ID.
+    let installation = if is_dry_run() {
+        "<installation-id>".to_owned()
+    } else {
+        crate::home::installation_id()?
+    };
     if is_dry_run() {
-        preview_global_prune_candidates(options.filters)?;
+        preview_global_prune_candidates(options.filters, &installation)?;
     }
-    run_docker_status(
-        &args,
-        &crate::docker::runtime_command_error_context("container prune"),
-    )
+    for scope in [
+        format!("label!={LABEL_INSTALLATION}"),
+        format!("label={LABEL_INSTALLATION}={installation}"),
+    ] {
+        let mut filters = vec![scope];
+        filters.extend(options.filters.iter().cloned());
+        let mut args = vec!["container".to_owned(), "prune".to_owned()];
+        if options.force {
+            args.push("--force".to_owned());
+        }
+        for filter in &filters {
+            args.push("--filter".to_owned());
+            args.push(filter.clone());
+        }
+        run_docker_status(
+            &args,
+            &crate::docker::runtime_command_error_context("container prune"),
+        )?;
+    }
+    Ok(())
 }
 
 pub(super) fn prune_stopped_container(service: &ServiceConfig) -> Result<()> {
@@ -88,6 +105,7 @@ pub(super) fn prune_stopped_container(service: &ServiceConfig) -> Result<()> {
         return Ok(());
     }
 
+    crate::docker::ensure_own_container(&container_name)?;
     let rm_output = docker_output(
         &["rm".to_owned(), container_name.clone()],
         &crate::docker::runtime_command_error_context("rm"),

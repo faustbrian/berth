@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file.
 
 ### Added
 
+- `berth up --ttl none` clears a TTL set earlier.
+- `berth gc` deletes test-slot lock files no test run holds and reports
+  them as `removed_test_slot_locks`.
+
 - Added `BERTH_ENGINE` (`docker` or `podman`), the environment form of
   `--engine`.
 - `scripts/accept-v9-agents.sh` runs against Podman with
@@ -15,8 +19,32 @@ All notable changes to this project are documented in this file.
   checkout). CI runs it on Linux against rootful Docker, rootless Docker
   and rootless Podman 4.9, and all three pass.
 
+### Changed
+
+- `berth exec --service <shared database or cache>` without a command opens
+  the tenant's client in a throwaway container of the server's image on the
+  instance network, instead of inside the shared server: a shell escape from
+  the client (`psql`'s `\!`, MySQL's `system`) no longer reaches the server
+  every instance shares.
+- `berth cp` accepts only this instance's services (`db:/path`), their
+  containers and host paths. Any other container name fails with 125.
+- An authored `domain` that is another instance's route no longer takes that
+  route away from its instance: the authored domain is withheld instead, and
+  the instance's `up` no longer fails.
+
 ### Fixed
 
+- Every command (`env` and `config validate` included) marks its instance
+  in use before reading anything of it from the berth home, and keeps it
+  marked until it ends. A concurrent reap could otherwise delete the credentials
+  a command had just read, so it reprovisioned the tenant with a password
+  berth no longer kept.
+- berth never stops, kills, restarts, starts or removes a container that
+  another berth installation labeled (another `BERTH_HOME` with the same
+  project and instance names): those commands fail with 125 naming it, and
+  `berth prune --all` skips that installation's stopped containers (and so
+  accepts only `label=` and `until=` filters; a `label!=` would defeat it).
+- A test run never holds a slot whose lock file was deleted meanwhile.
 - Container, volume and network listings read labels in a form Podman 4.9
   accepts: its `ps` and `volume ls` templates have no `.Label` function, and
   network labels are read through `network inspect`. `up` failed with

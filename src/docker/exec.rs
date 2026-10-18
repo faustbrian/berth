@@ -15,6 +15,51 @@ use run::{dry_run_process, run_docker_status, spawn_docker_piped};
 
 mod args;
 mod run;
+mod tenant_client;
+
+/// Opens a shared server tenant's client in a throwaway container on the
+/// instance network (see `tenant_client`), passing its exit code through.
+///
+/// # Errors
+///
+/// Returns an error when the server is not running or the client cannot be
+/// started; a client that exits non-zero is reported with its code.
+pub fn exec_tenant_client(service: &ServiceConfig, tty: bool) -> Result<()> {
+    let server = service.container_name()?;
+    let args = tenant_client::tenant_client_run_args(service, tty)?;
+    if is_dry_run() {
+        print_docker_command(&args);
+        return Ok(());
+    }
+    // Running and attached to this instance under the service's name, or
+    // the client could not resolve it (`stop` and `down` detach it).
+    match crate::shared::status(service).as_deref() {
+        Some("running") => {}
+        Some(state) => anyhow::bail!(
+            "service '{}' is {state} for this instance (server {server}); run `berth up` first",
+            service.name
+        ),
+        None => anyhow::bail!(
+            "service '{}' has no shared server {server}, or Docker is unreachable; run `berth up` \
+             first",
+            service.name
+        ),
+    }
+    let status = run_docker_status(&args, &super::runtime_command_error_context("run"))?;
+    if !status.success() {
+        return Err(super::command_failed_error(
+            status,
+            format!(
+                "the {} client exited with {}",
+                service.name,
+                status
+                    .code()
+                    .map_or_else(|| "a signal".to_owned(), |code| code.to_string())
+            ),
+        ));
+    }
+    Ok(())
+}
 
 /// Execs interactive as part of the docker exec workflow.
 pub fn exec_interactive(service: &ServiceConfig, tty: bool) -> Result<()> {

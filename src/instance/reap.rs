@@ -25,6 +25,8 @@ pub(crate) struct ReapReport {
     pub(crate) instances: Vec<String>,
     /// Names of removed leftover test-slot containers.
     pub(crate) slot_containers: Vec<String>,
+    /// How many unused test-slot lock files a forced pass deleted.
+    pub(crate) slot_locks: usize,
 }
 
 /// Reaps unless another process is reaping or, without `force`, a pass ran
@@ -108,10 +110,25 @@ pub(crate) fn reap(force: bool, keep: Option<(&str, &str)>) -> Result<ReapReport
             Err(error) => failures.push(format!("{error:#}")),
         }
     }
-    match failures.into_iter().next() {
-        None => Ok(report),
-        Some(first) => anyhow::bail!("failed to reap: {first}"),
+    if let Some(first) = failures.into_iter().next() {
+        anyhow::bail!("failed to reap: {first}");
     }
+    // `berth gc` also deletes slot locks no run holds: under this pass's
+    // lock, so no other reaper uses them meanwhile, and never for a slot
+    // that still has containers (a dead run's that this pass skipped, say),
+    // which a later pass finds only through its lock file.
+    if force {
+        let mut occupied = std::collections::BTreeSet::new();
+        for record in list_instances()? {
+            for container in &record.containers {
+                if let Some((workspace, slot)) = slot_of(&container.name) {
+                    occupied.insert(format!("{workspace}/slot-{slot}.lock"));
+                }
+            }
+        }
+        report.slot_locks = super::free_test_slots::remove_free_test_slot_locks(&occupied)?;
+    }
+    Ok(report)
 }
 
 /// Why the instance should be reaped at `now`, if it should.
@@ -160,18 +177,19 @@ fn reap_stale_slots(record: &InstanceRecord) -> Result<Vec<String>> {
         let Some((workspace, slot)) = slot_of(&container.name) else {
             continue;
         };
-        let lock = crate::home::home_path(
+        // `private_dir` creates the workspace's directory 0700, refusing
+        // symlinks, should `berth gc` have emptied it.
+        let lock = crate::home::private_dir(
             &std::path::Path::new("locks")
                 .join("test-slots")
-                .join(workspace)
-                .join(format!("slot-{slot}.lock")),
-        )?;
-        if !lock.exists() {
-            continue;
-        }
+                .join(workspace),
+        )?
+        .join(format!("slot-{slot}.lock"));
         // Hold the slot while removing its containers, so a run that takes
-        // the slot meanwhile never loses the containers it just started.
-        let Some(_slot) = crate::home::try_hold_lock(&lock)? else {
+        // the slot meanwhile never loses the containers it just started. A
+        // missing lock file (deleted by `berth gc` after the run started) is
+        // created: its containers are still the dead run's.
+        let Some(_slot) = hold_slot(&lock)? else {
             continue;
         };
         let output = crate::docker::run_docker_output(
@@ -189,6 +207,33 @@ fn reap_stale_slots(record: &InstanceRecord) -> Result<Vec<String>> {
         removed.push(container.name.clone());
     }
     Ok(removed)
+}
+
+/// Takes a slot's lock without waiting, creating its file if needed, and
+/// only on the file that is at the path afterwards: `None` while a run
+/// holds it.
+fn hold_slot(path: &std::path::Path) -> Result<Option<std::fs::File>> {
+    use std::os::unix::fs::OpenOptionsExt as _;
+    loop {
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(path)
+            .with_context(|| format!("failed to open {}", path.display()))?;
+        match file.try_lock() {
+            Ok(()) => {}
+            Err(std::fs::TryLockError::WouldBlock) => return Ok(None),
+            Err(std::fs::TryLockError::Error(error)) => {
+                return Err(error).with_context(|| format!("failed to lock {}", path.display()));
+            }
+        }
+        if crate::home::same_file(&file, path)? {
+            return Ok(Some(file));
+        }
+    }
 }
 
 /// The workspace key and slot of a test-slot container name.

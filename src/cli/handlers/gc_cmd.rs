@@ -17,6 +17,7 @@ pub(crate) fn handle_gc(json: bool) -> Result<()> {
         anyhow::bail!("`berth gc` does not support --dry-run; `berth ls --json` shows what exists");
     }
     let reaped = crate::instance::reap(true, None)?;
+    let slot_locks = reaped.slot_locks;
     let servers = crate::shared::collect_servers()?;
     // A gateway failure must not hide what was already reaped and removed:
     // it is reported with the rest, then fails the command.
@@ -39,6 +40,7 @@ pub(crate) fn handle_gc(json: bool) -> Result<()> {
         super::serialize::print_json_pretty(&serde_json::json!({
             "reaped_instances": reaped.instances,
             "removed_test_containers": reaped.slot_containers,
+            "removed_test_slot_locks": slot_locks,
             "servers": servers,
             "gateway": match &gateway {
                 Ok(name) => serde_json::json!({ "removed": true, "container": name }),
@@ -60,6 +62,14 @@ pub(crate) fn handle_gc(json: bool) -> Result<()> {
             Persistence::Persistent,
         );
     }
+    if slot_locks > 0 {
+        output::event(
+            "gc",
+            LogLevel::Success,
+            &format!("Removed {slot_locks} unused test-slot lock files"),
+            Persistence::Persistent,
+        );
+    }
     if let Ok(name) = &gateway {
         output::event(
             "gc",
@@ -70,6 +80,7 @@ pub(crate) fn handle_gc(json: bool) -> Result<()> {
     }
     if servers.is_empty()
         && reaped.instances.is_empty()
+        && slot_locks == 0
         && gateway.is_err()
         && gateway_failure.is_none()
     {

@@ -55,6 +55,7 @@ case "$1" in
     [ -f "$S/c/$name" ] || { echo "Error: No such object: $name" >&2; exit 1; }
     case "$*" in
       *NetworkSettings.Networks*) printf '{}' ;;
+      *dev.berth.installation*) cat "$BERTH_HOME/installation-id" ;;
       *--format*) printf running ;;
       *) printf '[{"State":{"Status":"running"},"NetworkSettings":{"Ports":{}},"HostConfig":{"PortBindings":{}}}]' ;;
     esac

@@ -262,12 +262,14 @@ pub(crate) use volume_targets::{
 };
 mod child_exit;
 mod cmd;
+mod container_owner;
 mod engine;
 mod exec;
 mod failure_message;
 mod health;
 mod image_inspect;
 mod image_pull;
+pub(crate) use container_owner::ensure_own_container;
 mod volume_owner;
 pub(crate) use volume_owner::is_foreign_volume;
 mod inspect;
@@ -304,7 +306,9 @@ pub(crate) use cmd::{
 };
 pub(crate) use engine::RuntimeDiagnosticCheck;
 pub(crate) use exec::build_exec_args;
-pub use exec::{exec_command, exec_command_to_stderr, exec_interactive, exec_piped};
+pub use exec::{
+    exec_command, exec_command_to_stderr, exec_interactive, exec_piped, exec_tenant_client,
+};
 pub(crate) use failure_message::command_failed_in_container;
 pub use health::wait_until_healthy;
 pub(crate) use image_inspect::{docker_image_exists, docker_image_repo_digest};
@@ -313,8 +317,8 @@ pub use inspect::{
     inspect_host_port_binding, inspect_json, inspect_label, inspect_service_status, inspect_status,
 };
 pub(crate) use labels::{
-    ContainerRole, LABEL_CONTAINER, LABEL_MANAGED, VALUE_MANAGED_TRUE, kind_label_value,
-    ownership_label_args,
+    ContainerRole, LABEL_CONTAINER, LABEL_INSTALLATION, LABEL_MANAGED, VALUE_MANAGED_TRUE,
+    kind_label_value, ownership_label_args,
 };
 pub use logs::{LogsOptions, logs, logs_many, logs_prefixed};
 pub use manage::{down, pull, recreate, restart, rm, stop};

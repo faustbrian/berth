@@ -507,7 +507,7 @@ berth up [OPTIONS]
 Options:
 
 - `--service <SERVICE>`
-- `--ttl <TTL>`: Lease the instance for this long (`90m`, `2h`, `1d`): every berth command in the checkout renews it, and once it lapses any berth command deletes the instance as `down --purge` does. Without it the instance is deleted only when its checkout is gone
+- `--ttl <TTL>`: Lease the instance for this long (`90m`, `2h`, `1d`): every berth command in the checkout renews it, and once it lapses any berth command deletes the instance as `down --purge` does. `none` clears a TTL set earlier; without `--ttl` the recorded TTL is kept
 - `--owner-pid <OWNER_PID>`: Record this process (usually the agent's shell, `$$`) as the instance's owner: once it exits, any berth command deletes the instance as `down --purge` does. `BERTH_OWNER_PID` sets it too [env: BERTH_OWNER_PID=]
 - `--kind <KIND>`
   - `database`: SQL databases
@@ -1007,8 +1007,8 @@ berth cp [OPTIONS] <SOURCE> <DESTINATION>
 
 Arguments:
 
-- `<SOURCE>`: Source path (`service:/path` or `container:/path` or host path)
-- `<DESTINATION>`: Destination path (`service:/path` or `container:/path` or host path)
+- `<SOURCE>`: Source path (`service:/path` or a host path)
+- `<DESTINATION>`: Destination path (`service:/path` or a host path)
 
 Options:
 
@@ -1168,9 +1168,9 @@ Options:
   - `search`: Search engines
   - `app`: Application runtimes (web apps, workers, tooling)
 - `--parallel <PARALLEL>`: [default: 4]
-- `--all`: Prune all stopped Docker containers (not only Berth-managed services)
+- `--all`: Prune all stopped Docker containers (not only Berth-managed services), except another berth installation's
 - `-f, --force`: Required with --all; confirms intentional global prune
-- `--filter <FILTER>`: Additional Docker prune filters (global mode only)
+- `--filter <FILTER>`: Additional Docker prune filters (global mode only; `label=` and `until=` only)
 - `berth prune`
 - `berth prune --kind database`
 - `berth prune --all --force`

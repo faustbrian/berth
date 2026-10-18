@@ -66,6 +66,7 @@ case "$1" in
         done
         printf '}' ;;
       *State.Status*dev.berth.gateway.spec*) printf 'running %s' "$(label "$name" dev.berth.gateway.spec)" ;;
+      *dev.berth.installation*) printf '%s' "$(label "$name" dev.berth.installation)" ;;
       *) printf running ;;
     esac
     exit 0 ;;
@@ -553,4 +554,161 @@ fn a_failed_gateway_removal_still_reports_everything_gc_did() {
         "{document}"
     );
     assert!(document["servers"].is_array(), "{document}");
+}
+
+/// The upstream the published gateway document sends `host` to.
+fn upstream_of(document: &str, host: &str) -> Option<String> {
+    let document: serde_json::Value = serde_json::from_str(document).ok()?;
+    let routes = document["apps"]["http"]["servers"]["berth_https"]["routes"].as_array()?;
+    routes.iter().find_map(|route| {
+        let matches = route["match"][0]["host"]
+            .as_array()?
+            .iter()
+            .any(|value| value == host);
+        matches
+            .then(|| {
+                route["handle"][0]["upstreams"][0]["dial"]
+                    .as_str()
+                    .map(ToOwned::to_owned)
+            })
+            .flatten()
+    })
+}
+
+const ALPHA_ROUTE: &str = "alpha-shop.berth.localhost";
+const BETA_AUTHORS_ALPHA: &str = "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    domain: alpha-shop.berth.localhost\n";
+const PLAIN: &str = "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  app:\n    preset: laravel\n";
+
+fn up_instance(fixture: &mut Fixture, instance: &str, project: &str) -> Output {
+    std::fs::write(fixture.base.join("project/.berth.yaml"), project).expect("config");
+    fixture.berth(
+        &[
+            "--non-interactive",
+            "--instance",
+            instance,
+            "up",
+            "--no-wait",
+        ],
+        false,
+    )
+}
+
+#[test]
+fn an_authored_domain_never_takes_another_instances_derived_route() {
+    // Order (i): alpha serves its route, then beta authors the same host.
+    let mut first = Fixture::new("derived-first");
+    let alpha = up_instance(&mut first, "alpha", PLAIN);
+    assert!(alpha.status.success(), "{}", stderr(&alpha));
+    let beta = up_instance(&mut first, "beta", BETA_AUTHORS_ALPHA);
+    assert!(beta.status.success(), "{}", stderr(&beta));
+    assert!(stderr(&beta).contains("withheld"), "{}", stderr(&beta));
+    assert!(stderr(&beta).contains(ALPHA_ROUTE), "{}", stderr(&beta));
+    let document = first.document();
+    assert_eq!(
+        upstream_of(&document, ALPHA_ROUTE).as_deref(),
+        Some("berth_shop_alpha_app:80"),
+        "{document}"
+    );
+    assert_eq!(
+        upstream_of(&document, "beta-shop.berth.localhost").as_deref(),
+        Some("berth_shop_beta_app:80"),
+        "{document}"
+    );
+
+    // Order (ii): beta authors the host first; alpha still comes up on it.
+    let mut second = Fixture::new("authored-first");
+    let beta = up_instance(&mut second, "beta", BETA_AUTHORS_ALPHA);
+    assert!(beta.status.success(), "{}", stderr(&beta));
+    let alpha = up_instance(&mut second, "alpha", PLAIN);
+    assert!(alpha.status.success(), "{}", stderr(&alpha));
+    assert!(stderr(&alpha).contains("withheld"), "{}", stderr(&alpha));
+    assert_eq!(
+        upstream_of(&second.document(), ALPHA_ROUTE).as_deref(),
+        Some("berth_shop_alpha_app:80"),
+        "{}",
+        second.document()
+    );
+}
+
+#[test]
+fn another_installations_app_container_is_never_removed() {
+    let mut fixture = Fixture::new("foreign-app");
+    fixture.up_ok();
+    let app = std::fs::read_dir(fixture.base.join("state/c"))
+        .expect("containers")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .find(|name| name.starts_with("berth_shop_") && name.ends_with("_app"))
+        .expect("app container");
+    let other_home = fixture.base.join("other-home");
+    for args in [&["down"][..], &["down", "--purge"][..]] {
+        fixture.clear_log();
+        let output = Command::new(env!("CARGO_BIN_EXE_berth"))
+            .current_dir(fixture.base.join("project"))
+            .args(["--non-interactive"].iter().chain(args))
+            .env(
+                "PATH",
+                format!(
+                    "{}:{}",
+                    fixture.base.join("bin").display(),
+                    std::env::var("PATH").unwrap_or_default()
+                ),
+            )
+            .env("BERTH_HOME", &other_home)
+            .env("FAKE_STATE", fixture.base.join("state"))
+            .env("BERTH_GATEWAY_HTTPS_PORT", fixture.https_port.to_string())
+            .env(
+                "BERTH_GATEWAY_HTTP_PORT",
+                (fixture.https_port - 1).to_string(),
+            )
+            .env_remove("BERTH_INSTANCE")
+            .env_remove("BERTH_ENGINE")
+            .output()
+            .expect("run berth");
+        assert_eq!(
+            output.status.code(),
+            Some(125),
+            "{args:?}: {}",
+            stderr(&output)
+        );
+        assert!(
+            stderr(&output).contains("another berth installation"),
+            "{}",
+            stderr(&output)
+        );
+        for call in fixture.calls() {
+            let verb = call.split(' ').next().unwrap_or_default();
+            assert!(
+                !(["stop", "rm"].contains(&verb) && call.contains(&app)),
+                "{args:?} touched A's app: {call}"
+            );
+        }
+        assert!(fixture.base.join("state/c").join(&app).exists(), "{args:?}");
+    }
+}
+
+#[test]
+fn a_second_instance_spelling_the_same_route_is_refused() {
+    // `a-b` of project `c` and `a` of project `b-c` both derive `a-b-c`.
+    let mut fixture = Fixture::new("same-route");
+    let project = |name: &str| {
+        format!(
+            "schema_version: 9\nproject: {name}\nproject_type: project\nservices:\n  app:\n    preset: laravel\n"
+        )
+    };
+    let first = up_instance(&mut fixture, "a-b", &project("c"));
+    assert!(first.status.success(), "{}", stderr(&first));
+    let second = up_instance(&mut fixture, "a", &project("b-c"));
+    assert_eq!(second.status.code(), Some(125), "{}", stderr(&second));
+    assert!(
+        stderr(&second).contains("already served by"),
+        "{}",
+        stderr(&second)
+    );
+    assert_eq!(
+        upstream_of(&fixture.document(), "a-b-c.berth.localhost").as_deref(),
+        Some("berth_c_a-b_app:80"),
+        "{}",
+        fixture.document()
+    );
 }

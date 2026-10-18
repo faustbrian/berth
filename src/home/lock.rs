@@ -82,24 +82,3 @@ fn open_lock_file(path: &Path) -> Result<File> {
         .open(path)
         .with_context(|| format!("failed to open {}", path.display()))
 }
-
-/// Takes the lock on the existing file `path` without waiting: `None`
-/// while another process holds it. The lock lasts until the file drops.
-///
-/// # Errors
-///
-/// Returns an error when the file cannot be opened or locked.
-pub(crate) fn try_hold_lock(path: &Path) -> Result<Option<File>> {
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(path)
-        .with_context(|| format!("failed to open {}", path.display()))?;
-    match file.try_lock() {
-        Ok(()) => Ok(Some(file)),
-        Err(TryLockError::WouldBlock) => Ok(None),
-        Err(TryLockError::Error(error)) => {
-            Err(error).with_context(|| format!("failed to lock {}", path.display()))
-        }
-    }
-}

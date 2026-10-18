@@ -11,6 +11,8 @@ use super::{inspect_image_exists, remove_container, start_container};
 
 /// Ensures or start existing exists and is in the required state.
 pub(super) fn ensure_or_start_existing(container_name: &str, recreate: bool) -> Result<bool> {
+    // Neither adopted nor removed when another installation made it.
+    crate::docker::ensure_own_container(container_name)?;
     if recreate {
         remove_container(container_name);
         return Ok(false);

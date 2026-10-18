@@ -51,6 +51,7 @@ case "$1" in
     [ -f "$S/c/$name" ] || exit 1
     case "$*" in
       *NetworkSettings.Networks*) printf '{}' ;;
+      *dev.berth.installation*) cat "$BERTH_HOME/installation-id" ;;
       *--format*) cat "$S/c/$name" | tr -d '\n' ;;
       *) printf '[{"State":{"Status":"running"},"NetworkSettings":{"Ports":{}},"HostConfig":{"PortBindings":{}}}]' ;;
     esac

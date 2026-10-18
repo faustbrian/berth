@@ -75,20 +75,44 @@ pub(super) fn acquire_testing_runtime_lease(workspace_root: &Path) -> Result<Tes
 
 /// Takes the slot's lock without waiting: `None` when another run holds it.
 fn try_lock_slot(path: &Path) -> Result<Option<std::fs::File>> {
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .mode(0o600)
-        .open(path)
-        .with_context(|| format!("failed to open {}", path.display()))?;
-    match file.try_lock() {
-        Ok(()) => Ok(Some(file)),
-        Err(std::fs::TryLockError::WouldBlock) => Ok(None),
-        Err(std::fs::TryLockError::Error(error)) => {
-            Err(error).with_context(|| format!("failed to lock {}", path.display()))
+    loop {
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(path)
+            .with_context(|| format!("failed to open {}", path.display()))?;
+        match lock_opened(file, path)? {
+            SlotLock::Held(file) => return Ok(Some(file)),
+            SlotLock::Busy => return Ok(None),
+            // `berth gc` deleted it between the open and the lock.
+            SlotLock::Stale => {}
         }
+    }
+}
+
+enum SlotLock {
+    Held(std::fs::File),
+    Busy,
+    Stale,
+}
+
+/// Locks an opened slot file, keeping the lock only while that file is the
+/// one at the path.
+fn lock_opened(file: std::fs::File, path: &Path) -> Result<SlotLock> {
+    match file.try_lock() {
+        Ok(()) => {}
+        Err(std::fs::TryLockError::WouldBlock) => return Ok(SlotLock::Busy),
+        Err(std::fs::TryLockError::Error(error)) => {
+            return Err(error).with_context(|| format!("failed to lock {}", path.display()));
+        }
+    }
+    if crate::home::same_file(&file, path)? {
+        Ok(SlotLock::Held(file))
+    } else {
+        Ok(SlotLock::Stale)
     }
 }
 
@@ -260,9 +284,9 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
-        ResourceHint, acquire_testing_runtime_lease, adaptive_pool_size_from_signals,
-        resolve_pooled_runtime_env_name, testing_runtime_env_name,
-        testing_runtime_pool_size_from_env, workspace_pool_key,
+        ResourceHint, SlotLock, acquire_testing_runtime_lease, adaptive_pool_size_from_signals,
+        lock_opened, resolve_pooled_runtime_env_name, testing_runtime_env_name,
+        testing_runtime_pool_size_from_env, try_lock_slot, workspace_pool_key,
     };
 
     fn temp_root(name: &str) -> PathBuf {
@@ -382,6 +406,23 @@ mod tests {
     fn workspace_pool_key_is_stable_for_same_path() {
         let root = temp_root("stable");
         assert_eq!(workspace_pool_key(&root), workspace_pool_key(&root));
+    }
+
+    #[test]
+    fn a_slot_whose_lock_file_was_deleted_is_not_held() {
+        let root = temp_root("deleted");
+        fs::create_dir_all(&root).expect("root");
+        let path = root.join("slot-1.lock");
+        // A run opened the file; `berth gc` deleted it before the run locked.
+        fs::write(&path, b"").expect("lock file");
+        let opened = fs::File::open(&path).expect("open");
+        fs::remove_file(&path).expect("gc removes it");
+        assert!(matches!(
+            lock_opened(opened, &path).expect("lock"),
+            SlotLock::Stale
+        ));
+        let held = try_lock_slot(&path).expect("lock").expect("free slot");
+        assert!(crate::home::same_file(&held, &path).expect("same"));
     }
 
     #[test]

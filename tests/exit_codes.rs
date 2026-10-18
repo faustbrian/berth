@@ -21,6 +21,7 @@ case "$*" in *"caddy reload"*) cat > /dev/null ;; esac
 case "$1" in
   inspect)
     [ "$FAKE_STATUS" = missing ] && exit 1
+    case "$*" in *dev.berth.installation*) cat "$BERTH_HOME/installation-id"; exit 0 ;; esac
     printf '%s' "${FAKE_STATUS:-running}"; exit 0 ;;
   exec)
     [ -n "$FAKE_LOG" ] && echo "$*" >> "$FAKE_LOG"

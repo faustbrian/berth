@@ -73,6 +73,15 @@ case "$1" in
   run)
     case "$*" in *"--entrypoint printenv"*) echo /var/lib/postgresql/data; exit 0 ;; esac
     case "$*" in *"--entrypoint sh"*) cat > "$S/acl-seed"; exit 0 ;; esac
+    # A throwaway client: records its stdin and whether a password reached
+    # its environment, then exits as asked.
+    case "$*" in *" --rm "*)
+      cat > "$S/client-stdin"
+      for var in PGPASSWORD MYSQL_PWD REDISCLI_AUTH; do
+        eval "value=\${$var:-}"; [ -n "$value" ] && echo "$var" >> "$S/client-env"
+      done
+      exit "${FAKE_CLIENT_EXIT:-0}" ;;
+    esac
     name=""; prev=""; : > "$S/labels"
     net=""
     for arg in "$@"; do
@@ -137,6 +146,7 @@ case "$1" in
         installation=$(grep '^dev.berth.installation=' "$S/c/$name" | cut -d= -f2)
         fp=$(grep '^dev.berth.shared.fingerprint=' "$S/c/$name" | cut -d= -f2)
         printf 'running\t%s\t%s' "$installation" "$fp" ;;
+      *dev.berth.installation*) cat "$BERTH_HOME/installation-id" ;;
       *--format*) if [ -f "$S/stopped-$name" ]; then printf exited; else printf running; fi ;;
       *) printf '[{"State":{"Status":"running"},"NetworkSettings":{"Ports":{}},"HostConfig":{"PortBindings":{}}}]' ;;
     esac
@@ -1462,14 +1472,144 @@ fn commands_of_the_callers_choosing_never_run_in_a_shared_server() {
         "{}",
         host.calls()
     );
-    // Without a command, `exec` is the tenant's own client.
+    let raw = host.berth(
+        &a,
+        &["cp", &format!("{server}:/var/lib/postgresql"), "./copy"],
+    );
+    assert_eq!(raw.status.code(), Some(125), "{}", text(&raw.stderr));
+}
+
+#[test]
+fn the_tenant_client_runs_in_a_throwaway_container_on_the_instance_network() {
+    let host = Host::new("client");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    let env = env_json(&host, &a);
+    let tenant = env["environment"]["DB_DATABASE"]
+        .as_str()
+        .expect("tenant")
+        .to_owned();
+    let password = env["environment"]["DB_PASSWORD"]
+        .as_str()
+        .expect("password")
+        .to_owned();
+    let network = format!(
+        "berth_shop_{}",
+        tenant.trim_start_matches("shop__").trim_end_matches("__db")
+    );
     host.clear();
     let client = host.berth(&a, &["exec", "--no-tty", "--service", "db"]);
     assert!(client.status.success(), "{}", text(&client.stderr));
+    let calls = host.calls();
     assert!(
-        host.calls().lines().any(|line| line.starts_with("exec")
-            && line.contains(&server)
-            && line.contains("psql")),
+        !calls
+            .lines()
+            .any(|line| line.starts_with("exec") && line.contains(&server)),
+        "the client never runs inside the shared server: {calls}"
+    );
+    let runs: Vec<&str> = calls
+        .lines()
+        .filter(|line| line.starts_with("run "))
+        .collect();
+    assert_eq!(runs.len(), 1, "{calls}");
+    let run = runs[0];
+    let words: Vec<&str> = run.split(' ').collect();
+    for expected in ["--rm", "-i", "--entrypoint", "psql", "-h", "db", "-U"] {
+        assert!(words.contains(&expected), "{expected}: {run}");
+    }
+    assert!(!words.contains(&"-it"), "{run}");
+    assert!(run.contains(&format!("--network {network}")), "{run}");
+    assert!(run.contains("timescale/timescaledb-ha:pg18"), "{run}");
+    assert!(words.contains(&tenant.as_str()), "{run}");
+    for forbidden in [
+        "-v",
+        "--volume",
+        "--mount",
+        "--privileged",
+        "host",
+        "docker.sock",
+    ] {
+        assert!(!words.contains(&forbidden), "{forbidden}: {run}");
+    }
+    assert!(
+        !calls.contains(&password),
+        "the password never reaches argv: {calls}"
+    );
+    let client_env =
+        std::fs::read_to_string(host.base.join("state/client-env")).unwrap_or_default();
+    assert_eq!(client_env.trim(), "PGPASSWORD", "{client_env}");
+}
+
+#[test]
+fn the_tenant_clients_exit_code_and_stdin_pass_through() {
+    use std::io::Write as _;
+    let host = Host::new("client-exit");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let mut child = host
+        .command(&a, &["exec", "--no-tty", "--service", "db"], "", "")
+        .env("FAKE_CLIENT_EXIT", "3")
+        .stdin(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn berth");
+    child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(b"select 1;\n")
+        .expect("write");
+    let output = child.wait_with_output().expect("berth");
+    assert_eq!(output.status.code(), Some(3), "{}", text(&output.stderr));
+    assert_eq!(
+        std::fs::read_to_string(host.base.join("state/client-stdin")).expect("stdin"),
+        "select 1;\n"
+    );
+}
+
+#[test]
+fn the_tenant_client_needs_the_instance_attached() {
+    let host = Host::new("client-detached");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    host.ok(&a, &["stop", "--service", "db"]);
+    host.clear();
+    let client = host.berth(&a, &["exec", "--no-tty", "--service", "db"]);
+    assert_eq!(client.status.code(), Some(125), "{}", text(&client.stderr));
+    assert!(
+        text(&client.stderr).contains("berth up"),
+        "{}",
+        text(&client.stderr)
+    );
+    assert!(
+        !host.calls().lines().any(|line| line.starts_with("run ")),
+        "{}",
+        host.calls()
+    );
+}
+
+#[test]
+fn the_tenant_client_needs_a_running_server() {
+    let host = Host::new("client-stopped");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    std::fs::write(
+        host.base.join("state").join(format!("stopped-{server}")),
+        b"",
+    )
+    .expect("stop");
+    host.clear();
+    let client = host.berth(&a, &["exec", "--no-tty", "--service", "db"]);
+    assert_eq!(client.status.code(), Some(125), "{}", text(&client.stderr));
+    assert!(
+        text(&client.stderr).contains("berth up"),
+        "{}",
+        text(&client.stderr)
+    );
+    assert!(
+        !host.calls().lines().any(|line| line.starts_with("run ")),
         "{}",
         host.calls()
     );
@@ -1624,5 +1764,205 @@ fn on_podman_a_server_is_never_recreated_without_its_run_options() {
         .filter(|line| line.starts_with("run -d") && line.contains(&server))
     {
         assert!(run.ends_with("-c max_connections=1000"), "{run}");
+    }
+}
+
+/// Runs `args` while this test holds `a`'s in-use lock as the reaper does,
+/// with its credentials unreadable; then purges the instance as a reap
+/// would and releases the lock. Returns the command's output.
+fn run_through_a_reap(
+    host: &Host,
+    a: &Path,
+    instance: &str,
+    selector: &[&str],
+    command: &[&str],
+) -> Output {
+    let args = [selector, command].concat();
+    let env = host.ok(a, &[selector, &["env", "--json"]].concat());
+    let document: serde_json::Value = serde_json::from_slice(&env.stdout).expect("env JSON");
+    let tenant = document["environment"]["DB_DATABASE"]
+        .as_str()
+        .expect("tenant")
+        .to_owned();
+    let state = host.base.join("home/instances/shop").join(instance);
+    let credentials = state.join("credentials").join(&tenant);
+    let lock_path = host
+        .base
+        .join("home/locks")
+        .join(format!("instance_shop_{instance}.lock"));
+    let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)
+        .expect("lock file");
+    lock.lock().expect("reaper lock");
+    std::fs::write(&credentials, "not hex").expect("unreadable credentials");
+    let mut child = host
+        .command(a, &args, "", "")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn berth");
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    assert!(
+        child.try_wait().expect("poll").is_none(),
+        "{args:?} read the instance's state before the reap released it"
+    );
+    std::fs::remove_dir_all(&state).expect("purge state");
+    std::fs::remove_file(&lock_path).expect("purge lock");
+    drop(lock);
+    child.wait_with_output().expect("berth output")
+}
+
+#[test]
+fn a_command_waits_for_a_reap_in_progress_before_reading_its_credentials() {
+    let host = Host::new("reap-race");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let validated: serde_json::Value =
+        serde_json::from_slice(&host.ok(&a, &["config", "validate", "--json"]).stdout)
+            .expect("validate");
+    let instance = validated["instance"].as_str().expect("instance").to_owned();
+    let ps = run_through_a_reap(&host, &a, &instance, &[], &["ps"]);
+    assert!(ps.status.success(), "{}", text(&ps.stderr));
+    assert!(
+        !text(&ps.stderr).contains("valid secret"),
+        "{}",
+        text(&ps.stderr)
+    );
+
+    host.ok(&a, &["--instance", "x", "up", "--no-wait"]);
+    let named = run_through_a_reap(&host, &a, "x", &["--instance", "x"], &["ps"]);
+    assert!(named.status.success(), "{}", text(&named.stderr));
+
+    // Commands that never touch Docker read and create credentials too.
+    let env = run_through_a_reap(&host, &a, &instance, &[], &["env", "--json"]);
+    assert!(env.status.success(), "{}", text(&env.stderr));
+    let document: serde_json::Value = serde_json::from_slice(&env.stdout).expect("env JSON");
+    let password = document["environment"]["DB_PASSWORD"]
+        .as_str()
+        .expect("password");
+    assert_eq!(
+        env_json(&host, &a)["environment"]["DB_PASSWORD"],
+        password,
+        "env printed the credentials berth keeps"
+    );
+}
+
+#[test]
+fn up_json_credentials_match_what_berth_keeps_after_waiting_out_a_reap() {
+    let host = Host::new("reap-up");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let validated: serde_json::Value =
+        serde_json::from_slice(&host.ok(&a, &["config", "validate", "--json"]).stdout)
+            .expect("validate");
+    let instance = validated["instance"].as_str().expect("instance").to_owned();
+    let up = run_through_a_reap(&host, &a, &instance, &[], &["up", "--no-wait", "--json"]);
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    let document: serde_json::Value = serde_json::from_slice(&up.stdout).expect("up JSON");
+    let reported = document["credentials"]["db"]["password"]
+        .as_str()
+        .expect("password")
+        .to_owned();
+    let env = env_json(&host, &a);
+    assert_eq!(
+        env["environment"]["DB_PASSWORD"],
+        reported.as_str(),
+        "{document}"
+    );
+    assert!(
+        reported.len() == 64 && reported.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        "a fresh credential: {reported}"
+    );
+}
+
+#[test]
+fn each_engines_tenant_client_reaches_its_server_by_name_with_its_password_in_the_environment() {
+    for (label, project, service, program, password_env, port) in [
+        (
+            "client-mysql",
+            "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: mysql\n",
+            "db",
+            "mysql",
+            "MYSQL_PWD",
+            "3306",
+        ),
+        (
+            "client-mariadb",
+            "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: mariadb\n",
+            "db",
+            "mariadb",
+            "MYSQL_PWD",
+            "3306",
+        ),
+        (
+            "client-redis",
+            REDIS_PROJECT,
+            "cache",
+            "redis-cli",
+            "REDISCLI_AUTH",
+            "6379",
+        ),
+    ] {
+        let host = Host::new(label);
+        let a = host.checkout("a", project);
+        host.ok(&a, &["up", "--no-wait"]);
+        host.clear();
+        let client = host
+            .command(&a, &["exec", "--service", service], "", "")
+            .output()
+            .expect("run berth");
+        assert!(client.status.success(), "{label}: {}", text(&client.stderr));
+        let calls = host.calls();
+        let run = calls
+            .lines()
+            .find(|line| line.starts_with("run --rm"))
+            .unwrap_or_default()
+            .to_owned();
+        let words: Vec<&str> = run.split(' ').collect();
+        assert!(
+            run.contains(&format!("--entrypoint {program} ")),
+            "{label}: {run}"
+        );
+        assert!(run.contains(&format!("-h {service} ")), "{label}: {run}");
+        assert!(
+            words.contains(&port) || words.contains(&format!("--port={port}").as_str()),
+            "{label}: {run}"
+        );
+        for hardening in ["--cap-drop ALL", "--security-opt no-new-privileges"] {
+            assert!(run.contains(hardening), "{label}: {run}");
+        }
+        let env = env_json(&host, &a);
+        let user_key = if service == "cache" {
+            "REDIS_USERNAME"
+        } else {
+            "DB_USERNAME"
+        };
+        let user = env["environment"][user_key]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        assert!(!user.is_empty(), "{label}: {env}");
+        let user_flag = if service == "cache" { "--user" } else { "-u" };
+        assert!(
+            run.contains(&format!("{user_flag} {user}")),
+            "{label}: {run}"
+        );
+        if service == "db" {
+            let database = env["environment"]["DB_DATABASE"]
+                .as_str()
+                .expect("database");
+            assert!(run.ends_with(&format!(" {database}")), "{label}: {run}");
+        }
+        assert!(
+            words.contains(&"-i") && !words.contains(&"-it"),
+            "without a terminal: {run}"
+        );
+        let client_env =
+            std::fs::read_to_string(host.base.join("state/client-env")).unwrap_or_default();
+        assert_eq!(client_env.trim(), password_env, "{label}");
     }
 }

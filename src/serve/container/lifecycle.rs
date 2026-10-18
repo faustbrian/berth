@@ -52,6 +52,8 @@ pub(super) fn ensure_container_running(
 
     // Sources first: a consumer whose source is not up never starts.
     let endpoints = dependency_networks::prepare_dependency_endpoints(target, project_root)?;
+    // Neither adopted nor replaced when another installation made it.
+    crate::docker::ensure_own_container(&container_name)?;
     if recreate || crate::network::publication_drifted(target) {
         force_remove_container(&container_name);
     } else if handle_existing_container(&container_name)? {

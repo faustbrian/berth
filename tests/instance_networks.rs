@@ -27,7 +27,10 @@ case "$1 $2" in
   "ps -a") cat "$FAKE_STATE/attached" 2>/dev/null; exit 0 ;;
 esac
 case "$1" in
-  inspect) [ -f "$FAKE_STATE/container" ] || exit 1; printf running; exit 0 ;;
+  inspect)
+    [ -f "$FAKE_STATE/container" ] || exit 1
+    case "$*" in *dev.berth.installation*) cat "$BERTH_HOME/installation-id"; exit 0 ;; esac
+    printf running; exit 0 ;;
   run) touch "$FAKE_STATE/container"; exit 0 ;;
   rm) rm -f "$FAKE_STATE/container"; exit 0 ;;
 esac

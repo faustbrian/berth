@@ -14,6 +14,7 @@ use crate::output;
 
 mod bootstrap;
 mod context;
+mod early_lock;
 mod lease;
 mod primary;
 mod secondary;
@@ -63,8 +64,10 @@ pub(crate) fn run(mut cli: Cli) -> Result<()> {
     )?;
     docker::set_container_engine(cli.engine.or(configured_engine).unwrap_or_default());
 
+    let early = early_lock::hold_before_load(&dispatch_context)?;
     let mut config = bootstrap::load_config_for_cli(&dispatch_context)?;
-    let lease = match lease::renew_and_reap(&cli, &config) {
+    // `early` stays held until the command ends.
+    let lease = match lease::renew_and_reap(&cli, &config, early.as_ref()) {
         Ok(lease) => lease,
         Err(error) => {
             // `up --json` promises one document on stdout, failures included

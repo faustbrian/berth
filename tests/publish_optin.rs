@@ -50,6 +50,7 @@ case "$1" in
     [ -f "$S/c/$name" ] || exit 1
     case "$*" in
       *--format*NetworkSettings.Networks*) printf '{}' ;;
+      *dev.berth.installation*) cat "$BERTH_HOME/installation-id" ;;
       *--format*) if [ -f "$S/stopped-$name" ]; then printf 'exited'; else printf 'running'; fi ;;
       *)
         status=running; [ -f "$S/stopped-$name" ] && status=exited

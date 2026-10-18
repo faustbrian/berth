@@ -5,7 +5,12 @@ use anyhow::Result;
 use super::docker_cmd::docker_output;
 use crate::output::{self, LogLevel, Persistence};
 
-pub(super) fn preview_global_prune_candidates(filters: &[String]) -> Result<()> {
+/// Lists what `prune --all` would remove: the stopped containers matching
+/// `filters`, except those another berth installation labeled.
+pub(super) fn preview_global_prune_candidates(
+    filters: &[String],
+    installation: &str,
+) -> Result<()> {
     let mut args = vec![
         "ps".to_owned(),
         "-a".to_owned(),
@@ -16,7 +21,10 @@ pub(super) fn preview_global_prune_candidates(filters: &[String]) -> Result<()> 
         "--filter".to_owned(),
         "status=dead".to_owned(),
         "--format".to_owned(),
-        "{{.Names}}".to_owned(),
+        format!(
+            "{{{{.Names}}}}\t{}",
+            crate::docker::label_template(crate::docker::LABEL_INSTALLATION)
+        ),
     ];
     let filter_args: Vec<String> = filters
         .iter()
@@ -39,9 +47,12 @@ pub(super) fn preview_global_prune_candidates(filters: &[String]) -> Result<()> 
 
     let names: Vec<String> = String::from_utf8_lossy(&output.stdout)
         .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(ToOwned::to_owned)
+        .filter_map(|line| {
+            let (name, owner) = line.split_once('\t').unwrap_or((line, ""));
+            let owner = owner.trim();
+            let own = owner.is_empty() || owner == "<no value>" || owner == installation;
+            (own && !name.trim().is_empty()).then(|| name.trim().to_owned())
+        })
         .collect();
     if names.is_empty() {
         output::event(
@@ -107,21 +118,23 @@ mod tests {
     #[test]
     fn preview_global_prune_candidates_reports_no_candidates() {
         with_fake_docker("printf ''\nexit 0", || {
-            preview_global_prune_candidates(&[]).expect("empty candidates");
+            preview_global_prune_candidates(&[], "mine").expect("empty candidates");
         });
     }
 
     #[test]
     fn preview_global_prune_candidates_reports_candidates() {
         with_fake_docker("printf 'stopped-1\\nstopped-2\\n'\nexit 0", || {
-            preview_global_prune_candidates(&["name=foo".to_owned()]).expect("candidate list");
+            preview_global_prune_candidates(&["name=foo".to_owned()], "mine")
+                .expect("candidate list");
         });
     }
 
     #[test]
     fn preview_global_prune_candidates_tolerates_list_failures() {
         with_fake_docker("printf 'oops' >&2\nexit 1", || {
-            preview_global_prune_candidates(&[]).expect("non-zero preview output tolerated");
+            preview_global_prune_candidates(&[], "mine")
+                .expect("non-zero preview output tolerated");
         });
     }
 }

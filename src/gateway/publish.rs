@@ -29,6 +29,14 @@ pub(super) struct LabeledRoute {
     pub(super) network: String,
 }
 
+impl LabeledRoute {
+    /// The container's own instance route: `route_hosts` labels it first,
+    /// ahead of any authored domains.
+    pub(super) fn derived_route(&self) -> Option<&str> {
+        self.hosts.first().map(String::as_str)
+    }
+}
+
 /// Why routes are being published.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PublishMode<'a> {
@@ -131,6 +139,17 @@ pub(crate) fn publish_routes(mode: PublishMode<'_>) -> Result<()> {
             crate::output::Persistence::Persistent,
         );
     }
+    for (host, authors) in &plan.overridden {
+        crate::output::event(
+            "gateway",
+            crate::output::LogLevel::Warn,
+            &format!(
+                "Domain {host} of {} withheld: it is another instance's route",
+                authors.join(" and ")
+            ),
+            crate::output::Persistence::Persistent,
+        );
+    }
     Ok(())
 }
 
@@ -146,17 +165,14 @@ pub(crate) fn ensure_route_unclaimed(own_container: &str, route: &str) -> Result
     if crate::docker::is_dry_run() {
         return Ok(());
     }
-    let hosts = [route];
     let installation = crate::home::installation_id()?;
     for entry in discover_routes(&installation)? {
         if entry.container == own_container {
             continue;
         }
-        if let Some(host) = entry
-            .hosts
-            .iter()
-            .find(|host| hosts.contains(&host.as_str()))
-        {
+        // Only another instance route blocks it; an authored domain spelled
+        // the same yields to it (see `plan_routes`).
+        if let Some(host) = entry.derived_route().filter(|host| *host == route) {
             anyhow::bail!(
                 "route {host} is already served by {}; use another --instance or bring {} \
                  down first",
@@ -174,10 +190,17 @@ pub(super) struct RoutePlan {
     pub(super) routes: Vec<GatewayRoute>,
     pub(super) aliases: BTreeMap<String, BTreeSet<String>>,
     pub(super) conflicts: BTreeMap<String, Vec<String>>,
+    /// Authored domains withheld because they are another container's
+    /// instance route: host to the containers that authored it.
+    pub(super) overridden: BTreeMap<String, Vec<String>>,
 }
 
 /// Turns labeled containers into routes and per-network gateway aliases.
-/// Every claimant of a host claimed more than once is excluded for that host.
+///
+/// A host claimed more than once goes to the one container whose instance
+/// route it is, and is withheld from those that authored it as a `domain`;
+/// a host only authored (by several worktrees of one project) is withheld
+/// from every claimant.
 pub(super) fn plan_routes(labeled: &[LabeledRoute]) -> Result<RoutePlan> {
     let mut claimants: BTreeMap<&str, Vec<&LabeledRoute>> = BTreeMap::new();
     for entry in labeled {
@@ -194,7 +217,25 @@ pub(super) fn plan_routes(labeled: &[LabeledRoute]) -> Result<RoutePlan> {
     }
     let mut plan = RoutePlan::default();
     for (host, entries) in claimants {
-        if let [entry] = entries.as_slice() {
+        let owners: Vec<&&LabeledRoute> = entries
+            .iter()
+            .filter(|entry| entry.derived_route() == Some(host))
+            .collect();
+        let winner = match (entries.as_slice(), owners.as_slice()) {
+            ([entry], _) => Some(*entry),
+            (_, [owner]) => {
+                let mut authors: Vec<String> = entries
+                    .iter()
+                    .filter(|entry| entry.container != owner.container)
+                    .map(|entry| entry.container.clone())
+                    .collect();
+                authors.sort();
+                plan.overridden.insert(host.to_owned(), authors);
+                Some(**owner)
+            }
+            _ => None,
+        };
+        if let Some(entry) = winner {
             plan.routes.push(GatewayRoute {
                 host: host.to_owned(),
                 upstream: format!("{}:{}", entry.container, entry.port),
@@ -579,9 +620,10 @@ mod tests {
 
     #[test]
     fn a_host_claimed_twice_is_withheld_from_both_and_others_still_publish() {
+        // Both author `x`; it is neither one's instance route.
         let labeled = parse_routes(
-            "one\tx.berth.localhost,one.berth.localhost\t80\tn1\n\
-             two\tx.berth.localhost\t80\tn2\n\
+            "one\tone.berth.localhost,x.berth.localhost\t80\tn1\n\
+             two\ttwo.berth.localhost,x.berth.localhost\t80\tn2\n\
              three\tthree.berth.localhost\t80\tn3\n",
         );
         let plan = plan_routes(&labeled).expect("plan");
@@ -590,9 +632,43 @@ mod tests {
             .iter()
             .map(|route| route.host.as_str())
             .collect();
-        assert_eq!(hosts, ["one.berth.localhost", "three.berth.localhost"]);
+        assert_eq!(
+            hosts,
+            [
+                "one.berth.localhost",
+                "three.berth.localhost",
+                "two.berth.localhost"
+            ]
+        );
         assert_eq!(plan.conflicts["x.berth.localhost"], ["one", "two"]);
-        assert!(!plan.aliases.contains_key("n2"), "n2 has no route left");
+        assert!(plan.overridden.is_empty());
+        assert!(!plan.aliases["n2"].contains("x.berth.localhost"));
+    }
+
+    #[test]
+    fn a_derived_route_wins_over_authored_domains_equal_to_it() {
+        // Each container's first host is its derived instance route.
+        let labeled = parse_routes(
+            "alpha\talpha-shop.berth.localhost\t80\tna\n\
+             beta\tbeta-shop.berth.localhost,alpha-shop.berth.localhost\t80\tnb\n\
+             gamma\tgamma-shop.berth.localhost,alpha-shop.berth.localhost\t80\tnc\n",
+        );
+        let plan = plan_routes(&labeled).expect("plan");
+        let upstream = |host: &str| {
+            plan.routes
+                .iter()
+                .find(|route| route.host == host)
+                .map(|route| route.upstream.as_str())
+        };
+        assert_eq!(upstream("alpha-shop.berth.localhost"), Some("alpha:80"));
+        assert_eq!(upstream("beta-shop.berth.localhost"), Some("beta:80"));
+        assert_eq!(
+            plan.overridden["alpha-shop.berth.localhost"],
+            ["beta", "gamma"]
+        );
+        assert!(plan.conflicts.is_empty(), "{:?}", plan.conflicts);
+        assert!(plan.aliases["na"].contains("alpha-shop.berth.localhost"));
+        assert!(!plan.aliases["nb"].contains("alpha-shop.berth.localhost"));
     }
 
     #[test]

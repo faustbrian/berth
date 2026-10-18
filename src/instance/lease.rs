@@ -7,6 +7,8 @@
 //! owner process exits, so an idle human environment is never deleted.
 
 use anyhow::{Context, Result};
+
+use super::TtlChange;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -89,7 +91,7 @@ pub(crate) fn renew_lease(
     project: &str,
     instance: &str,
     root: &Path,
-    ttl: Option<Duration>,
+    ttl: TtlChange,
     owner: Option<super::owner::OwnerProcess>,
     take_over: bool,
 ) -> Result<Lease> {
@@ -99,8 +101,9 @@ pub(crate) fn renew_lease(
     )?;
     let existing = read_lease(project, instance)?;
     let ttl_secs = match ttl {
-        Some(ttl) => Some(ttl.as_secs()),
-        None => existing.as_ref().and_then(|lease| lease.ttl_secs),
+        TtlChange::Set(ttl) => Some(ttl.as_secs()),
+        TtlChange::Clear => None,
+        TtlChange::Keep => existing.as_ref().and_then(|lease| lease.ttl_secs),
     };
     let lease = Lease {
         root: root.to_path_buf(),
@@ -126,13 +129,17 @@ pub(crate) fn renew_lease(
     Ok(lease)
 }
 
-/// Parses a TTL: a whole number with `s`, `m`, `h` or `d` (`90m`, `2h`).
+/// Parses `--ttl`: a whole number with `s`, `m`, `h` or `d` (`90m`, `2h`),
+/// or `none`, which clears a TTL set earlier.
 ///
 /// # Errors
 ///
 /// Returns an error for anything else, or a zero TTL.
-pub(crate) fn parse_ttl(raw: &str) -> Result<Duration> {
+pub(crate) fn parse_ttl(raw: &str) -> Result<TtlChange> {
     let raw = raw.trim();
+    if raw == "none" {
+        return Ok(TtlChange::Clear);
+    }
     let (digits, unit) = raw.split_at(raw.len().saturating_sub(1));
     let scale = match unit {
         "s" => 1,
@@ -147,12 +154,15 @@ pub(crate) fn parse_ttl(raw: &str) -> Result<Duration> {
     if count == 0 {
         anyhow::bail!("TTL '{raw}' must be longer than zero");
     }
-    Ok(Duration::from_secs(count.saturating_mul(scale)))
+    Ok(TtlChange::Set(Duration::from_secs(
+        count.saturating_mul(scale),
+    )))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Lease, parse_ttl, same_file};
+    use super::{Lease, TtlChange, parse_ttl};
+    use crate::home::same_file;
 
     #[test]
     fn a_lock_on_a_deleted_file_is_not_the_lock_at_the_path() {
@@ -178,11 +188,15 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    fn ttls_need_a_unit_and_a_positive_count() {
-        assert_eq!(parse_ttl("90m").expect("ttl"), Duration::from_secs(5400));
-        assert_eq!(parse_ttl("2h").expect("ttl"), Duration::from_secs(7200));
-        assert_eq!(parse_ttl("1d").expect("ttl"), Duration::from_secs(86_400));
-        for bad in ["", "2", "h", "0h", "-1h", "1.5h", "2w"] {
+    fn ttls_need_a_unit_and_a_positive_count_or_are_none() {
+        let set = |seconds| TtlChange::Set(Duration::from_secs(seconds));
+        assert_eq!(parse_ttl("90m").expect("ttl"), set(5400));
+        assert_eq!(parse_ttl("2h").expect("ttl"), set(7200));
+        assert_eq!(parse_ttl("1d").expect("ttl"), set(86_400));
+        assert_eq!(parse_ttl("none").expect("ttl"), TtlChange::Clear);
+        for bad in [
+            "", "2", "h", "0h", "-1h", "1.5h", "2w", "none1", "nonee", "None",
+        ] {
             assert!(parse_ttl(bad).is_err(), "{bad}");
         }
     }
@@ -266,21 +280,9 @@ pub(crate) fn hold_in_use(project: &str, instance: &str) -> Result<InUse> {
         // A purge deletes the lock file while holding it; a command that was
         // waiting would then hold a lock no later reaper can see. Keep the
         // lock only on the file that is at the path now.
-        if same_file(&file, &path)? {
+        if crate::home::same_file(&file, &path)? {
             return Ok(InUse { _file: file });
         }
-    }
-}
-
-fn same_file(file: &std::fs::File, path: &Path) -> Result<bool> {
-    use std::os::unix::fs::MetadataExt;
-    let held = file
-        .metadata()
-        .with_context(|| format!("failed to inspect {}", path.display()))?;
-    match std::fs::metadata(path) {
-        Ok(current) => Ok(held.dev() == current.dev() && held.ino() == current.ino()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error).with_context(|| format!("failed to inspect {}", path.display())),
     }
 }
 

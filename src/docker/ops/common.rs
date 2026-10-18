@@ -54,6 +54,7 @@ pub(super) fn run_simple_container_command(
     context_message: &str,
 ) -> Result<()> {
     let container_name = service.container_name()?;
+    crate::docker::ensure_own_container(&container_name)?;
     let args = vec![subcommand.to_owned(), container_name];
     run_docker_status(&args, context_message)
 }
@@ -66,6 +67,7 @@ pub(super) fn run_container_command_with_optional_flag(
     context_message: &str,
 ) -> Result<()> {
     let container_name = service.container_name()?;
+    crate::docker::ensure_own_container(&container_name)?;
     let mut args = vec![subcommand.to_owned()];
     if let Some(flag_value) = value {
         args.push(flag.to_owned());

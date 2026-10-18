@@ -23,7 +23,7 @@ pub(super) fn cleanup_stale_testing_runtime_containers(
         return Ok(());
     }
 
-    let list_args = stale_cleanup_list_args();
+    let list_args = stale_cleanup_list_args(&crate::home::installation_id()?);
 
     if crate::docker::is_dry_run() {
         crate::docker::print_docker_command(&list_args);
@@ -63,12 +63,16 @@ pub(super) fn cleanup_stale_testing_runtime_containers(
     Ok(())
 }
 
-fn stale_cleanup_list_args() -> Vec<String> {
+fn stale_cleanup_list_args(installation: &str) -> Vec<String> {
     vec![
         "ps".to_owned(),
         "-a".to_owned(),
         "--filter".to_owned(),
         format!("label={LABEL_MANAGED}={VALUE_MANAGED_TRUE}"),
+        // Only this installation's: another one's stopped test containers
+        // carry the same names.
+        "--filter".to_owned(),
+        format!("label=dev.berth.installation={installation}"),
         "--filter".to_owned(),
         "status=exited".to_owned(),
         "--filter".to_owned(),
@@ -150,12 +154,14 @@ mod tests {
     #[test]
     fn stale_cleanup_list_args_targets_only_stopped_containers() {
         assert_eq!(
-            stale_cleanup_list_args(),
+            stale_cleanup_list_args("abc123"),
             vec![
                 "ps".to_owned(),
                 "-a".to_owned(),
                 "--filter".to_owned(),
                 format!("label={LABEL_MANAGED}={VALUE_MANAGED_TRUE}"),
+                "--filter".to_owned(),
+                "label=dev.berth.installation=abc123".to_owned(),
                 "--filter".to_owned(),
                 "status=exited".to_owned(),
                 "--filter".to_owned(),

@@ -25,6 +25,7 @@ pub(super) fn down(service: &ServiceConfig, timeout: u64) -> Result<()> {
         return Ok(());
     }
 
+    crate::docker::ensure_own_container(&container_name)?;
     let stop_output = docker_output(
         &["stop", "--time", &timeout.to_string(), &container_name],
         &crate::docker::runtime_command_error_context("stop"),

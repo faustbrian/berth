@@ -46,9 +46,13 @@ pub(crate) fn handle_exec(config: &config::Config, options: HandleExecOptions<'_
         cli::support::effective_tty(options.tty, options.no_tty)
     };
 
-    // Without a command, `exec` opens the tenant's own client. A command of
+    // Without a command, `exec` opens the service's client: a shared
+    // server's tenant gets its own in a throwaway container. A command of
     // the caller's choosing would run in the server every instance shares.
     if options.command.is_empty() {
+        if svc.runtime.shared.is_some() {
+            return docker::pass_through_exit_code(docker::exec_tenant_client(svc, effective_tty));
+        }
         return docker::pass_through_exit_code(docker::exec_interactive(svc, effective_tty));
     }
     crate::shared::refuse_server_operation(svc, "run commands in")?;

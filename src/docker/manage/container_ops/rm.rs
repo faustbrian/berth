@@ -22,6 +22,7 @@ pub(super) fn rm(service: &ServiceConfig, force: bool) -> Result<()> {
         return Ok(());
     }
 
+    crate::docker::ensure_own_container(&container_name)?;
     if force {
         try_docker_output(&["stop", &container_name]);
     } else if let Some(status) = inspect_status(&container_name)

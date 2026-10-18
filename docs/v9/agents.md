@@ -86,9 +86,10 @@ about`); `--wait-timeout` (default 120 s) bounds it.
   endpoints a host tool can reach (only published services have any).
 - On failure `up --json` still prints one document and exits 125:
   `{"schema":1,"project":…,"instance":…,"root":…,"status":"failed","error":"…"}`.
-  Known secrets in the error are redacted. Two failures come before there is
-  a project to describe and print nothing on stdout (exit 125, the error on
-  stderr): a project file that cannot be loaded, and `--dry-run` (refused).
+  Known secrets in the error are redacted. Three failures come before there
+  is a project to describe and print nothing on stdout (exit 125, the error
+  on stderr): a project file that cannot be loaded, an instance that cannot
+  be marked in use (an unwritable berth home), and `--dry-run` (refused).
 
 ## Commands in the instance
 
@@ -100,9 +101,11 @@ about`); `--wait-timeout` (default 120 s) bounds it.
 - `berth exec [--service S] -- CMD…` runs in the service's running
   container; when it is not running, `exec` fails with 125 and says to run
   `berth up` first. On a shared-backed service, `berth exec --service db`
-  without a command opens the tenant's own client; a command of your own,
-  `cp` and `inspect` are refused (125), because they would act on the server
-  every instance shares.
+  without a command opens the tenant's own client in a throwaway container
+  on the instance network (stdin and its exit code pass through); a command
+  of your own, `cp` and `inspect` are refused (125), because they would act
+  on the server every instance shares. `berth cp` accepts only this
+  instance's services (`db:/path`) and host paths.
 - Inside a container, reach other services by name (`db:5432`, the
   `endpoint` field) and other projects through swarm `inject_env` values.
   Route URLs (`*.berth.localhost`) are for the host: libcurl resolves every
@@ -138,8 +141,8 @@ No daemon is needed. Every berth command that touches Docker (at most every
 30 s per installation; `berth ls` and `gc` too) reaps, as `down --purge`
 does, any instance of this installation whose:
 
-- lease expired (`up --ttl 2h`; every berth command in the checkout that
-  touches Docker renews it, which `init`, `config`, `preset`, `profile`,
+- lease expired (`up --ttl 2h`, cleared by `up --ttl none`; every berth
+  command in the checkout that touches Docker renews it, which `init`, `config`, `preset`, `profile`,
   `env`, `lock`, `completions`, `daemon` and `ls --services` do not; there is
   no default TTL), or
 - owner process exited (`up --owner-pid $$`, or `BERTH_OWNER_PID`; the PID is
@@ -174,7 +177,7 @@ Every inspection command prints exactly one JSON document on stdout with
 - `berth config validate --json`: `{"valid":true,"project","instance",
   "services":[{"name","kind","shared"}]}`, or exit 125.
 - `berth gc --json`: `{"reaped_instances","removed_test_containers",
-  "servers":[{"server","engine","removed","reason"}],"gateway":{"removed",
+  "removed_test_slot_locks","servers":[{"server","engine","removed","reason"}],"gateway":{"removed",
   "container"|"reason"}}`. If reaping itself fails, `gc` exits 125 with the
   error on stderr and prints no document.
 
@@ -213,21 +216,14 @@ must be in `depends_on` and running.
 
 ## Known limits
 
-- The in-use lock is taken after the config is loaded: a command racing a
-  reap on its first berth call can still see its credentials removed.
-- `--ttl` has no "none" value; omit it.
-- The tenant client `berth exec --service db` opens runs inside the shared
-  server, so a deliberate shell escape (`psql`'s `\!`, MySQL's `system`)
-  reaches it, as raw `docker exec` would; running the client in a one-off
-  container on the instance network is deferred. `berth cp` with a raw
-  container name instead of a service name is passed to Docker unchanged.
-- Two berth homes using the same project and instance names can remove each
-  other's containers by name (never their data volumes, which carry the
-  installation label).
-- An authored `domain` equal to another instance's derived route makes the
-  gateway withhold that host from both until one goes.
-- Test-slot lock files (`~/.berth/locks/test-slots/`, at most the pool size
-  per checkout, empty) are kept for reuse.
+- berth never stops, kills, restarts or removes a container that another
+  berth installation (another `BERTH_HOME`) labeled: such a command fails
+  with 125 naming it, and `berth prune --all` prunes every stopped container
+  except another installation's. Two homes using the same project and instance names
+  still derive the same container names, so only one of them can run that
+  instance at a time.
+- When an authored `domain` is another instance's route, the route serves
+  that instance and the authored domain is withheld, with a warning.
 - The acceptance run (`BERTH_ENGINE=docker|podman`) passes on Docker
   Desktop and, in CI on Linux, on rootful Docker, rootless Docker and
   rootless Podman 4.9, including the app that terminates TLS on port 443.

@@ -62,7 +62,7 @@ refused) hold only leases, locks, credentials and generated gateway state.
   idle database the first time another project's command ran.)
 - An instance is not owned by a berth process: `berth up` exits once the
   environment is healthy. While any berth command runs in an instance it holds
-  a shared `flock` on `locks/instance-{project}-{instance}.lock`, and the
+  a shared `flock` on `locks/instance_{project}_{instance}.lock`, and the
   reaper skips instances whose lock it cannot take, so a test run longer than
   its TTL is never deleted underneath it.
 - Docker-touching commands run the reaper at most every 30 seconds per
@@ -90,7 +90,8 @@ refused) hold only leases, locks, credentials and generated gateway state.
 
 `berth artisan test` keeps the 7.0.0 lease semantics: a bounded per-workspace
 slot pool (8–32 slots, each an `flock` under `~/.berth/locks/test-slots`)
-limits concurrency, and each run is isolated. Each run's shared services are
+limits concurrency, and each run is isolated. `berth gc` deletes the slot
+locks no run holds. Each run's shared services are
 a tenant of the slot's own runtime environment, dropped at the start and end
 of the run (ParaTest's `_test_*` databases included); dedicated services keep
 7.0.0's per-run containers. A killed run frees its slot at once, and the next
@@ -232,7 +233,9 @@ routes. A host claimed by two running containers (an authored domain committed
 to a project with two worktrees up, say) is withheld from both with a warning
 while every other route keeps being published (8.x FI-53), so committed config
 never needs editing per worktree. When all but one claimant go down, the
-shared domain serves the remaining one again.
+shared domain serves the remaining one again. A host that is one container's
+instance route always serves that container: an authored domain spelled the
+same is withheld from its authors instead.
 
 The gateway ports are an installation setting: the first gateway records them
 in `~/.berth/gateway/ports` (from `BERTH_GATEWAY_HTTPS_PORT`/`_HTTP_PORT` or the

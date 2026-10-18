@@ -14,23 +14,25 @@ use crate::config::Config;
 ///
 /// Returns an error for an invalid `--ttl`, or when the lease cannot be
 /// written or reaping fails.
-pub(super) fn renew_and_reap(cli: &Cli, config: &Config) -> Result<Option<ActiveLease>> {
+pub(super) fn renew_and_reap(
+    cli: &Cli,
+    config: &Config,
+    early: Option<&super::early_lock::EarlyLock>,
+) -> Result<Option<ActiveLease>> {
     let (ttl, owner) = match &cli.command {
         Commands::Up(args) => (
             args.ttl
                 .as_deref()
                 .map(crate::instance::parse_ttl)
-                .transpose()?,
+                .transpose()?
+                .unwrap_or(crate::instance::TtlChange::Keep),
             args.owner_pid
                 .map(crate::instance::owner_process)
                 .transpose()?,
         ),
-        _ => (None, None),
+        _ => (crate::instance::TtlChange::Keep, None),
     };
-    // Unit tests drive dispatch against the developer's real Docker and
-    // berth home, which must never be reaped; the integration tests cover
-    // reaping through the binary with a fake Docker.
-    if cfg!(test) || !touches_docker(&cli.command) || crate::docker::is_dry_run() {
+    if !leases(&cli.command) {
         return Ok(None);
     }
     let identity = config.service.iter().find_map(|service| {
@@ -45,7 +47,15 @@ pub(super) fn renew_and_reap(cli: &Cli, config: &Config) -> Result<Option<Active
         reap_in_passing(None);
         return Ok(None);
     };
-    let in_use = crate::instance::hold_in_use(&project, &instance)?;
+    match early {
+        Some(early) if early.project == project && early.instance == instance => {}
+        Some(early) => anyhow::bail!(
+            "berth marked {}/{} in use but loaded {project}/{instance}",
+            early.project,
+            early.instance
+        ),
+        None => anyhow::bail!("berth did not mark {project}/{instance} in use before loading it"),
+    }
     // Only `up` establishes the instance anew and takes over from a dead
     // owner; any other command keeps the recorded owner, so a command that
     // outlives its killed agent never stops the instance from being reaped.
@@ -56,16 +66,15 @@ pub(super) fn renew_and_reap(cli: &Cli, config: &Config) -> Result<Option<Active
         project,
         instance,
         root,
-        _in_use: in_use,
     }))
 }
 
-/// The instance a command runs in, held in use until the command ends.
+/// The instance a command runs in (`dispatch` holds it in use until the
+/// command ends).
 pub(super) struct ActiveLease {
     project: String,
     instance: String,
     root: std::path::PathBuf,
-    _in_use: crate::instance::InUse,
 }
 
 impl ActiveLease {
@@ -86,8 +95,15 @@ impl ActiveLease {
         {
             return Ok(());
         }
-        crate::instance::renew_lease(&self.project, &self.instance, &self.root, None, None, false)
-            .map(drop)
+        crate::instance::renew_lease(
+            &self.project,
+            &self.instance,
+            &self.root,
+            crate::instance::TtlChange::Keep,
+            None,
+            false,
+        )
+        .map(drop)
     }
 }
 
@@ -108,6 +124,14 @@ pub(super) fn reap_in_passing(keep: Option<(&str, &str)>) {
             crate::output::Persistence::Persistent,
         );
     }
+}
+
+/// Whether `command` leases its instance (and so marks it in use). Unit
+/// tests drive dispatch against the developer's real Docker and berth home,
+/// which must never be reaped; the integration tests cover reaping through
+/// the binary with a fake Docker.
+pub(super) fn leases(command: &Commands) -> bool {
+    !cfg!(test) && touches_docker(command) && !crate::docker::is_dry_run()
 }
 
 /// Commands that only read or write project files.

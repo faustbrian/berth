@@ -513,6 +513,13 @@ agent() {
   fi
   printf '%s\n' "$?" > "$out/npm.status"
 
+  # The tenant's own clients run in throwaway containers on the instance
+  # network and reach the shared servers by service name.
+  printf 'select current_user;\n' | "$BERTH" exec --no-tty --service db > "$out/psql.out" 2>&1
+  printf '%s\n' "$?" > "$out/psql.status"
+  printf 'PING\n' | "$BERTH" exec --no-tty --service cache > "$out/redis-cli.out" 2>&1
+  printf '%s\n' "$?" > "$out/redis-cli.status"
+
   "$BERTH" artisan --no-tty --non-interactive test tests/Feature/IsolationTest.php > "$out/test.out" 2>&1
   printf '%s\n' "$?" > "$out/test.status"
   "$BERTH" artisan --no-tty --non-interactive test --parallel --processes=4 \
@@ -608,6 +615,8 @@ for index in $(seq 1 "$AGENTS"); do
   check "$name sees only its own data" "$(tail -n 1 "$out/markers.out" | tr -d '[:space:]')" "$name"
   check "$name composer as the invoking user" "$(cat "$out/composer.status")" 0
   check "$name npm as the invoking user" "$(cat "$out/npm.status")" 0
+  check "$name psql as its tenant" "$(cat "$out/psql.status") $(grep -c "$(jq -r '.credentials.db.username' "$out/up.json")" "$out/psql.out")" "0 1"
+  check "$name redis-cli as its tenant" "$(cat "$out/redis-cli.status") $(tr -d '\r' < "$out/redis-cli.out" | grep -cx PONG)" "0 1"
   check "$name focused test" "$(cat "$out/test.status")" 0
   # Files the app writes into the checkout belong to the agent's user.
   check "$name app writes files as the invoking user" \

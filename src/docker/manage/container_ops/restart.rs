@@ -22,6 +22,7 @@ pub(super) fn restart(service: &ServiceConfig) -> Result<()> {
     if inspect_status(&container_name).is_none() {
         anyhow::bail!("Container {container_name} does not exist");
     }
+    crate::docker::ensure_own_container(&container_name)?;
 
     let output = docker_output(
         &["restart", &container_name],

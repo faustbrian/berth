@@ -12,8 +12,8 @@ pub(crate) struct CpArgs {
     /// Copy all uid/gid information
     #[arg(short = 'a', long, default_value_t = false)]
     pub(crate) archive: bool,
-    /// Source path (`service:/path` or `container:/path` or host path)
+    /// Source path (`service:/path` or a host path)
     pub(crate) source: String,
-    /// Destination path (`service:/path` or `container:/path` or host path)
+    /// Destination path (`service:/path` or a host path)
     pub(crate) destination: String,
 }

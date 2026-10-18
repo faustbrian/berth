@@ -152,6 +152,7 @@ pub(crate) fn remove_container_with_volumes(service: &ServiceConfig) -> Result<(
         ]);
         return Ok(());
     }
+    crate::docker::ensure_own_container(&container)?;
     let output = crate::docker::run_docker_output(
         &["rm", "-f", "-v", &container],
         "failed to remove container",

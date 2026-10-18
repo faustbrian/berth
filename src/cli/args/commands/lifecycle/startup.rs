@@ -92,8 +92,8 @@ pub(crate) struct UpArgs {
     pub(crate) service: Option<String>,
     /// Lease the instance for this long (`90m`, `2h`, `1d`): every berth
     /// command in the checkout renews it, and once it lapses any berth
-    /// command deletes the instance as `down --purge` does. Without it the
-    /// instance is deleted only when its checkout is gone.
+    /// command deletes the instance as `down --purge` does. `none` clears a
+    /// TTL set earlier; without `--ttl` the recorded TTL is kept.
     #[arg(long)]
     pub(crate) ttl: Option<String>,
     /// Record this process (usually the agent's shell, `$$`) as the
