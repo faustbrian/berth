@@ -61,7 +61,7 @@ mod tests {
     #[test]
     fn default_template_is_valid_v9_yaml_and_preset_driven() {
         let raw = parse_project_file(&default_config_template("my app"), Path::new(".berth.yaml"))
-            .expect("template parses as a berth 9 project file");
+            .expect("template parses as a berth project file");
         assert_eq!(raw.project_type, Some(crate::config::ProjectType::Project));
         let presets: Vec<_> = raw
             .service

@@ -1,6 +1,6 @@
-# Berth 9.x architecture
+# berth architecture
 
-Berth 9.x keeps the explicit-invocation model of helm v6 / stackctl 7.0.0:
+berth keeps the explicit-invocation model of helm v6 / stackctl 7.0.0:
 every command runs in the caller's process and drives the Docker CLI
 directly. There is no required daemon. The design target is many AI agents
 creating disposable environments in parallel git worktrees of one project.

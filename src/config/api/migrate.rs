@@ -1,7 +1,7 @@
 //! config api migrate module.
 //!
 //! Converts helm, stackctl and pre-9 berth project files in one directory into
-//! berth 9 `.berth.yaml` files.
+//! berth `.berth.yaml` files.
 
 use anyhow::{Context, Result};
 use std::path::PathBuf;
@@ -19,7 +19,7 @@ pub type MigrateConfigOptions<'a> = ProjectRootPathOptions<'a>;
 ///
 /// # Errors
 ///
-/// Returns an error when the directory has no legacy file, a berth 9 file
+/// Returns an error when the directory has no legacy file, a berth file
 /// already exists, or a conversion fails.
 pub(crate) fn migrate_config_with(
     options: MigrateConfigOptions<'_>,

@@ -211,7 +211,7 @@ mod tests {
         )
         .expect("convert 8.x file");
         let config_path = dir.join(".berth.yaml");
-        std::fs::write(&config_path, converted.content).expect("write berth 9 file");
+        std::fs::write(&config_path, converted.content).expect("write berth file");
 
         let config = crate::config::load_config_with(crate::config::LoadConfigPathOptions::new(
             Some(&config_path),

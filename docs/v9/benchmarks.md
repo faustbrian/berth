@@ -1,4 +1,4 @@
-# berth 9 benchmarks
+# berth benchmarks
 
 Time-to-ready and peak memory of parallel agents, berth 9 against helm 6
 (the v6 baseline), on one machine.

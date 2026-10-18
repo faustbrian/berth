@@ -139,7 +139,7 @@ pub(crate) struct UpArgs {
     /// Seed used by `--port-strategy stable`
     #[arg(long)]
     pub(crate) port_seed: Option<String>,
-    /// Removed in berth 9 (fails naming `berth env`); kept hidden.
+    /// Removed (fails naming `berth env`); kept hidden.
     #[arg(long, hide = true, default_value_t = false)]
     pub(crate) env_output: bool,
     /// Skip starting workspace swarm dependencies

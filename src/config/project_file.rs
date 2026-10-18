@@ -1,4 +1,4 @@
-//! Strict berth 9.x project file (`.berth.yaml`) parsing and legacy detection.
+//! Strict berth project file (`.berth.yaml`) parsing and legacy detection.
 //!
 //! Berth reads exactly one project file format. Older helm and stackctl files
 //! are never read implicitly; they must be converted with `berth config migrate`.

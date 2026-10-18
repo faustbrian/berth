@@ -297,7 +297,7 @@ fn converter_rejects_random_domains_and_unknown_schema_versions() {
         "container_prefix = \"api\"\ndomain_strategy = \"random\"\n",
         &dir.join(".stackctl.toml"),
     )
-    .expect_err("random domains have no berth 9 equivalent");
+    .expect_err("random domains have no berth equivalent");
     assert!(
         format!("{random:#}").contains("domain_strategy"),
         "{random:#}"
@@ -354,7 +354,7 @@ fn migrate_rejects_two_overrides_for_one_environment_and_writes_nothing() -> any
         .count();
     assert_eq!(
         leftovers, 0,
-        "a failed migration leaves no berth 9 files or staging files"
+        "a failed migration leaves no berth files or staging files"
     );
     Ok(())
 }

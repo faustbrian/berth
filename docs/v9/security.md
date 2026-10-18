@@ -1,4 +1,4 @@
-# berth 9 security model
+# berth security model
 
 berth runs project code from many checkouts at once, often on behalf of
 agents that edit those checkouts. The project file in a worktree is therefore
@@ -71,7 +71,7 @@ symlink to it, or a directory above it) is refused at parse time.
 
 ### SEC-06: publication of generated files (mitigated, narrowed)
 
-berth 9 never writes into a checkout implicitly: no lock file, no `.env`.
+berth never writes into a checkout implicitly: no lock file, no `.env`.
 The only generated config is the gateway's, written atomically under a host
 lock into a private directory and applied through Caddy's validated reload.
 `berth lock` (explicit) and `env generate` (to a new file only) refuse

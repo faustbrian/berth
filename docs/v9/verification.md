@@ -1,4 +1,4 @@
-# Verifying berth 9
+# Verifying berth
 
 Who can prove what, and how a failure is written down (carried from 8.x's
 verification discipline, ledger L161).

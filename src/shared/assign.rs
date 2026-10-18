@@ -45,7 +45,7 @@ pub(crate) fn assign_shared_target(
     let Some(engine) = shared_engine(service) else {
         if service.runtime.isolation == Some(Isolation::Shared) {
             anyhow::bail!(
-                "service '{}' asks for `isolation: shared`, which berth 9 supports only for \
+                "service '{}' asks for `isolation: shared`, which berth supports only for \
                  PostgreSQL, MySQL, MariaDB, Redis and Valkey; remove it or use `isolation: dedicated`",
                 service.name
             );

@@ -1,5 +1,5 @@
 //! Explicit conversion of helm, stackctl 6/7 and stackctl 8 project files into
-//! berth 9.x `.berth.yaml`.
+//! berth `.berth.yaml`.
 //!
 //! Conversion is deliberately conservative: every field is either mapped to its
 //! exact 9.x equivalent or rejected with the field named, so a migrated file
@@ -89,14 +89,14 @@ pub(crate) fn convert_legacy_config(
     let content =
         crate::config::yaml::to_string(&rendered).context("failed to render .berth.yaml")?;
     parse_project_file(&content, &legacy_path.with_file_name(PROJECT_FILE_NAME))
-        .context("converted project file failed berth 9 validation")?;
+        .context("converted project file failed berth validation")?;
     Ok(ConvertedProjectFile { content, notes })
 }
 
-/// Converts every legacy project file in `dir` into its berth 9 name.
+/// Converts every legacy project file in `dir` into its berth name.
 ///
 /// The base project file and runtime-environment overrides
-/// (`.stackctl.testing.toml` and similar) are converted. Existing berth 9
+/// (`.stackctl.testing.toml` and similar) are converted. Existing berth
 /// files are never overwritten.
 ///
 /// # Errors
@@ -159,7 +159,7 @@ pub(crate) fn migrate_project_file(dir: &Path) -> Result<Vec<MigratedProjectFile
 
 /// Stages every converted file under a temporary name, then renames them into
 /// place. Any failure removes what this call created, so a failed migration
-/// never leaves a partial set of berth 9 files behind.
+/// never leaves a partial set of berth files behind.
 fn write_all_or_nothing(
     planned: Vec<(PathBuf, PathBuf, ConvertedProjectFile)>,
 ) -> Result<Vec<MigratedProjectFile>> {
@@ -231,7 +231,7 @@ pub(crate) fn is_migratable_file_name(file_name: &str) -> bool {
 }
 
 /// 8.x already shared PostgreSQL and MySQL-family servers and named its logical database
-/// from `database`; berth 9 names the tenant per instance, so the name is
+/// from `database`; berth names the tenant per instance, so the name is
 /// dropped rather than turning the service into a dedicated container.
 fn drop_v8_shared_database_name(service: &mut Map<String, Value>) -> bool {
     let shared = matches!(
@@ -274,7 +274,7 @@ fn keep_dedicated_database(service: &mut Map<String, Value>) -> bool {
     true
 }
 
-/// Removes `domain`/`domains` values berth 9 cannot serve (anything but one
+/// Removes `domain`/`domains` values berth cannot serve (anything but one
 /// label under `berth.localhost`), returning the dropped values. Copying them
 /// would produce a file that fails to load.
 fn drop_unservable_domains(service_name: &str, service: &mut Map<String, Value>) -> Vec<String> {
@@ -304,7 +304,7 @@ fn drop_unservable_domains(service_name: &str, service: &mut Map<String, Value>)
 
 /// Test fixture writer with the signature of `std::fs::write`.
 ///
-/// Converts 7.0-style TOML fixture content into a berth 9 project file at
+/// Converts 7.0-style TOML fixture content into a berth project file at
 /// `path`, so existing fixtures exercise the same converter as
 /// `berth config migrate`.
 #[cfg(test)]
@@ -405,17 +405,17 @@ fn convert_v7(
         }
     };
     validate_project_name(&project).with_context(|| {
-        format!("`container_prefix` '{project}' cannot become the berth 9 project name")
+        format!("`container_prefix` '{project}' cannot become the berth project name")
     })?;
 
     match root.remove("domain_strategy") {
         None => notes.push(
-            "berth 9 gives every web app an instance route `{instance}-{project}[-{service}].berth.localhost`"
+            "berth gives every web app an instance route `{instance}-{project}[-{service}].berth.localhost`"
                 .to_owned(),
         ),
         Some(Value::String(strategy)) if strategy == "directory" => {}
         Some(other) => anyhow::bail!(
-            "`domain_strategy` {other} has no berth 9 equivalent; berth 9 routes are derived from the instance"
+            "`domain_strategy` {other} has no berth equivalent; berth routes are derived from the instance"
         ),
     }
 
@@ -453,7 +453,7 @@ fn convert_v7(
             let dropped = drop_unservable_domains(&name, &mut service);
             if !dropped.is_empty() {
                 notes.push(format!(
-                    "service '{name}': dropped domain(s) {} — berth 9 serves only one label \
+                    "service '{name}': dropped domain(s) {} — berth serves only one label \
                      under berth.localhost and otherwise uses the generated instance route",
                     dropped.join(", ")
                 ));
@@ -463,10 +463,10 @@ fn convert_v7(
     }
 
     if dropped_container_names {
-        notes.push("dropped `container_name`: berth 9 names containers per instance".to_owned());
+        notes.push("dropped `container_name`: berth names containers per instance".to_owned());
     }
     notes.push(
-        "berth 9 names containers and data volumes per instance, so existing 6/7 data volumes are not reused; restore data with `berth restore` after `berth up`"
+        "berth names containers and data volumes per instance, so existing 6/7 data volumes are not reused; restore data with `berth restore` after `berth up`"
             .to_owned(),
     );
 
@@ -503,13 +503,12 @@ fn convert_v8(
             derived
         }
     };
-    validate_project_name(&project).with_context(|| {
-        format!("8.x project '{project}' cannot become the berth 9 project name")
-    })?;
+    validate_project_name(&project)
+        .with_context(|| format!("8.x project '{project}' cannot become the berth project name"))?;
 
     if root.contains_key("workflows") {
         anyhow::bail!(
-            "8.x `workflows` cannot be converted automatically; remove them and re-declare them for berth 9"
+            "8.x `workflows` cannot be converted automatically; remove them and re-declare them for berth"
         );
     }
 
@@ -525,7 +524,7 @@ fn convert_v8(
             let mut converted = convert_v8_service(&name, entry)?;
             if drop_v8_shared_database_name(&mut converted) {
                 notes.push(format!(
-                    "service '{name}': dropped `database` — berth 9 names each instance's \
+                    "service '{name}': dropped `database` — berth names each instance's \
                      shared tenant itself and injects it as DB_DATABASE"
                 ));
             }
@@ -694,7 +693,7 @@ fn reject_remaining(map: &Map<String, Value>, scope: &str) -> Result<()> {
         .map(String::as_str)
         .collect::<Vec<_>>()
         .join(", ");
-    anyhow::bail!("{scope} fields have no berth 9 equivalent: {keys}")
+    anyhow::bail!("{scope} fields have no berth equivalent: {keys}")
 }
 
 fn derive_project_name(legacy_path: &Path) -> Result<String> {
