@@ -38,9 +38,6 @@ struct TestingRuntimeSlot {
     _file: std::fs::File,
 }
 
-/// How long a run waits for a free slot of its workspace's pool.
-const SLOT_WAIT: std::time::Duration = std::time::Duration::from_secs(180);
-
 pub(super) fn acquire_testing_runtime_lease(workspace_root: &Path) -> Result<TestingRuntimeLease> {
     let pool_size = testing_runtime_pool_size();
     if pool_size == 0 {
@@ -52,7 +49,9 @@ pub(super) fn acquire_testing_runtime_lease(workspace_root: &Path) -> Result<Tes
 
     let workspace_key = workspace_pool_key(workspace_root);
     let lock_root = pool_lock_root(&workspace_key)?;
-    let started = std::time::Instant::now();
+    // A run waits as long as every slot is busy: other test runs end, and a
+    // killed one frees its slot, so the wait has no deadline.
+    let mut notified = false;
     loop {
         for slot in 1..=pool_size {
             if let Some(file) = try_lock_slot(&lock_root.join(format!("slot-{slot}.lock")))? {
@@ -62,11 +61,16 @@ pub(super) fn acquire_testing_runtime_lease(workspace_root: &Path) -> Result<Tes
                 });
             }
         }
-        if started.elapsed() >= SLOT_WAIT {
-            anyhow::bail!(
-                "all {pool_size} test slots of this workspace stayed busy for {}s; raise \
-                 BERTH_TEST_RUNTIME_POOL_SIZE or wait for the running test commands",
-                SLOT_WAIT.as_secs()
+        if !notified {
+            notified = true;
+            crate::output::event(
+                "test",
+                crate::output::LogLevel::Info,
+                &format!(
+                    "all {pool_size} test slots of this workspace are busy; waiting for a \
+                     running test command (BERTH_TEST_RUNTIME_POOL_SIZE raises the pool)"
+                ),
+                crate::output::Persistence::Persistent,
             );
         }
         std::thread::sleep(std::time::Duration::from_millis(25));

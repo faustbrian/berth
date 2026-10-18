@@ -115,20 +115,48 @@ pub(super) fn is_handoff(engine: SharedEngine, code: Option<i32>, output: &str) 
         return false;
     }
     match engine {
-        SharedEngine::Postgres => code == Some(2),
+        // psql exits 2 for every connection failure, also permanent ones (a
+        // missing role or database, a pg_hba rule), so only messages of a
+        // server that is not up yet, or restarting, count.
+        SharedEngine::Postgres => {
+            code == Some(2)
+                && [
+                    "Connection refused",
+                    "could not connect",
+                    "the database system is starting up",
+                    "the database system is shutting down",
+                    "the database system is in recovery mode",
+                    "the database system is not yet accepting connections",
+                    "sorry, too many clients already",
+                    "server closed the connection unexpectedly",
+                ]
+                .iter()
+                .any(|error| stderr.contains(error))
+        }
         SharedEngine::Mysql | SharedEngine::Mariadb => {
             code == Some(1)
-                && ["ERROR 2002", "ERROR 2003", "ERROR 2013"]
+                && ["ERROR 2002", "ERROR 2003", "ERROR 2013", "ERROR 1040"]
                     .iter()
                     .any(|error| stderr.contains(error))
         }
         SharedEngine::Redis | SharedEngine::Valkey => {
             code == Some(1)
-                && ["Could not connect", "Connection refused", "LOADING"]
-                    .iter()
-                    .any(|error| stderr.contains(error))
+                && [
+                    "Could not connect",
+                    "Connection refused",
+                    "LOADING",
+                    "max number of clients reached",
+                ]
+                .iter()
+                .any(|error| stderr.contains(error))
         }
     }
+}
+
+/// Whether the engine, not the server, failed to run the admin command
+/// (an overloaded or restarting engine): asking again may succeed.
+pub(super) fn is_engine_exec_failure(output: &str) -> bool {
+    crate::docker::is_engine_exec_failure(output)
 }
 
 /// Whether the server rejected the admin password.
@@ -208,6 +236,30 @@ mod tests {
             "password authentication failed"
         ));
         assert!(!is_handoff(SharedEngine::Postgres, Some(3), "syntax error"));
+        for permanent in [
+            "psql: error: connection to server at \"127.0.0.1\", port 5432 failed: FATAL:  role \"x\" does not exist",
+            "FATAL:  database \"postgres\" does not exist",
+            "FATAL:  no pg_hba.conf entry for host \"127.0.0.1\"",
+        ] {
+            assert!(
+                !is_handoff(SharedEngine::Postgres, Some(2), permanent),
+                "a connect-time FATAL never resolves by retrying: {permanent}"
+            );
+        }
+        for starting in [
+            "psql: error: connection to server at \"127.0.0.1\", port 5432 failed: Connection refused",
+            "FATAL:  the database system is starting up",
+            "FATAL:  the database system is shutting down",
+            "server closed the connection unexpectedly",
+            "FATAL:  the database system is in recovery mode",
+            "FATAL:  the database system is not yet accepting connections",
+            "FATAL:  sorry, too many clients already",
+        ] {
+            assert!(
+                is_handoff(SharedEngine::Postgres, Some(2), starting),
+                "{starting}"
+            );
+        }
         assert!(is_handoff(
             SharedEngine::Mysql,
             Some(1),

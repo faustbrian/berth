@@ -11,7 +11,6 @@ use crate::docker;
 use crate::output::{self, LogLevel, Persistence};
 
 const HEALTHY_POLL_INTERVAL_SECS: u64 = 5;
-const RECOVERY_TIMEOUT_SECS: u64 = 30;
 
 #[expect(
     clippy::infinite_loop,
@@ -71,7 +70,7 @@ fn bootstrap_project(project_root: &Path) -> Result<()> {
             profile: None,
             wait: false,
             no_wait: true,
-            wait_timeout: RECOVERY_TIMEOUT_SECS,
+            wait_timeout: None,
             pull_policy: docker::PullPolicy::Missing,
             force_recreate: false,
             open_after_start: false,
@@ -104,7 +103,7 @@ fn recover_if_needed(project_root: &Path) -> Result<Vec<String>> {
             profile: None,
             wait: false,
             no_wait: true,
-            wait_timeout: RECOVERY_TIMEOUT_SECS,
+            wait_timeout: None,
             pull_policy: docker::PullPolicy::Missing,
             force_recreate: false,
             publish_all: false,

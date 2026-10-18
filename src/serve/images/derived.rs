@@ -19,9 +19,6 @@ use super::super::image_build::{
 use super::browser::{browser_test_runtime_enabled, resolve_playwright_package_spec};
 use super::lock::{docker_image_exists, read_derived_image_lock, write_derived_image_lock};
 
-/// How long a process waits for another one building the same derived
-/// image; a cold extension build takes minutes on a small engine VM.
-const DERIVED_BUILD_LOCK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30 * 60);
 use super::runtime::normalize_php_extensions;
 use signature::derive_image_signature;
 
@@ -125,10 +122,10 @@ pub(super) fn resolve_runtime_image(
     // One build per image across processes: parallel `up`s on a cold cache
     // would otherwise compile the same extensions side by side (a 2 GiB
     // Podman VM OOM-killed the second one). A waiter reuses the result.
-    let _building = crate::home::HostLock::acquire(
-        &format!("derived-image-{}", derived_tag.replace('/', "-")),
-        DERIVED_BUILD_LOCK_TIMEOUT,
-    )?;
+    let _building = crate::home::HostLock::acquire(&format!(
+        "derived-image-{}",
+        derived_tag.replace('/', "-")
+    ))?;
     if docker_image_exists(&derived_tag)? {
         emit_derived_event(
             target,

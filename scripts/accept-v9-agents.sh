@@ -37,7 +37,7 @@ fi
 BERTH="$(cd "$(dirname "$BERTH_INPUT")" && pwd)/$(basename "$BERTH_INPUT")"
 readonly BERTH
 readonly OUTPUT_INPUT="$2"
-readonly AGENTS="${3:-${BERTH_ACCEPT_AGENTS:-30}}"
+readonly AGENTS="${3:-${BERTH_ACCEPT_AGENTS:-12}}"
 # The engine berth drives and this script inspects with.
 ENGINE="${BERTH_ENGINE:-docker}"
 case "$ENGINE" in

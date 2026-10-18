@@ -25,7 +25,7 @@ pub(super) fn start_runtime_service(
     uses_random_port: bool,
     context: &StartRuntimeContext<'_>,
     healthy: bool,
-    timeout: u64,
+    timeout: Option<u64>,
     pull_policy: docker::PullPolicy,
     recreate: bool,
 ) -> Result<()> {

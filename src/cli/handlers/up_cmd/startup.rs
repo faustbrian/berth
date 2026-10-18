@@ -14,7 +14,7 @@ pub(super) struct RunStandardUpOptions<'a> {
     pub(super) kind: Option<config::Kind>,
     pub(super) profile: Option<&'a str>,
     pub(super) healthy: bool,
-    pub(super) timeout: u64,
+    pub(super) timeout: Option<u64>,
     pub(super) pull_policy: docker::PullPolicy,
     pub(super) recreate: bool,
     pub(super) quiet: bool,
@@ -57,7 +57,7 @@ fn start_runtime_service(
     recreate: bool,
     pull_policy: docker::PullPolicy,
     wait_healthy: bool,
-    health_timeout_secs: u64,
+    health_timeout_secs: Option<u64>,
     env_path: Option<&Path>,
     quiet: bool,
 ) -> Result<()> {

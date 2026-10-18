@@ -123,17 +123,34 @@ fn mysql_ping_args(service: &ServiceConfig, container_name: &str) -> Vec<String>
 }
 
 fn health_check_horizon(container_name: &str) -> Result<bool> {
-    docker_exec_succeeds(
-        &["exec", container_name, "php", "artisan", "horizon:status"],
-        "horizon health check command failed",
-    )
+    artisan_check(container_name, "horizon:status")
 }
 
 fn health_check_scheduler(container_name: &str) -> Result<bool> {
-    docker_exec_succeeds(
-        &["exec", container_name, "php", "artisan", "schedule:list"],
-        "scheduler health check command failed",
-    )
+    artisan_check(container_name, "schedule:list")
+}
+
+/// Runs an `artisan` health command. A worker still starting (Horizon
+/// reports "inactive") or an engine that could not run the command is not
+/// ready yet; any other failure is the app's code or config and does not
+/// change by waiting, so it ends the wait.
+fn artisan_check(container_name: &str, command: &str) -> Result<bool> {
+    let output = crate::docker::run_docker_output(
+        &["exec", container_name, "php", "artisan", command],
+        &format!("`php artisan {command}` health check failed to run"),
+    )?;
+    if output.status.success() {
+        return Ok(true);
+    }
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    if text.contains("inactive") || crate::docker::is_engine_exec_failure(&text) {
+        return Ok(false);
+    }
+    Err(super::ReadinessFailure(format!("`php artisan {command}` failed: {}", text.trim())).into())
 }
 
 fn docker_exec_succeeds(args: &[&str], context: &str) -> Result<bool> {

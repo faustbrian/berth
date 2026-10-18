@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 use std::collections::BTreeSet;
-use std::time::Duration;
 
 use crate::config::ServiceConfig;
 use crate::output::{self, LogLevel, Persistence};
@@ -52,7 +51,7 @@ where
     // same network at once. A concurrent `up` of the same instance can still
     // lose its network between ensuring it and running its container; that
     // `up` then fails with Docker's "network not found" and can be rerun.
-    let _lock = crate::home::HostLock::acquire("network-allocation", Duration::from_secs(120))?;
+    let _lock = crate::home::HostLock::acquire("network-allocation")?;
     for network in networks {
         if network_owner(network)?.as_deref() != Some(installation.as_str()) {
             continue;
@@ -68,7 +67,7 @@ where
         // between (lock order: network, gateway). Route-free networks, such as
         // every test lease's, never wait for the gateway lock.
         let _gateway_lock = if crate::gateway::is_attached(network)? {
-            let lock = crate::home::HostLock::acquire("gateway", Duration::from_secs(180))?;
+            let lock = crate::home::HostLock::acquire("gateway")?;
             if has_containers(network, &gateway)? {
                 continue;
             }

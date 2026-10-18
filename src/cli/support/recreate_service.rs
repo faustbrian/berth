@@ -13,7 +13,7 @@ pub(crate) fn recreate_service(
     service: &config::ServiceConfig,
     start_context: &super::ServiceStartContext<'_>,
     wait_healthy: bool,
-    health_timeout_secs: u64,
+    health_timeout_secs: Option<u64>,
 ) -> Result<()> {
     if service.kind == config::Kind::App {
         return super::start_service(
@@ -97,7 +97,7 @@ mod tests {
         let env = HashMap::new();
         let context = ServiceStartContext::new(Path::new("/tmp"), &env);
         crate::docker::with_dry_run_lock(|| {
-            recreate_service(&service, &context, false, 30).expect("non-app recreate");
+            recreate_service(&service, &context, false, Some(30)).expect("non-app recreate");
         });
     }
 }

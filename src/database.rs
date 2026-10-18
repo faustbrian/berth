@@ -15,7 +15,7 @@ mod sql_admin;
 
 pub(crate) use post_restore::PostRestoreOptions;
 
-pub fn setup(service: &ServiceConfig, timeout: u64) -> Result<()> {
+pub fn setup(service: &ServiceConfig, timeout: Option<u64>) -> Result<()> {
     setup::setup(service, timeout)
 }
 

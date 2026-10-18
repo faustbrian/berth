@@ -11,7 +11,7 @@ pub(crate) fn recreate_non_app_service(
     start_after_recreate: bool,
     start_pull_policy: docker::PullPolicy,
     wait_healthy: bool,
-    health_timeout_secs: u64,
+    health_timeout_secs: Option<u64>,
 ) -> Result<()> {
     docker::recreate(service)?;
     if start_after_recreate {
@@ -110,7 +110,7 @@ mod tests {
                 false,
                 crate::docker::PullPolicy::Missing,
                 false,
-                30,
+                None,
             )
             .expect("no-op path");
         });
@@ -124,7 +124,7 @@ mod tests {
                 true,
                 crate::docker::PullPolicy::Missing,
                 true,
-                30,
+                None,
             )
             .expect("start and wait path");
         });
@@ -139,7 +139,7 @@ mod tests {
                 true,
                 crate::docker::PullPolicy::Always,
                 false,
-                1,
+                None,
             )
             .expect("always policy path");
         });

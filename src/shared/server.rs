@@ -4,20 +4,11 @@ use anyhow::{Context, Result};
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::config::{SharedEngine, SharedTarget};
 
 use super::{engine, postgres};
-
-/// How long a process waits for another to finish creating a server.
-const LOCK_TIMEOUT: Duration = Duration::from_secs(300);
-/// How long a new server may take to accept authenticated connections.
-const READY_TIMEOUT: Duration = Duration::from_secs(90);
-/// The bounded retry for the init-server handoff: the official images start
-/// a temporary server, run init scripts, stop it and start the real one, so
-/// a probe can pass and the next connection fail (8.x FI-33).
-const HANDOFF_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Labels on every shared server and its volume.
 fn labels(target: &SharedTarget, installation: &str) -> Vec<String> {
@@ -88,7 +79,16 @@ pub(super) fn installation_servers() -> Result<Vec<SharedTarget>> {
 /// Holds the server's lock: creation, readiness and tenant provisioning of
 /// one server never run concurrently.
 pub(super) fn lock(target: &SharedTarget) -> Result<crate::home::HostLock> {
-    crate::home::HostLock::acquire(&format!("shared-{}", target.server), LOCK_TIMEOUT)
+    let name = format!("shared-{}", target.server);
+    if super::best_effort::is_best_effort() {
+        return crate::home::HostLock::try_acquire(&name)?.ok_or_else(|| {
+            anyhow::anyhow!(
+                "skipped shared server {}: another berth process is using it",
+                target.server
+            )
+        });
+    }
+    crate::home::HostLock::acquire(&name)
 }
 
 /// The server's admin password, kept under `~/.berth/shared/{server}`.
@@ -368,10 +368,13 @@ fn inspect(server: &str) -> Result<Option<State>> {
 }
 
 /// Waits until the server accepts an authenticated query, failing at once
-/// when the container stops.
+/// when the container stops or rejects the admin password. There is no
+/// deadline: a first start on a loaded machine is slow, not broken.
 fn wait_ready(target: &SharedTarget) -> Result<()> {
-    let started = Instant::now();
+    let deadline = crate::wait::Deadline::start();
     loop {
+        crate::parallel::ensure_no_sibling_failed()?;
+        deadline.ensure(&format!("shared server {}", target.server))?;
         match inspect(&target.server)? {
             Some(state) if state.running => {}
             _ => anyhow::bail!(
@@ -396,28 +399,41 @@ fn wait_ready(target: &SharedTarget) -> Result<()> {
                     recovery = engine::lost_secret_recovery(target.engine, &target.server)
                 );
             }
-            Err(_) => {}
-        }
-        if started.elapsed() >= READY_TIMEOUT {
-            anyhow::bail!(
-                "shared server {} did not accept connections within {}s; see `docker logs {}`",
-                target.server,
-                READY_TIMEOUT.as_secs(),
-                target.server
-            );
+            // Reaping in passing never waits for a server still starting.
+            Err(error) if super::best_effort::is_best_effort() => {
+                return Err(error.context(format!(
+                    "skipped shared server {}: it does not answer yet",
+                    target.server
+                )));
+            }
+            // `admin_sql` retries the init handoff itself, so any other
+            // error is permanent, unless the server stopped meanwhile.
+            // The engine failing to run the ping says nothing about the
+            // server: ask again.
+            Err(error) if engine::is_engine_exec_failure(&format!("{error:#}")) => {}
+            Err(error) => {
+                if inspect(&target.server)?.is_some_and(|state| state.running) {
+                    return Err(error.context(format!(
+                        "shared server {} does not accept berth's admin connection",
+                        target.server
+                    )));
+                }
+            }
         }
         std::thread::sleep(Duration::from_millis(500));
     }
 }
 
 /// Runs SQL as the admin over TCP with the admin password, retrying only
-/// the init-server handoff for a bounded few seconds. TCP matters for
-/// readiness: the official images' temporary init server listens only on
-/// the local socket, so only the final server answers here.
+/// the init-server handoff while the server runs: the official images start
+/// a temporary server, run init scripts, stop it and start the real one, so a
+/// probe can pass and the next connection fail (8.x FI-33). TCP matters for
+/// readiness: the temporary init server listens only on the local socket, so
+/// only the final server answers here.
 pub(super) fn admin_sql(target: &SharedTarget, sql: &str) -> Result<String> {
     let secret = admin_secret(target)?;
     let command = engine::admin_command(target.engine, &target.image);
-    let started = Instant::now();
+    let deadline = crate::wait::Deadline::start();
     loop {
         let (code, stdout, stderr) = exec_stdin(
             &target.server,
@@ -430,8 +446,18 @@ pub(super) fn admin_sql(target: &SharedTarget, sql: &str) -> Result<String> {
             return Ok(stdout);
         }
         let output = format!("{stdout}{stderr}");
-        if !engine::is_handoff(target.engine, code, &output) || started.elapsed() >= HANDOFF_TIMEOUT
-        {
+        // A failed `inspect` is no answer, so the handoff wait goes on.
+        let handing_off = engine::is_handoff(target.engine, code, &output)
+            && !matches!(
+                crate::docker::container_state(&target.server),
+                crate::docker::ContainerState::NotRunning(_)
+                    | crate::docker::ContainerState::Missing
+            );
+        // Reaping in passing never waits for a server still starting.
+        if handing_off && !super::best_effort::is_best_effort() {
+            crate::parallel::ensure_no_sibling_failed()?;
+            deadline.ensure(&format!("shared server {}", target.server))?;
+        } else {
             anyhow::bail!(
                 "{} on {}: {}",
                 target.engine.as_str(),
@@ -443,12 +469,42 @@ pub(super) fn admin_sql(target: &SharedTarget, sql: &str) -> Result<String> {
     }
 }
 
-/// Runs the admin client with extra arguments and no input (for example
-/// `redis-cli --scan`), failing on a non-zero exit.
-pub(super) fn admin_cli(target: &SharedTarget, args: &[&str]) -> Result<String> {
+/// The `sh` loop `admin_scan` runs: `$1` is the database count, the other
+/// arguments the key prefixes. Keys come back one per line behind their
+/// database number; a client failure ends the scan with its exit code.
+fn scan_script(client: &str) -> String {
+    format!(
+        "d=$1; shift; n=0\n\
+         while [ \"$n\" -lt \"$d\" ]; do\n\
+         for p in \"$@\"; do\n\
+         out=$({client} -n \"$n\" --scan --pattern \"$p*\") || exit 1\n\
+         [ -z \"$out\" ] || printf '%s\\n' \"$out\" | while IFS= read -r k; do printf '%s\\t%s\\n' \"$n\" \"$k\"; done\n\
+         done\n\
+         n=$((n + 1))\n\
+         done"
+    )
+}
+
+/// Lists the keys matching each prefix in every logical database of a Redis
+/// or Valkey server, as `(database, key)` pairs, in one `exec`: the server's
+/// lock is held meanwhile, and one `exec` per database (16 by default, each
+/// several seconds on a loaded engine) kept every other instance waiting for
+/// minutes.
+pub(super) fn admin_scan(
+    target: &SharedTarget,
+    databases: u32,
+    prefixes: &[String],
+) -> Result<Vec<(u32, String)>> {
     let secret = admin_secret(target)?;
-    let mut command = engine::admin_command(target.engine, &target.image);
-    command.extend_from_slice(args);
+    let client = engine::admin_command(target.engine, &target.image)
+        .iter()
+        .map(|word| format!("'{word}'"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let script = scan_script(&client);
+    let count = databases.to_string();
+    let mut command = vec!["sh", "-c", script.as_str(), "sh", count.as_str()];
+    command.extend(prefixes.iter().map(String::as_str));
     let (code, stdout, stderr) = exec_stdin(
         &target.server,
         engine::password_env(target.engine),
@@ -465,7 +521,22 @@ pub(super) fn admin_cli(target: &SharedTarget, args: &[&str]) -> Result<String> 
             stderr.trim()
         );
     }
-    Ok(stdout)
+    stdout
+        .lines()
+        .filter_map(|line| line.split_once('\t'))
+        .map(|(database, key)| {
+            database
+                .parse::<u32>()
+                .map(|database| (database, key.to_owned()))
+                .map_err(|_| {
+                    anyhow::anyhow!(
+                        "unexpected scan line from {}: {line}",
+                        target.server,
+                        line = database
+                    )
+                })
+        })
+        .collect()
 }
 
 fn exec_stdin(
@@ -521,4 +592,58 @@ fn docker_owned(args: &[String], context: &str) -> Result<()> {
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod scan_script_tests {
+    use super::scan_script;
+
+    /// Runs the script with a fake client that answers `-n N --scan
+    /// --pattern P` from `keys` (`database pattern-prefix key` triples), or
+    /// fails when `fail` is set.
+    fn run(keys: &str, fail: bool, args: &[&str]) -> std::process::Output {
+        let dir =
+            crate::docker::unique_test_path(crate::test_support::temp_root().join("scan-script"));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let client = dir.join("redis-cli");
+        std::fs::write(&client, format!(
+            "#!/bin/sh\n[ -n \"{fail}\" ] && exit 1\nn=$2; p=${{5%\\*}}\nprintf '%s\\n' \"{keys}\" | while read -r db pre key; do [ \"$db\" = \"$n\" ] && [ \"$pre\" = \"$p\" ] && echo \"$key\"; done\nexit 0\n",
+            fail = if fail { "1" } else { "" },
+        ))
+        .expect("fake client");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&client, std::fs::Permissions::from_mode(0o755))
+                .expect("chmod");
+        }
+        let script = scan_script(&format!("'{}'", client.display()));
+        std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&script)
+            .arg("sh")
+            .args(args)
+            .output()
+            .expect("run sh")
+    }
+
+    #[test]
+    fn every_database_and_prefix_is_scanned_in_one_run() {
+        let output = run(
+            "0 a: a:x\n1 a: a:y\n2 b: b:z\n3 a: a:outside",
+            false,
+            &["3", "a:", "b:"],
+        );
+        assert!(output.status.success());
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            "0\ta:x\n1\ta:y\n2\tb:z\n",
+            "databases 0 to 2, both prefixes, nothing past the count"
+        );
+    }
+
+    #[test]
+    fn a_failing_client_fails_the_scan() {
+        let output = run("", true, &["2", "a:"]);
+        assert_eq!(output.status.code(), Some(1));
+    }
 }

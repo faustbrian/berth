@@ -2,7 +2,7 @@
 
 `berth` gives every checkout of a project its own disposable, isolated Docker
 environment, from one command and with no daemon. It is built for AI agents
-that create environments in parallel (thirty agents in thirty worktrees of
+that create environments in parallel (a dozen agents in a dozen worktrees of
 one project), and works the same for the humans next to them.
 
 - **One instance per checkout.** The instance ID is derived from the checkout

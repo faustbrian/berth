@@ -1,14 +1,12 @@
 //! Lightweight Docker operation scheduler for heavy workflows.
 
 use anyhow::{Context, Result};
-use std::io::Write;
+use std::fs::TryLockError;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::time::Duration;
 
 const SLOT_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(25);
-const HEAVY_SLOT_WAIT_ATTEMPTS: usize = 2_400;
-const BUILD_SLOT_WAIT_ATTEMPTS: usize = 7_200;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DockerOpClass {
@@ -29,9 +27,7 @@ where
     }
 
     let limit = concurrency_limit(class).max(1);
-    let lock_root = lock_root(class);
-    std::fs::create_dir_all(&lock_root)
-        .with_context(|| format!("failed to create {}", lock_root.display()))?;
+    let lock_root = lock_root(class)?;
     let _slot = acquire_slot(&lock_root, limit, op_name, class)?;
     operation()
 }
@@ -44,134 +40,93 @@ fn concurrency_limit(class: DockerOpClass) -> usize {
     }
 }
 
-fn lock_root(class: DockerOpClass) -> PathBuf {
-    let class_name = match class {
+fn class_name(class: DockerOpClass) -> &'static str {
+    match class {
         DockerOpClass::Heavy => "heavy",
         DockerOpClass::Build => "build",
-    };
-    std::env::temp_dir()
-        .join("berth-docker-scheduler")
-        .join(class_name)
-}
-
-struct SlotGuard {
-    path: PathBuf,
-}
-
-impl Drop for SlotGuard {
-    fn drop(&mut self) {
-        drop(std::fs::remove_file(&self.path));
     }
 }
 
+/// The slots live in the berth home (private to its user), not the shared
+/// temp directory, where another user's files could block or deny them.
+fn lock_root(class: DockerOpClass) -> Result<PathBuf> {
+    #[cfg(test)]
+    {
+        let root = crate::test_support::temp_root()
+            .join("engine-slots")
+            .join(class_name(class));
+        std::fs::create_dir_all(&root)
+            .with_context(|| format!("failed to create {}", root.display()))?;
+        Ok(root)
+    }
+    #[cfg(not(test))]
+    crate::home::private_dir(&Path::new("locks").join(format!("engine-{}", class_name(class))))
+}
+
+/// One held slot: an exclusive `flock` on `slot-{n}.lock`, released when
+/// dropped or when the process dies, so a crashed berth never keeps a slot.
+struct SlotGuard {
+    _file: std::fs::File,
+}
+
+/// Takes the first free slot of `limit`, waiting as long as all are busy:
+/// how long other operations take depends on how loaded the engine is, and
+/// a holder that dies frees its slot. Reports the wait on stderr.
 fn acquire_slot(
     root: &Path,
     limit: usize,
     op_name: &str,
     class: DockerOpClass,
 ) -> Result<SlotGuard> {
-    let max_attempts = match class {
-        DockerOpClass::Heavy => HEAVY_SLOT_WAIT_ATTEMPTS,
-        DockerOpClass::Build => BUILD_SLOT_WAIT_ATTEMPTS,
-    };
-    for _ in 0..max_attempts {
+    let mut notified = false;
+    loop {
         for slot in 0..limit {
             let slot_path = root.join(format!("slot-{slot}.lock"));
-            match std::fs::OpenOptions::new()
-                .create_new(true)
+            let file = std::fs::OpenOptions::new()
+                .read(true)
                 .write(true)
+                .create(true)
+                .truncate(false)
+                .mode(0o600)
                 .open(&slot_path)
-            {
-                Ok(mut file) => {
-                    if writeln!(file, "{}:{op_name}", std::process::id()).is_err() {
-                        // Best-effort metadata write; lock acquisition is what matters.
-                    }
-                    return Ok(SlotGuard { path: slot_path });
-                }
-                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
-                    if should_reclaim_existing_slot(&slot_path) {
-                        drop(std::fs::remove_file(&slot_path));
-                    }
-                    continue;
-                }
-                Err(err) => {
-                    return Err(err)
-                        .with_context(|| format!("failed to acquire {}", slot_path.display()));
+                .with_context(|| format!("failed to open {}", slot_path.display()))?;
+            match file.try_lock() {
+                Ok(()) => return Ok(SlotGuard { _file: file }),
+                Err(TryLockError::WouldBlock) => {}
+                Err(TryLockError::Error(error)) => {
+                    return Err(error)
+                        .with_context(|| format!("failed to lock {}", slot_path.display()));
                 }
             }
         }
+        crate::parallel::ensure_no_sibling_failed()?;
+        if !notified {
+            notified = true;
+            crate::output::event(
+                "engine",
+                crate::output::LogLevel::Info,
+                &format!(
+                    "'{op_name}' waits for one of {limit} {} slots; other berth processes hold them",
+                    class_name(class)
+                ),
+                crate::output::Persistence::Persistent,
+            );
+        }
         std::thread::sleep(SLOT_WAIT_POLL_INTERVAL);
     }
-
-    let wait_secs = SLOT_WAIT_POLL_INTERVAL.as_secs_f64() * max_attempts as f64;
-    anyhow::bail!(
-        "timed out waiting for runtime operation slot for '{op_name}' after {} attempts (~{wait_secs:.1}s)",
-        max_attempts,
-    )
-}
-
-fn should_reclaim_existing_slot(slot_path: &Path) -> bool {
-    should_reclaim_existing_slot_with(slot_path, process_exists)
-}
-
-fn should_reclaim_existing_slot_with<F>(slot_path: &Path, process_exists: F) -> bool
-where
-    F: Fn(u32) -> bool,
-{
-    let Some(pid) = read_slot_pid(slot_path) else {
-        return false;
-    };
-
-    !process_exists(pid)
-}
-
-fn read_slot_pid(slot_path: &Path) -> Option<u32> {
-    let raw = std::fs::read_to_string(slot_path).ok()?;
-    raw.trim()
-        .split_once(':')
-        .map_or(raw.trim(), |(pid, _)| pid)
-        .parse::<u32>()
-        .ok()
-}
-
-fn process_exists(pid: u32) -> bool {
-    process_exists_with_command("kill", pid)
-}
-
-fn process_exists_with_command(command: &str, pid: u32) -> bool {
-    Command::new(command)
-        .args(["-0", &pid.to_string()])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        BUILD_SLOT_WAIT_ATTEMPTS, DockerOpClass, HEAVY_SLOT_WAIT_ATTEMPTS, SLOT_WAIT_POLL_INTERVAL,
-        process_exists_with_command, read_slot_pid, should_reclaim_existing_slot_with,
-        with_scheduled_docker_op,
-    };
+    use super::{DockerOpClass, acquire_slot, with_scheduled_docker_op};
     use std::fs;
-    use std::io::Read;
-    use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
-    use std::sync::Mutex;
     use std::time::Duration;
 
-    static PATH_MUTEX: Mutex<()> = Mutex::new(());
-
     fn temp_root(name: &str) -> PathBuf {
-        let root = crate::test_support::temp_root().join(format!(
-            "berth-docker-scheduler-{name}-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
-        ));
+        let root = crate::docker::unique_test_path(
+            crate::test_support::temp_root().join(format!("berth-docker-scheduler-{name}")),
+        );
         fs::create_dir_all(&root).expect("create temp root");
         root
     }
@@ -186,78 +141,46 @@ mod tests {
     }
 
     #[test]
-    fn build_slot_timeout_budget_exceeds_long_image_builds() {
-        let wait_budget = SLOT_WAIT_POLL_INTERVAL.saturating_mul(BUILD_SLOT_WAIT_ATTEMPTS as u32);
+    fn a_full_scheduler_waits_for_a_slot_instead_of_failing() {
+        let root = temp_root("full");
+        let held = acquire_slot(&root, 1, "holder", DockerOpClass::Build).expect("first slot");
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let waiter_root = root.clone();
+        std::thread::spawn(move || {
+            sender
+                .send(acquire_slot(&waiter_root, 1, "waiter", DockerOpClass::Build).map(|_| ()))
+                .expect("send");
+        });
         assert!(
-            wait_budget >= Duration::from_secs(60),
-            "build slot wait budget should cover long derived image builds"
+            receiver.recv_timeout(Duration::from_millis(500)).is_err(),
+            "every slot is held, so the waiter keeps waiting"
+        );
+        drop(held);
+        receiver
+            .recv_timeout(Duration::from_secs(10))
+            .expect("the waiter gets the slot once it is released")
+            .expect("acquired");
+    }
+
+    #[test]
+    fn a_slot_file_a_crashed_berth_left_behind_is_taken_at_once() {
+        let root = temp_root("crashed");
+        // 9.x wrote `pid:op` into a slot file and deleted it on drop; a
+        // crash left the file, and one without a pid was never reclaimed.
+        fs::write(root.join("slot-0.lock"), "").expect("leftover slot file");
+        let started = std::time::Instant::now();
+        let _slot = acquire_slot(&root, 1, "after-crash", DockerOpClass::Heavy).expect("slot");
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "no holder, no wait"
         );
     }
 
     #[test]
-    fn heavy_slot_timeout_budget_covers_slow_runtime_cleanup() {
-        let wait_budget = SLOT_WAIT_POLL_INTERVAL.saturating_mul(HEAVY_SLOT_WAIT_ATTEMPTS as u32);
-        assert!(
-            wait_budget >= Duration::from_secs(60),
-            "heavy slot wait budget should cover slow runtime cleanup"
-        );
-    }
-
-    #[test]
-    fn read_slot_pid_parses_pid_prefix_before_op_name() {
-        let root = temp_root("read-slot");
-        let slot_path = root.join("slot-1.lock");
-        fs::write(&slot_path, "424242:docker-volume-rm-runtime-test\n").expect("write slot");
-
-        assert_eq!(read_slot_pid(&slot_path), Some(424242));
-    }
-
-    #[test]
-    fn stale_slot_with_dead_pid_is_reclaimed() {
-        let root = temp_root("stale-slot");
-        let slot_path = root.join("slot-1.lock");
-        fs::write(&slot_path, "424242:docker-rm-runtime-test-container\n").expect("write slot");
-
-        assert!(should_reclaim_existing_slot_with(&slot_path, |_| false));
-    }
-
-    #[test]
-    fn slot_with_live_pid_is_not_reclaimed() {
-        let root = temp_root("live-slot");
-        let slot_path = root.join("slot-1.lock");
-        fs::write(&slot_path, "12345:docker-volume-rm-runtime-test\n").expect("write slot");
-
-        assert!(!should_reclaim_existing_slot_with(&slot_path, |_| true));
-    }
-
-    #[test]
-    fn process_exists_with_command_checks_pid_quietly() {
-        let _guard = PATH_MUTEX.lock().unwrap_or_else(|err| err.into_inner());
-        let root = temp_root("fake-kill");
-        let binary = root.join("kill");
-        let args_file = root.join("kill-args.txt");
-        fs::write(
-            &binary,
-            format!(
-                "#!/bin/sh\nprintf '%s %s' \"$1\" \"$2\" > '{}'\nprintf '%s' 'No such process' >&2\nexit 1\n",
-                args_file.display()
-            ),
-        )
-        .expect("write fake kill");
-        let mut perms = fs::metadata(&binary).expect("kill metadata").permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&binary, perms).expect("chmod kill");
-
-        assert!(!process_exists_with_command(
-            binary.to_str().expect("binary path"),
-            424242
-        ));
-
-        let mut recorded_args = String::new();
-        fs::File::open(args_file)
-            .expect("open args file")
-            .read_to_string(&mut recorded_args)
-            .expect("read args file");
-        assert_eq!(recorded_args, "-0 424242");
+    fn a_free_slot_is_taken_while_another_is_held() {
+        let root = temp_root("free");
+        let _first = acquire_slot(&root, 2, "first", DockerOpClass::Heavy).expect("first slot");
+        let _second = acquire_slot(&root, 2, "second", DockerOpClass::Heavy).expect("second slot");
     }
 }

@@ -11,7 +11,7 @@ mod same_file;
 mod secret_file;
 
 pub(crate) use app_key::app_key;
-pub(crate) use installation::installation_id;
+pub(crate) use installation::{existing_installation_id, installation_id};
 pub(crate) use lock::HostLock;
 pub(crate) use paths::{home_path, private_dir, remove_instance_state};
 pub(crate) use same_file::same_file;

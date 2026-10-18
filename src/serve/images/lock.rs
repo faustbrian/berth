@@ -2,7 +2,6 @@
 
 use anyhow::{Context, Result};
 use std::path::PathBuf;
-use std::time::Duration;
 
 use super::super::DerivedImageLock;
 
@@ -65,45 +64,26 @@ fn lockfile_path(path: &std::path::Path) -> PathBuf {
     path.with_extension(extension)
 }
 
+/// An exclusive `flock` on the lock file, released when dropped or when the
+/// process dies. The file stays: deleting it would let a waiter lock a file
+/// no longer at the path.
 struct FileLockGuard {
-    path: PathBuf,
+    _file: std::fs::File,
 }
 
-impl Drop for FileLockGuard {
-    fn drop(&mut self) {
-        drop(std::fs::remove_file(&self.path));
-    }
-}
-
+/// Blocks until no other process holds the lock: the kernel releases a dead
+/// holder's lock, so there is nothing to time out on.
 fn acquire_file_lock(path: &std::path::Path) -> Result<FileLockGuard> {
-    let max_attempts = 200;
-    for _ in 0..max_attempts {
-        match std::fs::OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(path)
-        {
-            Ok(_) => {
-                return Ok(FileLockGuard {
-                    path: path.to_path_buf(),
-                });
-            }
-            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
-                std::thread::sleep(Duration::from_millis(25));
-                continue;
-            }
-            Err(err) => {
-                return Err(err)
-                    .with_context(|| format!("failed to create lock file {}", path.display()));
-            }
-        }
-    }
-
-    anyhow::bail!(
-        "timed out waiting for lock file {} after {} attempts",
-        path.display(),
-        max_attempts
-    )
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)
+        .with_context(|| format!("failed to open lock file {}", path.display()))?;
+    file.lock()
+        .with_context(|| format!("failed to lock {}", path.display()))?;
+    Ok(FileLockGuard { _file: file })
 }
 
 fn write_atomic_file(path: &std::path::Path, content: &str) -> Result<()> {
@@ -143,16 +123,39 @@ mod tests {
     }
 
     #[test]
-    fn file_lock_guard_creates_and_cleans_lock_file() {
+    fn a_lock_file_a_crashed_berth_left_behind_is_taken_at_once() {
+        let lock_path = temp_path("crashed").with_extension("lock");
+        // 9.x's lock was the file's existence; a crash left it behind and
+        // every later berth timed out on it.
+        fs::write(&lock_path, "").expect("leftover lock file");
+        let started = std::time::Instant::now();
+        let _guard = acquire_file_lock(&lock_path).expect("acquired");
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    }
+
+    #[test]
+    fn file_lock_waits_for_its_holder() {
         let lock_path = temp_path("guard").with_extension("lock");
-        assert!(!lock_path.exists());
+        let held = acquire_file_lock(&lock_path).expect("acquire lock");
 
-        {
-            let _guard = acquire_file_lock(&lock_path).expect("acquire lock");
-            assert!(lock_path.exists());
-        }
-
-        assert!(!lock_path.exists());
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let waiter_path = lock_path.clone();
+        std::thread::spawn(move || {
+            sender
+                .send(acquire_file_lock(&waiter_path).map(|_| ()))
+                .expect("send");
+        });
+        assert!(
+            receiver
+                .recv_timeout(std::time::Duration::from_millis(500))
+                .is_err(),
+            "a held lock keeps the waiter waiting"
+        );
+        drop(held);
+        receiver
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("the waiter gets the lock once it is released")
+            .expect("acquired");
     }
 
     #[test]

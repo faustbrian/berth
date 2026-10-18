@@ -8,10 +8,12 @@ use super::is_dry_run;
 use command::{docker_inspect, docker_inspect_format};
 use label::inspect_label as inspect_label_value;
 use parse::extract_host_port_binding_from_inspect;
+pub(crate) use state::{ContainerState, container_state};
 
 mod command;
 mod label;
 mod parse;
+mod state;
 #[cfg(test)]
 mod tests;
 

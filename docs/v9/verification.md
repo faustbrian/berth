@@ -9,7 +9,7 @@ verification discipline, ledger L161).
 |---|---|---|
 | Parsing, naming, policy, planning | unit tests (`cargo test`) | every developer, CI on four platforms |
 | Command behavior against an engine (argv, ordering, exit codes, JSON documents, labels, purge, reaping) | integration tests in `tests/` with a fake `docker` that records calls | `cargo test`, CI |
-| Real Docker behavior (shared tenants, gateway TLS, least privilege, ownership, isolation, ParaTest, reaping a killed agent, zero leftovers) | `scripts/accept-v9-agents.sh <berth> <out> [N]` | a developer with Docker (N=30), CI on Linux with rootful Docker, rootless Docker and rootless Podman (N=4, cold image cache) |
+| Real Docker behavior (shared tenants, gateway TLS, least privilege, ownership, isolation, ParaTest, reaping a killed agent, zero leftovers) | `scripts/accept-v9-agents.sh <berth> <out> [N]` | a developer with Docker (N=12), CI on Linux with rootful Docker, rootless Docker and rootless Podman (N=4, cold image cache) |
 | v6 command parity | `scripts/runtime-parity-smoke.sh`, `scripts/runtime-parity-full.sh` | a developer with Docker |
 | Lint, supply chain, workflow pinning | `just lint`, `scripts/audit-supply-chain.sh`, `scripts/test-policy-audits.sh` | every developer, CI |
 | Ledger coverage of 8.x | `scripts/check-v9-ledger.sh [--final]` | every developer, CI |
@@ -48,4 +48,4 @@ On the exact commit to be tagged: `just build`, `cargo test`,
 `cargo clippy --all-targets --all-features -- -D warnings`,
 `scripts/audit-supply-chain.sh`, `scripts/test-policy-audits.sh`,
 `scripts/check-v9-ledger.sh --final`, `scripts/accept-v9-agents.sh` at
-N=30, an independent review of the complete diff, and green CI.
+N=12 (8 to 12 agents is what one developer machine runs), an independent review of the complete diff, and green CI.

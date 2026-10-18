@@ -3,7 +3,6 @@
 //! Contains cli support for each service logic used by Berth command workflows.
 
 use anyhow::Result;
-use rayon::prelude::*;
 
 use crate::config;
 
@@ -48,9 +47,7 @@ where
         services.iter().partition(|service| is_app(service));
 
     install_in_pool(parallel, || {
-        non_app_services
-            .par_iter()
-            .try_for_each(|service| run(service))
+        crate::parallel::try_for_each_ending_siblings(&non_app_services, |service| run(service))
     })?;
 
     for service in app_services {
@@ -87,7 +84,9 @@ where
         return Ok(());
     }
 
-    install_in_pool(parallel, || selected.par_iter().try_for_each(run))
+    install_in_pool(parallel, || {
+        crate::parallel::try_for_each_ending_siblings(selected, run)
+    })
 }
 
 #[cfg(test)]

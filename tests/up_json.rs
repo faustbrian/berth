@@ -13,8 +13,12 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 
-/// `FAKE_BOOT=ok|fatal|exit`: how `php artisan about` answers (`exit` stops
-/// the app container). `FAKE_DB_RUN=busy` makes the database's `run` fail.
+/// `FAKE_BOOT=ok|fatal|rendered|exit|restarting|restarting-twice`: how
+/// `php artisan about` answers (`rendered` is an exception Laravel's console
+/// kernel rendered, `exit` stops the app container, `restarting` is the
+/// engine refusing the exec, `restarting-twice` only for the first two).
+/// `FAKE_DB_HEALTH=exit` stops the database during its health check, and
+/// `FAKE_CACHE_HEALTH=never` keeps the cache from ever answering. `FAKE_DB_RUN=busy` makes the database's `run` fail.
 const FAKE_DOCKER: &str = r#"#!/bin/sh
 # The gateway reload sends its config on stdin; take it all.
 case "$*" in *"caddy reload"*) cat > /dev/null ;; esac
@@ -48,7 +52,7 @@ case "$1" in
     printf 'ready to accept connections\n\377bad\nafter\n'; echo "a warning" >&2; exit 0 ;;
   inspect)
     name=""; for arg in "$@"; do name="$arg"; done
-    [ -f "$S/c/$name" ] || exit 1
+    [ -f "$S/c/$name" ] || { echo "Error: No such object: $name" >&2; exit 1; }
     case "$*" in
       *NetworkSettings.Networks*) printf '{}' ;;
       *dev.berth.installation*) cat "$BERTH_HOME/installation-id" ;;
@@ -63,9 +67,26 @@ case "$1" in
           fatal) echo "PHP Fatal error:  Uncaught Error in /app/bootstrap/app.php:9" >&2; exit 255 ;;
           exit) for f in "$S"/c/*_app; do echo exited > "$f"; done; exit 1 ;;
           undefined) echo 'Command "about" is not defined.' >&2; exit 1 ;;
+          rendered) echo '   ParseError  syntax error, unexpected token "}" at routes/console.php:12' >&2; exit 1 ;;
+          restarting) echo 'Error response from daemon: Container x is restarting, wait until the container is running' >&2; exit 1 ;;
+          hang) sleep 60 ;;
+          oci-then-ok)
+            [ -f "$S/oci" ] || { touch "$S/oci"; echo 'OCI runtime exec failed: exec failed: read init-p: connection reset by peer: unknown' >&2; exit 126; } ;;
+          restarting-twice)
+            n=$(cat "$S/boots" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$S/boots"
+            [ "$n" -le 2 ] && { echo 'Error response from daemon: Container x is restarting, wait until the container is running' >&2; exit 1; } ;;
         esac
         echo "Environment ... local"; exit 0 ;;
       *wget*) printf 'ok'; echo "  HTTP/1.1 200 OK" >&2 ;;
+      *pg_isready*) [ "$FAKE_DB_HEALTH" = exit ] && { for f in "$S"/c/*_db; do echo exited > "$f"; done; exit 1; } ;;
+      *redis-cli*) [ "$FAKE_CACHE_HEALTH" = never ] && exit 1 ;;
+      *"horizon:status"*)
+        case "$FAKE_HORIZON" in
+          broken) echo '   ErrorException  Undefined array key "redis" in config/horizon.php:12' >&2; exit 1 ;;
+          inactive-twice)
+            n=$(cat "$S/horizon" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$S/horizon"
+            [ "$n" -le 2 ] && { echo 'Horizon is inactive.'; exit 1; } ;;
+        esac ;;
       *" -i "*) cat >/dev/null; echo "SET"; echo "CREATE TABLE" ;;
     esac
     exit 0 ;;
@@ -164,7 +185,7 @@ impl Fixture {
         for pair in env {
             command.env(pair.0, pair.1);
         }
-        command.output().expect("run berth")
+        bounded_output(&mut command)
     }
 
     fn write_project(&self, contents: &str) {
@@ -252,10 +273,10 @@ fn up_json_prints_one_ready_document_and_keeps_progress_and_hooks_on_stderr() {
 #[test]
 fn a_fatal_framework_boot_fails_up_with_125_one_failure_document_and_the_fatal_line() {
     let fixture = Fixture::new("fatal");
-    let up = fixture.berth(
-        &["up", "--json", "--wait-timeout", "5"],
-        &[("FAKE_BOOT", "fatal")],
-    );
+    let started = std::time::Instant::now();
+    // No `--wait-timeout`: a PHP fatal is a real error, so it fails at once.
+    let up = fixture.berth(&["up", "--json"], &[("FAKE_BOOT", "fatal")]);
+    assert!(started.elapsed().as_secs() < 20, "a fatal boot never waits");
     assert_eq!(
         up.status.code(),
         Some(125),
@@ -277,10 +298,7 @@ fn a_fatal_framework_boot_fails_up_with_125_one_failure_document_and_the_fatal_l
     // Readiness is not liveness: a second `up` keeps the running app.
     let log = fixture.base.join("state/log");
     std::fs::remove_file(&log).expect("clear log");
-    let again = fixture.berth(
-        &["up", "--json", "--wait-timeout", "5"],
-        &[("FAKE_BOOT", "fatal")],
-    );
+    let again = fixture.berth(&["up", "--json"], &[("FAKE_BOOT", "fatal")]);
     assert_eq!(again.status.code(), Some(125));
     let calls = std::fs::read_to_string(&log).expect("log");
     assert!(
@@ -296,17 +314,153 @@ fn a_fatal_framework_boot_fails_up_with_125_one_failure_document_and_the_fatal_l
 fn an_app_that_stops_while_booting_fails_at_once() {
     let fixture = Fixture::new("exited");
     let started = std::time::Instant::now();
-    let up = fixture.berth(&["up", "--wait-timeout", "60"], &[("FAKE_BOOT", "exit")]);
+    // No `--wait-timeout`: a stopped container ends the wait by itself.
+    let up = fixture.berth(&["up"], &[("FAKE_BOOT", "exit")]);
     assert_eq!(up.status.code(), Some(125));
     assert!(
         started.elapsed().as_secs() < 20,
-        "no waiting out the timeout"
+        "a stopped app never waits"
     );
     assert!(
         text(&up.stderr).contains("stopped while booting"),
         "{}",
         text(&up.stderr)
     );
+}
+
+#[test]
+fn a_probe_the_engine_cannot_run_waits_and_fails_only_at_an_opt_in_cap() {
+    let fixture = Fixture::new("capped");
+    let started = std::time::Instant::now();
+    let up = fixture.berth(
+        &["up", "--json", "--wait-timeout", "2"],
+        &[("FAKE_BOOT", "restarting")],
+    );
+    assert_eq!(up.status.code(), Some(125), "{}", text(&up.stderr));
+    assert!(started.elapsed().as_secs() < 20, "the cap ends the wait");
+    let error = one_document(&up.stdout)["error"]
+        .as_str()
+        .expect("error")
+        .to_owned();
+    assert!(error.contains("--wait-timeout"), "{error}");
+    assert!(
+        error.contains("the last probe said") && error.contains("is restarting"),
+        "the capped wait says what it waited on: {error}"
+    );
+}
+
+#[test]
+fn an_engine_that_fails_to_run_the_probe_is_asked_again() {
+    let fixture = Fixture::new("oci");
+    let up = fixture.berth(&["up", "--json"], &[("FAKE_BOOT", "oci-then-ok")]);
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    assert_eq!(one_document(&up.stdout)["status"], "ready");
+}
+
+const HORIZON_PROJECT: &str = "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  cache:\n    preset: redis\n    isolation: dedicated\n  horizon:\n    preset: horizon\n";
+
+#[test]
+fn a_broken_horizon_fails_at_once_and_a_starting_one_is_waited_out() {
+    let fixture = Fixture::new("horizon");
+    fixture.write_project(HORIZON_PROJECT);
+    let started = std::time::Instant::now();
+    let broken = fixture.berth(&["up", "--json"], &[("FAKE_HORIZON", "broken")]);
+    assert_eq!(broken.status.code(), Some(125), "{}", text(&broken.stderr));
+    assert!(
+        started.elapsed().as_secs() < 20,
+        "a broken worker never waits"
+    );
+    let error = one_document(&broken.stdout)["error"]
+        .as_str()
+        .expect("error")
+        .to_owned();
+    assert!(error.contains("config/horizon.php"), "{error}");
+
+    let starting = Fixture::new("horizon-starting");
+    starting.write_project(HORIZON_PROJECT);
+    let up = starting.berth(&["up", "--json"], &[("FAKE_HORIZON", "inactive-twice")]);
+    assert!(up.status.success(), "{}", text(&up.stderr));
+}
+
+#[test]
+fn a_hanging_probe_is_ended_by_an_opt_in_cap() {
+    let fixture = Fixture::new("hang");
+    let started = std::time::Instant::now();
+    let up = fixture.berth(
+        &["up", "--json", "--wait-timeout", "2"],
+        &[("FAKE_BOOT", "hang")],
+    );
+    assert_eq!(up.status.code(), Some(125), "{}", text(&up.stderr));
+    assert!(
+        started.elapsed().as_secs() < 20,
+        "the cap kills the probe in flight"
+    );
+}
+
+#[test]
+fn a_slow_start_without_a_cap_waits_until_the_app_boots() {
+    let fixture = Fixture::new("slow");
+    let up = fixture.berth(&["up", "--json"], &[("FAKE_BOOT", "restarting-twice")]);
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    assert_eq!(one_document(&up.stdout)["status"], "ready");
+}
+
+#[test]
+fn a_boot_exception_laravel_renders_fails_at_once_without_a_cap() {
+    let fixture = Fixture::new("rendered");
+    let started = std::time::Instant::now();
+    let up = fixture.berth(&["up", "--json"], &[("FAKE_BOOT", "rendered")]);
+    assert_eq!(up.status.code(), Some(125), "{}", text(&up.stderr));
+    assert!(started.elapsed().as_secs() < 20, "a broken app never waits");
+    let error = one_document(&up.stdout)["error"]
+        .as_str()
+        .expect("error")
+        .to_owned();
+    assert!(error.contains("routes/console.php"), "{error}");
+}
+
+#[test]
+fn a_database_that_stops_while_starting_fails_up_at_once_without_a_cap() {
+    let fixture = Fixture::new("db-exits");
+    let started = std::time::Instant::now();
+    let up = fixture.berth(&["up", "--json"], &[("FAKE_DB_HEALTH", "exit")]);
+    assert_eq!(up.status.code(), Some(125), "{}", text(&up.stderr));
+    assert!(
+        started.elapsed().as_secs() < 20,
+        "a stopped database never waits"
+    );
+    let error = one_document(&up.stdout)["error"]
+        .as_str()
+        .expect("error")
+        .to_owned();
+    assert!(error.contains("is not running"), "{error}");
+}
+
+#[test]
+fn one_services_failure_ends_a_parallel_siblings_wait_and_is_the_error_reported() {
+    let fixture = Fixture::new("siblings");
+    fixture.write_project(
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: postgres\n    isolation: dedicated\n  cache:\n    preset: redis\n    isolation: dedicated\n",
+    );
+    let started = std::time::Instant::now();
+    let up = fixture.berth(
+        &["up", "--json"],
+        &[("FAKE_DB_HEALTH", "exit"), ("FAKE_CACHE_HEALTH", "never")],
+    );
+    assert_eq!(up.status.code(), Some(125), "{}", text(&up.stderr));
+    assert!(
+        started.elapsed().as_secs() < 20,
+        "the cache's endless wait ends once the database failed"
+    );
+    let error = one_document(&up.stdout)["error"]
+        .as_str()
+        .expect("error")
+        .to_owned();
+    assert!(
+        error.contains("is not running") && error.contains("_db"),
+        "{error}"
+    );
+    assert!(!error.contains("another service failed"), "{error}");
 }
 
 #[test]
@@ -657,4 +811,49 @@ fn parallel_ups_build_a_missing_derived_image_once() {
     }
     let builds = std::fs::read_to_string(fixture.base.join("state/builds")).unwrap_or_default();
     assert_eq!(builds.lines().count(), 1, "{builds}");
+}
+
+/// Runs `command` to completion, failing the test instead of hanging when a
+/// regression makes berth wait forever (berth itself has no deadlines).
+fn bounded_output(command: &mut Command) -> Output {
+    use std::io::Read;
+    let mut child = command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("run berth");
+    fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> std::thread::JoinHandle<Vec<u8>> {
+        std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            if let Some(mut pipe) = pipe {
+                drop(pipe.read_to_end(&mut bytes));
+            }
+            bytes
+        })
+    }
+    let stdout = drain(child.stdout.take());
+    let stderr = drain(child.stderr.take());
+    let started = std::time::Instant::now();
+    let mut timed_out = false;
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("wait for berth") {
+            break status;
+        }
+        if started.elapsed() > std::time::Duration::from_secs(120) {
+            timed_out = true;
+            drop(child.kill());
+            break child.wait().expect("wait for the killed berth");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    assert!(
+        !timed_out,
+        "berth did not finish within 120s: a wait that should end did not"
+    );
+    Output {
+        status,
+        stdout: stdout.join().expect("stdout"),
+        stderr: stderr.join().expect("stderr"),
+    }
 }

@@ -61,10 +61,11 @@ pub(crate) fn app_container_env(
 ///
 /// # Errors
 ///
-/// Returns an error if timeout is reached or curl execution fails repeatedly.
+/// Returns an error when the container stops, the app answers with a server
+/// error waiting cannot fix, or an opt-in `timeout_secs` passes.
 pub fn wait_until_http_healthy(
     target: &ServiceConfig,
-    timeout_secs: u64,
+    timeout_secs: Option<u64>,
     interval_secs: u64,
     health_path: Option<&str>,
 ) -> Result<()> {

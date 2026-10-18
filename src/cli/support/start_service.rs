@@ -58,7 +58,7 @@ pub(crate) fn start_service(
     recreate: bool,
     pull_policy: docker::PullPolicy,
     wait_healthy: bool,
-    health_timeout_secs: u64,
+    health_timeout_secs: Option<u64>,
     build: bool,
 ) -> Result<()> {
     if service.kind == config::Kind::App {

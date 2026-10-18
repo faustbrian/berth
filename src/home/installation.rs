@@ -27,6 +27,25 @@ pub(crate) fn installation_id() -> Result<String> {
     create_or_read(&dir.join(FILE_NAME))
 }
 
+/// Returns the installation ID if one exists, without creating it: for dry
+/// runs, which write nothing. Without one, no container is this
+/// installation's yet.
+///
+/// # Errors
+///
+/// Returns an error when the ID file exists but cannot be read or holds an
+/// invalid value.
+pub(crate) fn existing_installation_id() -> Result<Option<String>> {
+    if cfg!(test) {
+        return Ok(Some("0".repeat(32)));
+    }
+    let path = super::home_path(Path::new(FILE_NAME))?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    read_id(&path).map(Some)
+}
+
 /// Writes a complete ID to a private temporary file and hard-links it into
 /// place. `link` never replaces an existing file, so the first run wins
 /// atomically and a crash can never leave a partial ID behind.

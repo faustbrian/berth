@@ -112,11 +112,28 @@ case "$1" in
   exec)
     case "$*" in *"'php' 'artisan' 'test'"*) [ -n "$FAKE_TEST_SLEEP" ] && sleep "$FAKE_TEST_SLEEP"; exit 0 ;; esac
     cat > "$S/last-sql"; cat "$S/last-sql" >> "$S/sql"
+    # FAKE_SERVER=exits stops the shared server on its first admin query,
+    # FAKE_SERVER=badauth rejects the admin password, FAKE_SERVER=norole
+    # answers with a permanent connection error.
+    case "$FAKE_SERVER:$*" in
+      refusing:*psql*)
+        [ -f "$S/refuse" ] && { echo 'psql: error: connection to server at "127.0.0.1", port 5432 failed: Connection refused' >&2; exit 2; } ;;
+      norole:*psql*)
+        echo 'psql: error: connection to server at "127.0.0.1", port 5432 failed: FATAL:  role "berth_admin" does not exist' >&2; exit 2 ;;
+      exits:*psql*)
+        for f in "$S"/c/berth_shared_*; do touch "$S/stopped-$(basename "$f")"; done
+        echo 'psql: error: connection to server at "127.0.0.1", port 5432 failed: Connection refused' >&2; exit 2 ;;
+      badauth:*psql*)
+        echo 'psql: error: connection to server at "127.0.0.1", port 5432 failed: FATAL:  password authentication failed for user "berth_admin"' >&2; exit 2 ;;
+    esac
     [ -f "$S/tenant-fails" ] && grep -q 'CREATE ROLE' "$S/last-sql" && { echo 'ERROR:  permission denied to create role' >&2; exit 1; }
     case "$*" in *psql*|*" mysql "*|*" mariadb "*|*redis-cli*) ;; *) exit 0 ;; esac
     case "$*" in
-      *"-n 0 --scan"*) for k in $FAKE_KEYS; do echo "$k"; done; exit 0 ;;
-      *"-n 1 --scan"*) cat "$S/keys-db1" 2>/dev/null; exit 0 ;;
+      # The one-exec scan of every database: `database<TAB>key` lines.
+      *"sh -c"*"--scan"*)
+        for k in $FAKE_KEYS; do printf '0\t%s\n' "$k"; done
+        [ -f "$S/keys-db1" ] && while IFS= read -r k; do printf '1\t%s\n' "$k"; done < "$S/keys-db1"
+        echo scan >> "$S/scans"; exit 0 ;;
       *"--scan"*) exit 0 ;;
     esac
     tail -n 1 "$S/sql" | grep -q '^ACL USERS' && { for n in $FAKE_NAMES; do echo "$n"; done; exit 0; }
@@ -150,7 +167,8 @@ case "$1" in
       *dev.berth.shared.fingerprint*)
         installation=$(grep '^dev.berth.installation=' "$S/c/$name" | cut -d= -f2)
         fp=$(grep '^dev.berth.shared.fingerprint=' "$S/c/$name" | cut -d= -f2)
-        printf 'running\t%s\t%s' "$installation" "$fp" ;;
+        state=running; [ -f "$S/stopped-$name" ] && state=exited
+        printf '%s\t%s\t%s' "$state" "$installation" "$fp" ;;
       *dev.berth.installation*) cat "$BERTH_HOME/installation-id" ;;
       *--format*) if [ -f "$S/stopped-$name" ]; then printf exited; else printf running; fi ;;
       *) printf '[{"State":{"Status":"running"},"NetworkSettings":{"Ports":{}},"HostConfig":{"PortBindings":{}}}]' ;;
@@ -243,9 +261,7 @@ impl Host {
     }
 
     fn berth_with_owned(&self, checkout: &Path, args: &[&str], names: &str, owned: &str) -> Output {
-        self.command(checkout, args, names, owned)
-            .output()
-            .expect("run berth")
+        bounded_output(&mut self.command(checkout, args, names, owned))
     }
 
     fn command(&self, checkout: &Path, args: &[&str], names: &str, owned: &str) -> Command {
@@ -602,6 +618,12 @@ fn what_a_tenant_cannot_have_fails_before_docker_is_touched() {
         ("volumes", "    volumes: [\"./dump:/dump\"]\n", "`volumes`"),
         ("env", "    env:\n      TZ: UTC\n", "`env`"),
         ("port", "    port: 5433\n", "`port`"),
+        // Run in the server, a hook would act on every instance's data.
+        (
+            "hook",
+            "    hook:\n      - name: peek\n        phase: post_up\n        run:\n          type: exec\n          argv: [echo, HOOK-SENTINEL]\n",
+            "`hook`",
+        ),
     ];
     for (label, extra, message) in cases {
         let host = Host::new(&format!("reject-{label}"));
@@ -618,6 +640,11 @@ fn what_a_tenant_cannot_have_fails_before_docker_is_touched() {
             "{label}: {stderr}"
         );
         assert!(!host.calls().contains("run "), "{label}: {}", host.calls());
+        assert!(
+            !host.calls().contains("HOOK-SENTINEL"),
+            "{label}: {}",
+            host.calls()
+        );
     }
     let host = Host::new("reject-memcached");
     let a = host.checkout(
@@ -1145,12 +1172,18 @@ fn a_redis_purge_deletes_the_instance_users_and_their_keys_only() {
         !sql.contains(&format!("ACL DELUSER {theirs}")) && !sql.contains("ACL DELUSER default"),
         "{sql}"
     );
+    // Every database is scanned in one exec: the server's lock is held
+    // meanwhile, and one exec per database kept other instances waiting.
+    let calls = host.calls();
     assert!(
-        host.calls()
+        !calls.contains("-n 0 --scan") && !calls.contains("-n 1 --scan"),
+        "no exec per database: {calls}"
+    );
+    assert!(
+        calls
             .lines()
-            .any(|line| line.contains(&format!("--scan --pattern {mine}:*"))),
-        "{}",
-        host.calls()
+            .any(|line| line == format!("done sh 16 {mine}:")),
+        "all 16 databases in one exec, for the tenant's prefix: {calls}"
     );
 }
 
@@ -1383,6 +1416,98 @@ fn a_tenant_that_fails_to_provision_names_its_instance_and_leaves_others_up() {
 }
 
 #[test]
+fn a_shared_server_that_stops_or_rejects_berth_fails_up_at_once_without_a_cap() {
+    for (mode, message) in [
+        ("exits", "stopped while starting"),
+        ("badauth", "rejects berth's admin password"),
+        ("norole", "role \"berth_admin\" does not exist"),
+    ] {
+        let host = Host::new(&format!("server-{mode}"));
+        let a = host.checkout("a", PROJECT);
+        let started = std::time::Instant::now();
+        let up = bounded_output(
+            host.command(&a, &["up", "--no-wait"], "", "")
+                .env("FAKE_SERVER", mode),
+        );
+        assert_eq!(up.status.code(), Some(125), "{mode}: {}", text(&up.stderr));
+        assert!(started.elapsed().as_secs() < 20, "{mode}: no endless wait");
+        assert!(
+            text(&up.stderr).contains(message),
+            "{mode}: {}",
+            text(&up.stderr)
+        );
+    }
+}
+
+#[test]
+fn reaping_in_passing_skips_a_busy_shared_server_instead_of_waiting_for_it() {
+    let host = Host::new("reap-busy");
+    let a = host.checkout("a", PROJECT);
+    let b = host.checkout("b", PROJECT);
+    host.ok(&a, &["up", "--no-wait", "--ttl", "1s"]);
+    host.ok(&b, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    std::thread::sleep(std::time::Duration::from_millis(2100));
+    drop(std::fs::remove_file(
+        host.base.join("home/locks/reap.stamp"),
+    ));
+    // Another berth process is using the server for as long as this test
+    // holds its lock.
+    let busy = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(host.base.join(format!("home/locks/shared-{server}.lock")))
+        .expect("lock file");
+    busy.lock().expect("hold the server's lock");
+
+    let started = std::time::Instant::now();
+    let ps = host.berth(&b, &["ps"]);
+    assert!(ps.status.success(), "{}", text(&ps.stderr));
+    assert!(
+        started.elapsed().as_secs() < 20,
+        "another instance's leftovers never block a command"
+    );
+    assert!(
+        text(&ps.stderr).contains("another berth process is using it"),
+        "{}",
+        text(&ps.stderr)
+    );
+    drop(busy);
+}
+
+#[test]
+fn reaping_in_passing_skips_a_shared_server_that_refuses_connections() {
+    let host = Host::new("reap-refusing");
+    let a = host.checkout("a", PROJECT);
+    let b = host.checkout("b", PROJECT);
+    host.ok(&a, &["up", "--no-wait", "--ttl", "1s"]);
+    host.ok(&b, &["up", "--no-wait"]);
+    std::thread::sleep(std::time::Duration::from_millis(2100));
+    drop(std::fs::remove_file(
+        host.base.join("home/locks/reap.stamp"),
+    ));
+    // From now on the running server refuses every connection.
+    std::fs::write(host.base.join("state/refuse"), "").expect("refuse");
+    let started = std::time::Instant::now();
+    let ps = bounded_output(
+        host.command(&b, &["ps"], "", "")
+            .env("FAKE_SERVER", "refusing"),
+    );
+    assert!(ps.status.success(), "{}", text(&ps.stderr));
+    assert!(
+        started.elapsed().as_secs() < 20,
+        "another instance's leftovers never block a command"
+    );
+    assert!(
+        text(&ps.stderr).contains("skipped shared server"),
+        "{}",
+        text(&ps.stderr)
+    );
+}
+
+#[test]
 fn a_reset_restore_reprovisions_only_the_instance_tenant() {
     let host = Host::new("reset");
     let a = host.checkout("a", PROJECT);
@@ -1426,15 +1551,113 @@ fn a_reset_restore_reprovisions_only_the_instance_tenant() {
     let dropped = dropped.expect("tenant a dropped");
     let created = sql[dropped..].find(&format!("'CREATE DATABASE ' || quote_ident('{tenant_a}')"));
     assert!(created.is_some(), "tenant a provisioned again: {sql}");
-    let created = created.expect("tenant a provisioned again");
-    let restored = sql[dropped + created..].find("restored_marker");
-    assert!(restored.is_some(), "the dump follows the new tenant: {sql}");
-    let restored = restored.expect("the dump follows the new tenant");
-    assert!(restored > 0);
+    assert!(
+        !sql.contains("restored_marker"),
+        "the dump never reaches the shared server's own client: {sql}"
+    );
+    let client_stdin =
+        std::fs::read_to_string(host.base.join("state/client-stdin")).expect("client stdin");
+    assert!(
+        client_stdin.contains("restored_marker"),
+        "the dump reaches the tenant's throwaway client: {client_stdin}"
+    );
     assert!(
         !sql.contains(&tenant_b),
         "instance b's tenant is untouched: {sql}"
     );
+}
+
+#[test]
+fn restore_and_dump_of_a_shared_tenant_run_in_a_throwaway_client_for_every_sql_engine() {
+    for (label, project, client, dump) in [
+        ("restore-pg", PROJECT.to_owned(), "psql", "pg_dump"),
+        (
+            "restore-mysql",
+            mysql_project("mysql:8.4"),
+            "mysql",
+            "mysqldump",
+        ),
+        (
+            "restore-maria",
+            mysql_project("mariadb:11.4"),
+            "mariadb",
+            "mariadb-dump",
+        ),
+    ] {
+        let host = Host::new(label);
+        let a = host.checkout("a", &project);
+        host.ok(&a, &["up", "--no-wait"]);
+        let server = std::fs::read_dir(host.base.join("state/c"))
+            .expect("containers")
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .find(|name| name.starts_with("berth_shared_"))
+            .expect("server");
+        let password = env_json(&host, &a)["environment"]["DB_PASSWORD"]
+            .as_str()
+            .expect("password")
+            .to_owned();
+        std::fs::write(
+            a.join("dump.sql"),
+            "CREATE TABLE restored_marker (id int);\n",
+        )
+        .expect("dump");
+        host.clear();
+
+        let restore = host.berth(&a, &["restore", "--service", "db", "--file", "dump.sql"]);
+        assert!(
+            restore.status.success(),
+            "{label}: {}",
+            text(&restore.stderr)
+        );
+        let calls = host.calls();
+        let run = calls
+            .lines()
+            .find(|line| line.starts_with("run --rm"))
+            .unwrap_or_default()
+            .to_owned();
+        assert!(
+            run.contains(&format!("--entrypoint {client} ")) && run.contains(" -h db "),
+            "{label}: the dump goes to the tenant's own client: {run}"
+        );
+        assert!(
+            !calls.lines().any(|line| line.starts_with("exec")
+                && line.contains(&server)
+                && line.contains(client)),
+            "{label}: no client runs inside the shared server: {calls}"
+        );
+        assert!(
+            std::fs::read_to_string(host.base.join("state/client-stdin"))
+                .unwrap_or_default()
+                .contains("restored_marker"),
+            "{label}: the dump reaches the throwaway client"
+        );
+        assert!(!calls.contains(&password), "{label}: no password in argv");
+
+        host.clear();
+        let dumped = host.berth(&a, &["dump", "--service", "db", "--stdout"]);
+        assert!(dumped.status.success(), "{label}: {}", text(&dumped.stderr));
+        let calls = host.calls();
+        let run = calls
+            .lines()
+            .find(|line| line.starts_with("run --rm"))
+            .unwrap_or_default()
+            .to_owned();
+        assert!(
+            run.contains(&format!("--entrypoint {dump} ")) && run.contains(" -h db "),
+            "{label}: the dump program runs in a throwaway container: {run}"
+        );
+        if client != "psql" {
+            assert!(run.contains("--no-tablespaces"), "{label}: {run}");
+        }
+        assert!(
+            !calls.lines().any(|line| line.starts_with("exec")
+                && line.contains(&server)
+                && line.contains(dump)),
+            "{label}: no dump runs inside the shared server: {calls}"
+        );
+        assert!(!calls.contains(&password), "{label}: no password in argv");
+    }
 }
 
 #[test]
@@ -1991,4 +2214,49 @@ fn gc_removes_a_mariadb_server_whose_only_users_are_the_images_own() {
     let server = &document["servers"][0];
     assert_eq!(server["engine"], "mariadb", "{document}");
     assert_eq!(server["removed"], true, "{document}");
+}
+
+/// Runs `command` to completion, failing the test instead of hanging when a
+/// regression makes berth wait forever (berth itself has no deadlines).
+fn bounded_output(command: &mut Command) -> Output {
+    use std::io::Read;
+    let mut child = command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("run berth");
+    fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> std::thread::JoinHandle<Vec<u8>> {
+        std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            if let Some(mut pipe) = pipe {
+                drop(pipe.read_to_end(&mut bytes));
+            }
+            bytes
+        })
+    }
+    let stdout = drain(child.stdout.take());
+    let stderr = drain(child.stderr.take());
+    let started = std::time::Instant::now();
+    let mut timed_out = false;
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("wait for berth") {
+            break status;
+        }
+        if started.elapsed() > std::time::Duration::from_secs(120) {
+            timed_out = true;
+            drop(child.kill());
+            break child.wait().expect("wait for the killed berth");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    assert!(
+        !timed_out,
+        "berth did not finish within 120s: a wait that should end did not"
+    );
+    Output {
+        status,
+        stdout: stdout.join().expect("stdout"),
+        stderr: stderr.join().expect("stderr"),
+    }
 }

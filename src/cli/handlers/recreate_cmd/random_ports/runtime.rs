@@ -8,7 +8,7 @@ use crate::{cli, config};
 #[derive(Clone, Copy)]
 pub(super) struct RecreateRuntimeContext<'a> {
     pub(super) healthy: bool,
-    pub(super) timeout: u64,
+    pub(super) timeout: Option<u64>,
     pub(super) start_context: cli::support::ServiceStartContext<'a>,
     pub(super) quiet: bool,
 }
@@ -16,7 +16,7 @@ pub(super) struct RecreateRuntimeContext<'a> {
 impl<'a> RecreateRuntimeContext<'a> {
     pub(super) fn new(
         healthy: bool,
-        timeout: u64,
+        timeout: Option<u64>,
         start_context: cli::support::ServiceStartContext<'a>,
         quiet: bool,
     ) -> Self {

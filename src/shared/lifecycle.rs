@@ -304,22 +304,18 @@ fn drop_redis_users(
         target,
         &redis::database_count_commands(),
     )?)?;
+    let prefixes: Vec<String> = users.iter().map(|user| redis::prefix(user)).collect();
     let mut keys: Vec<(u32, Vec<String>)> = Vec::new();
-    for database in 0..databases {
-        let number = database.to_string();
-        let mut found = Vec::new();
-        for user in &users {
-            let prefix = redis::prefix(user);
-            let pattern = format!("{prefix}*");
-            found.extend(
-                server::admin_cli(target, &["-n", &number, "--scan", "--pattern", &pattern])?
-                    .lines()
-                    .filter(|key| key.starts_with(&prefix))
-                    .map(ToOwned::to_owned),
-            );
+    for (database, key) in server::admin_scan(target, databases, &prefixes)? {
+        if !prefixes
+            .iter()
+            .any(|prefix| key.starts_with(prefix.as_str()))
+        {
+            continue;
         }
-        if !found.is_empty() {
-            keys.push((database, found));
+        match keys.iter_mut().find(|(number, _)| *number == database) {
+            Some((_, found)) => found.push(key),
+            None => keys.push((database, vec![key])),
         }
     }
     server::admin_sql(target, &redis::drop_commands(&keys, &users))?;

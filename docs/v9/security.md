@@ -29,7 +29,11 @@ consumer's network under the consumer's service name and holds a separate
 tenant per instance: its own database and role (PostgreSQL, PUBLIC revoked,
 `template1` closed), schema and user (MySQL/MariaDB, grants on escaped name
 patterns only) or ACL user confined to a key prefix with dangerous commands
-denied (Redis/Valkey). Swarm consumers join a network shared only with the
+denied (Redis/Valkey). A tenant's own client, `restore` and `dump` run in a
+throwaway container of the server's image on the instance network, which
+connects over TCP as the tenant, without capabilities or mounts: a dump's
+`\connect`, `\!` or `system` line never runs inside the server. Swarm
+consumers join a network shared only with the
 source app, never the source's instance network. The gateway joins instance
 networks to proxy routes and is detached before a network is removed.
 
@@ -85,7 +89,8 @@ symlinked destinations.
 - **Host locks** (`~/.berth/locks/*.lock`, flock): serialize shared-server
   creation and tenant provisioning, gateway publication, network allocation,
   reaping and test-slot leases. Locks are advisory: they order berth's own
-  processes, not other programs.
+  processes, not other programs. A waiter blocks until the lock is free (the
+  kernel frees a dead holder's lock), so no wait fails on elapsed time.
 - **Ownership labels** (`dev.berth.installation`, `project`, `instance`,
   `role`, …): reaping, purge and `gc` act only on objects carrying this
   installation's ID; a foreign container under a berth name is never adopted.
@@ -99,9 +104,6 @@ symlinked destinations.
 
 ## Not covered
 
-- `berth restore` into a shared-backed database streams the dump to the
-  client inside the shared server, so a dump containing a shell escape
-  (`\!`) reaches the server; restore only dumps you trust.
 - Host trust-store installation (deferred): the CA stays inside the berth
   home.
 - A shared server is one process: a tenant can observe server-wide resource

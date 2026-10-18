@@ -3,7 +3,6 @@
 use anyhow::{Context, Result};
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
 
 use crate::config::ServiceConfig;
 use crate::output::{self, LogLevel, Persistence};
@@ -48,7 +47,7 @@ pub(crate) fn ensure_service_network(service: &ServiceConfig) -> Result<()> {
     let installation = crate::home::installation_id()?;
     // One allocation at a time: two processes probing the same subnet would
     // otherwise both see it free.
-    let _lock = crate::home::HostLock::acquire("network-allocation", Duration::from_secs(120))?;
+    let _lock = crate::home::HostLock::acquire("network-allocation")?;
     match network_installation_label(network)? {
         Some(owner) if owner == installation => {}
         Some(_) | None if network_exists(network)? => anyhow::bail!(

@@ -17,6 +17,8 @@ mod args;
 mod run;
 mod tenant_client;
 
+use tenant_client::TenantProgram;
+
 /// Opens a shared server tenant's client in a throwaway container on the
 /// instance network (see `tenant_client`), passing its exit code through.
 ///
@@ -25,26 +27,12 @@ mod tenant_client;
 /// Returns an error when the server is not running or the client cannot be
 /// started; a client that exits non-zero is reported with its code.
 pub fn exec_tenant_client(service: &ServiceConfig, tty: bool) -> Result<()> {
-    let server = service.container_name()?;
-    let args = tenant_client::tenant_client_run_args(service, tty)?;
+    let args = tenant_client::tenant_client_run_args(service, tty, TenantProgram::Client)?;
     if is_dry_run() {
         print_docker_command(&args);
         return Ok(());
     }
-    // Running and attached to this instance under the service's name, or
-    // the client could not resolve it (`stop` and `down` detach it).
-    match crate::shared::status(service).as_deref() {
-        Some("running") => {}
-        Some(state) => anyhow::bail!(
-            "service '{}' is {state} for this instance (server {server}); run `berth up` first",
-            service.name
-        ),
-        None => anyhow::bail!(
-            "service '{}' has no shared server {server}, or Docker is unreachable; run `berth up` \
-             first",
-            service.name
-        ),
-    }
+    ensure_tenant_reachable(service)?;
     let status = run_docker_status(&args, &super::runtime_command_error_context("run"))?;
     if !status.success() {
         return Err(super::command_failed_error(
@@ -57,6 +45,42 @@ pub fn exec_tenant_client(service: &ServiceConfig, tty: bool) -> Result<()> {
                     .map_or_else(|| "a signal".to_owned(), |code| code.to_string())
             ),
         ));
+    }
+    Ok(())
+}
+
+/// Dumps a shared server tenant's database with the dump program in a
+/// throwaway container on the instance network, as the tenant: like the
+/// client, it never runs inside the server every instance shares.
+///
+/// # Errors
+///
+/// Returns an error when the server is not running for this instance or
+/// the dump cannot be started.
+pub(crate) fn run_tenant_dump(service: &ServiceConfig) -> Result<std::process::Output> {
+    let args = tenant_client::tenant_client_run_args(service, false, TenantProgram::Dump)?;
+    if !is_dry_run() {
+        ensure_tenant_reachable(service)?;
+    }
+    super::run_docker_output_owned(&args, &super::runtime_command_error_context("run"))
+}
+
+/// Fails unless the shared server runs and is attached to this instance
+/// under the service's name: a throwaway client could not resolve it
+/// otherwise (`stop` and `down` detach it).
+fn ensure_tenant_reachable(service: &ServiceConfig) -> Result<()> {
+    let server = service.container_name()?;
+    match crate::shared::status(service).as_deref() {
+        Some("running") => {}
+        Some(state) => anyhow::bail!(
+            "service '{}' is {state} for this instance (server {server}); run `berth up` first",
+            service.name
+        ),
+        None => anyhow::bail!(
+            "service '{}' has no shared server {server}, or Docker is unreachable; run `berth up` \
+             first",
+            service.name
+        ),
     }
     Ok(())
 }
@@ -102,8 +126,20 @@ fn ensure_container_running(service: &ServiceConfig, container_name: &str) -> Re
     }
 }
 
-/// Execs piped as part of the docker exec workflow.
+/// Starts the service's database client with a piped stdin (for
+/// `restore`). A shared server's tenant gets it in a throwaway container on
+/// the instance network: run inside the server, a dump's `\connect` or shell
+/// escape would reach every instance's data.
 pub fn exec_piped(service: &ServiceConfig, tty: bool) -> Result<Child> {
+    if service.runtime.shared.is_some() {
+        let args = tenant_client::tenant_client_run_args(service, false, TenantProgram::Client)?;
+        if is_dry_run() {
+            print_docker_command(&args);
+            return dry_run_process();
+        }
+        ensure_tenant_reachable(service)?;
+        return spawn_docker_piped(&args);
+    }
     let container_name = service.container_name()?;
     let client_args = piped_client_args(service)?;
     let args = build_client_exec_args(&container_name, &client_env(service), &client_args, tty);

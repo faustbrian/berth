@@ -23,6 +23,9 @@ pub(super) fn dispatch_primary(
     config: &mut Config,
     context: &CliDispatchContext<'_>,
 ) -> Option<Result<()>> {
+    // `--wait-timeout` also caps the waits on the way to readiness (shared
+    // servers, the gateway, object stores); without it nothing has a deadline.
+    crate::wait::set_cap(wait_cap(&cli.command));
     match &cli.command {
         Commands::Init | Commands::Completions(_) => Some(Ok(())),
         Commands::Config(args) => Some(match args.command {
@@ -69,6 +72,20 @@ pub(super) fn dispatch_primary(
             context.project_root(),
         )),
         _ => dispatch_operation_commands(cli, config, context),
+    }
+}
+
+/// The `--wait-timeout` (or `setup --timeout`) a lifecycle command was given.
+fn wait_cap(command: &Commands) -> Option<u64> {
+    match command {
+        Commands::Up(args) => args.wait_timeout,
+        Commands::Start(args) => args.wait_timeout,
+        Commands::Update(args) => args.wait_timeout,
+        Commands::Recreate(args) => args.wait_timeout,
+        Commands::Restart(args) => args.wait_timeout,
+        Commands::Relabel(args) => args.wait_timeout,
+        Commands::Setup(args) => args.timeout,
+        _ => None,
     }
 }
 

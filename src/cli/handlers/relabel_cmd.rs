@@ -23,7 +23,7 @@ pub(crate) struct HandleRelabelOptions<'a> {
     pub(crate) kind: Option<config::Kind>,
     pub(crate) profile: Option<&'a str>,
     pub(crate) wait: bool,
-    pub(crate) wait_timeout: u64,
+    pub(crate) wait_timeout: Option<u64>,
     pub(crate) parallel: usize,
     pub(crate) config_path: Option<&'a Path>,
     pub(crate) project_root: Option<&'a Path>,
@@ -95,7 +95,7 @@ fn apply_relabel(
     status: &str,
     start_context: &cli::support::ServiceStartContext<'_>,
     wait: bool,
-    wait_timeout: u64,
+    wait_timeout: Option<u64>,
 ) -> Result<()> {
     output::event(
         &service.name,

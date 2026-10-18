@@ -13,21 +13,23 @@ use std::time::{Duration, Instant};
 use crate::config::ServiceConfig;
 use crate::output::{self, LogLevel, Persistence};
 
-/// One probe may take this long; a cold container's first boot compiles
-/// and caches, which can take several seconds (8.x FI-60 used 15s).
-const PROBE_TIMEOUT: Duration = Duration::from_secs(15);
 /// Pause between probes.
 const PROBE_INTERVAL: Duration = Duration::from_secs(2);
 
 /// Waits until `php artisan about --only=environment` succeeds in the app
-/// container, failing at once when the container stops and otherwise after
-/// `timeout_secs`, with the last probe output. Never restarts the container:
-/// readiness is not liveness (8.x FI-60).
+/// container. It fails at once when the container stops or the probe hits a
+/// PHP fatal error (8.x FI-06: a broken `bootstrap/app.php` never boots), and
+/// otherwise only after an opt-in `timeout_secs`, with the last probe
+/// output: a cold first boot on a loaded machine is slow, not broken. Never
+/// restarts the container: readiness is not liveness (8.x FI-60).
 ///
 /// # Errors
 ///
 /// Returns an error naming the app, the probe and its last output.
-pub(crate) fn wait_until_laravel_boots(service: &ServiceConfig, timeout_secs: u64) -> Result<()> {
+pub(crate) fn wait_until_laravel_boots(
+    service: &ServiceConfig,
+    timeout_secs: Option<u64>,
+) -> Result<()> {
     let container = service.container_name()?;
     if crate::docker::is_dry_run() {
         output::event(
@@ -45,22 +47,35 @@ pub(crate) fn wait_until_laravel_boots(service: &ServiceConfig, timeout_secs: u6
         Persistence::Persistent,
     );
     let started = Instant::now();
-    let deadline = started + Duration::from_secs(timeout_secs);
+    let deadline = timeout_secs.map(|secs| started + Duration::from_secs(secs));
+    let cap = deadline;
+    let mut last = String::new();
     loop {
-        match crate::docker::inspect_status(&container).as_deref() {
-            Some("running") => {}
-            Some(status) => anyhow::bail!(
+        crate::parallel::ensure_no_sibling_failed()?;
+        if cap.is_some_and(|cap| Instant::now() >= cap) {
+            anyhow::bail!(
+                "app service '{}' did not boot within the --wait-timeout{}{}",
+                service.name,
+                timeout_secs
+                    .map(|secs| format!(" of {secs}s"))
+                    .unwrap_or_default(),
+                last_probe(&last)
+            );
+        }
+        match crate::docker::container_state(&container) {
+            crate::docker::ContainerState::Running | crate::docker::ContainerState::Unknown => {}
+            crate::docker::ContainerState::NotRunning(status) => anyhow::bail!(
                 "app service '{}' stopped while booting (container {container} is {status}); \
                  see `berth logs {}`",
                 service.name,
                 service.name
             ),
-            None => anyhow::bail!(
+            crate::docker::ContainerState::Missing => anyhow::bail!(
                 "app service '{}' has no container {container}",
                 service.name
             ),
         }
-        let last = match probe(&container)? {
+        match probe(&container, cap)? {
             Probe::Booted => {
                 output::event(
                     &service.name,
@@ -70,42 +85,74 @@ pub(crate) fn wait_until_laravel_boots(service: &ServiceConfig, timeout_secs: u6
                 );
                 return Ok(());
             }
-            Probe::Failed(output) => output,
-            Probe::TimedOut => format!("no answer within {}s", PROBE_TIMEOUT.as_secs()),
-        };
-        if Instant::now() + PROBE_INTERVAL >= deadline {
-            anyhow::bail!(
-                "app service '{}' did not boot within {timeout_secs}s: \
-                 `php artisan about --only=environment` failed: {}",
+            // `artisan` ran and failed: the app's code, config or `vendor/`
+            // is broken (a PHP fatal, or an exception Laravel's console
+            // kernel caught and rendered), and probing again gives the same
+            // answer.
+            // A container that stopped during the probe is reported as such,
+            // and while the engine cannot even say whether it runs, the
+            // failure may be the engine's: ask again.
+            Probe::Failed(_)
+                if !matches!(
+                    crate::docker::container_state(&container),
+                    crate::docker::ContainerState::Running
+                ) => {}
+            Probe::Failed(output) => anyhow::bail!(
+                "app service '{}' cannot boot: `php artisan about --only=environment` failed: {}",
                 service.name,
-                tail(&last)
-            );
+                tail(&output)
+            ),
+            // The engine could not run the probe (the container is being
+            // restarted, an overloaded engine): its state decides next.
+            Probe::Unreached(output) => last = output,
+            Probe::CapReached => anyhow::bail!(
+                "app service '{}' did not boot within the --wait-timeout{}{}",
+                service.name,
+                timeout_secs
+                    .map(|secs| format!(" of {secs}s"))
+                    .unwrap_or_default(),
+                last_probe(&last)
+            ),
         }
         std::thread::sleep(PROBE_INTERVAL);
+    }
+}
+
+/// The last probe's output for a capped wait's error, if there was any.
+fn last_probe(output: &str) -> String {
+    if output.trim().is_empty() {
+        String::new()
+    } else {
+        format!("; the last probe said: {}", tail(output))
     }
 }
 
 enum Probe {
     Booted,
     Failed(String),
-    TimedOut,
+    Unreached(String),
+    CapReached,
 }
 
-fn probe(container: &str) -> Result<Probe> {
-    match run_artisan(container, &["about", "--only=environment", "--no-ansi"])? {
+fn probe(container: &str, cap: Option<Instant>) -> Result<Probe> {
+    match run_artisan(
+        container,
+        &["about", "--only=environment", "--no-ansi"],
+        cap,
+    )? {
         // `about` exists since Laravel 9.21; older apps still boot the
         // console kernel (config, providers) for `--version`.
         Probe::Failed(output)
             if output.contains("Command \"about\" is not defined")
                 || output.contains("\"--only\" option does not exist") =>
         {
-            run_artisan(container, &["--version", "--no-ansi"])
+            run_artisan(container, &["--version", "--no-ansi"], cap)
         }
         other => Ok(other),
     }
 }
 
-fn run_artisan(container: &str, args: &[&str]) -> Result<Probe> {
+fn run_artisan(container: &str, args: &[&str], cap: Option<Instant>) -> Result<Probe> {
     let mut child = Command::new(crate::docker::docker_command())
         .args(["exec", container, "php", "artisan"])
         .args(args)
@@ -118,27 +165,30 @@ fn run_artisan(container: &str, args: &[&str]) -> Result<Probe> {
     // deprecation flood would otherwise fill a pipe and block the child.
     let stdout = child.stdout.take().map(drain);
     let stderr = child.stderr.take().map(drain);
-    let started = Instant::now();
+    // No deadline on one probe either: a cold first boot on a loaded
+    // machine takes as long as it takes. Only an opt-in cap ends it.
     let status = loop {
         if let Some(status) = child
             .try_wait()
             .context("failed to wait for the boot probe")?
         {
-            break Some(status);
+            break status;
         }
-        if started.elapsed() >= PROBE_TIMEOUT {
+        if cap.is_some_and(|cap| Instant::now() >= cap) {
             drop(child.kill());
             drop(child.wait());
-            break None;
+            return Ok(Probe::CapReached);
         }
         std::thread::sleep(Duration::from_millis(100));
     };
     let mut text = stdout.map(collect).unwrap_or_default();
     text.push_str(&stderr.map(collect).unwrap_or_default());
-    Ok(match status {
-        Some(status) if status.success() => Probe::Booted,
-        Some(_) => Probe::Failed(text),
-        None => Probe::TimedOut,
+    Ok(if status.success() {
+        Probe::Booted
+    } else if crate::docker::is_engine_exec_failure(&text) {
+        Probe::Unreached(text)
+    } else {
+        Probe::Failed(text)
     })
 }
 

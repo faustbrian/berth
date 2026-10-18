@@ -24,9 +24,10 @@ mod preview;
 /// installation's own (`docker container prune` cannot exclude one label
 /// value).
 pub(super) fn prune(options: PruneOptions<'_>) -> Result<()> {
-    // A dry run writes nothing, so it does not create the installation ID.
+    // A dry run writes nothing, so it reads the installation ID without
+    // creating it; without one, no container is this installation's yet.
     let installation = if is_dry_run() {
-        "<installation-id>".to_owned()
+        crate::home::existing_installation_id()?.unwrap_or_else(|| "<installation-id>".to_owned())
     } else {
         crate::home::installation_id()?
     };

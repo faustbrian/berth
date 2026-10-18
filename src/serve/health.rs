@@ -18,13 +18,18 @@ pub(crate) use framework_boot::wait_until_laravel_boots;
 use observation::HealthProbeObservation;
 use url::health_url_for_target;
 
-/// Polls target health endpoint until success or timeout.
+/// Polls the target's health endpoint until it is healthy.
 ///
 /// Accepts configured status allowlists; otherwise treats any 2xx response as
 /// healthy. Some drivers (for example Gotenberg) also require body validation.
+/// Without `timeout_secs` it waits as long as the container runs and the app
+/// is still starting; it fails at once when the container stops or the app
+/// answers with what waiting cannot change (a 3xx, 4xx or 5xx other than the
+/// 502/503/504 a proxy or a starting server gives, or 408/425/429), unless
+/// the target accepts that status.
 pub(crate) fn wait_until_http_healthy(
     target: &ServiceConfig,
-    timeout_secs: u64,
+    timeout_secs: Option<u64>,
     interval_secs: u64,
     health_path: Option<&str>,
 ) -> Result<()> {
@@ -70,7 +75,21 @@ pub(crate) fn wait_until_http_healthy(
         Persistence::Persistent,
     );
     let started = std::time::Instant::now();
+    let container = target.container_name()?;
     let timeout_details = loop {
+        crate::parallel::ensure_no_sibling_failed()?;
+        match crate::docker::container_state(&container) {
+            crate::docker::ContainerState::Running | crate::docker::ContainerState::Unknown => {}
+            crate::docker::ContainerState::NotRunning(status) => anyhow::bail!(
+                "app service '{}' stopped while starting (container {container} is {status}); \
+                 see `berth logs {}`",
+                target.name,
+                target.name
+            ),
+            crate::docker::ContainerState::Missing => {
+                anyhow::bail!("app service '{}' has no container {container}", target.name)
+            }
+        }
         let result = if in_network {
             crate::gateway::http_probe_output(target, &probe_path)
         } else {
@@ -98,8 +117,22 @@ pub(crate) fn wait_until_http_healthy(
             return Ok(());
         }
 
-        if started.elapsed() >= Duration::from_secs(timeout_secs) {
-            break observation.describe_for_target(target);
+        if observation
+            .status()
+            .is_some_and(|status| is_definitive_failure(status, &accepted_statuses))
+        {
+            anyhow::bail!(
+                "app service '{}' answered {} at {health_url} ({})",
+                target.name,
+                observation.status().unwrap_or_default(),
+                observation.describe_for_target(target)
+            );
+        }
+
+        if let Some(timeout_secs) = timeout_secs
+            && started.elapsed() >= Duration::from_secs(timeout_secs)
+        {
+            break (timeout_secs, observation.describe_for_target(target));
         }
 
         thread::sleep(Duration::from_secs(interval_secs));
@@ -109,9 +142,19 @@ pub(crate) fn wait_until_http_healthy(
         "app service '{}' did not become healthy at {} within {}s ({})",
         target.name,
         health_url,
-        timeout_secs,
-        timeout_details
+        timeout_details.0,
+        timeout_details.1
     );
+}
+
+/// An answer a running app keeps giving: a redirect (to a login page), a
+/// client error (a missing health route, an auth wall) or a server error.
+/// 502, 503 and 504 come from a proxy or a server still starting, and 408,
+/// 425 and 429 ask to come back later, so only those are worth waiting out.
+fn is_definitive_failure(status: u16, accepted_statuses: &HashSet<u16>) -> bool {
+    (300..=599).contains(&status)
+        && !matches!(status, 502..=504 | 408 | 425 | 429)
+        && !accepted_statuses.contains(&status)
 }
 
 #[cfg(test)]
@@ -169,6 +212,18 @@ mod tests {
         }
     }
 
+    /// A `docker` whose `inspect` reports the app container in `status`.
+    fn fake_docker(bin_dir: &std::path::Path, status: &str) -> String {
+        let docker = bin_dir.join("docker");
+        fs::write(&docker, format!("#!/bin/sh\necho {status}\n")).expect("write fake docker");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&docker, fs::Permissions::from_mode(0o755)).expect("chmod");
+        }
+        docker.to_string_lossy().to_string()
+    }
+
     fn with_fake_curl<F, T>(output: &str, test: F) -> T
     where
         F: FnOnce() -> T,
@@ -194,7 +249,10 @@ mod tests {
         }
 
         let command = curl.to_string_lossy().to_string();
-        let result = crate::docker::with_dry_run_state(false, || with_curl_command(&command, test));
+        let docker = fake_docker(&bin_dir, "running");
+        let result = crate::docker::with_dry_run_state(false, || {
+            crate::docker::with_docker_command(&docker, || with_curl_command(&command, test))
+        });
         fs::remove_dir_all(&bin_dir).ok();
         result
     }
@@ -224,7 +282,10 @@ mod tests {
         }
 
         let command = curl.to_string_lossy().to_string();
-        let result = crate::docker::with_dry_run_state(false, || with_curl_command(&command, test));
+        let docker = fake_docker(&bin_dir, "running");
+        let result = crate::docker::with_dry_run_state(false, || {
+            crate::docker::with_docker_command(&docker, || with_curl_command(&command, test))
+        });
         fs::remove_dir_all(&bin_dir).ok();
         result
     }
@@ -232,7 +293,7 @@ mod tests {
     #[test]
     fn wait_until_http_healthy_succeeds_on_healthy_code() {
         with_fake_curl("body\n200", || {
-            wait_until_http_healthy(&make_target(Driver::Frankenphp), 1, 1, Some("/up"))
+            wait_until_http_healthy(&make_target(Driver::Frankenphp), None, 1, Some("/up"))
                 .expect("healthy");
         });
     }
@@ -243,25 +304,81 @@ mod tests {
         target.health_statuses = Some(vec![302]);
 
         with_fake_curl("body\n302", || {
-            wait_until_http_healthy(&target, 1, 1, Some("/up")).expect("allowed status accepted");
+            wait_until_http_healthy(&target, None, 1, Some("/up"))
+                .expect("allowed status accepted");
         });
     }
 
     #[test]
-    fn wait_until_http_healthy_times_out_when_unhealthy() {
-        with_fake_curl("body\n500", || {
+    fn a_server_error_fails_the_wait_at_once_without_a_cap() {
+        with_fake_curl("Server Error\n500", || {
             let error =
-                wait_until_http_healthy(&make_target(Driver::Frankenphp), 0, 1, Some("/up"))
-                    .expect_err("timeout expected");
-            assert!(error.to_string().contains("did not become healthy"));
+                wait_until_http_healthy(&make_target(Driver::Frankenphp), None, 1, Some("/up"))
+                    .expect_err("a 500 is not worth waiting out");
+            assert!(error.to_string().contains("answered 500"), "{error}");
         });
+    }
+
+    #[test]
+    fn a_missing_health_route_fails_the_wait_at_once_without_a_cap() {
+        with_fake_curl("Not Found\n404", || {
+            let error =
+                wait_until_http_healthy(&make_target(Driver::Frankenphp), None, 1, Some("/up"))
+                    .expect_err("a 404 never turns into a 2xx");
+            assert!(error.to_string().contains("answered 404"), "{error}");
+        });
+    }
+
+    #[test]
+    fn a_redirect_fails_the_wait_at_once_unless_accepted() {
+        with_fake_curl("Redirecting to /login\n302", || {
+            let error =
+                wait_until_http_healthy(&make_target(Driver::Frankenphp), None, 1, Some("/"))
+                    .expect_err("a redirect never turns into a 2xx");
+            assert!(error.to_string().contains("answered 302"), "{error}");
+        });
+    }
+
+    #[test]
+    fn a_starting_app_is_waited_out_without_a_cap() {
+        let counter = crate::docker::unique_test_path(
+            crate::test_support::temp_root().join("serve-health-starting"),
+        );
+        let script = format!(
+            "n=$(cat '{c}' 2>/dev/null || echo 0); n=$((n + 1)); echo $n > '{c}'\n\
+             if [ $n -le 2 ]; then printf 'starting\\n503'; else printf 'ok\\n200'; fi",
+            c = counter.display()
+        );
+        with_fake_curl_script(&script, || {
+            wait_until_http_healthy(&make_target(Driver::Frankenphp), None, 1, Some("/up"))
+                .expect("a 503 is waited out until the app answers");
+        });
+    }
+
+    #[test]
+    fn a_stopped_container_fails_the_wait_at_once_without_a_cap() {
+        let bin_dir = crate::docker::unique_test_path(
+            crate::test_support::temp_root().join("serve-health-stopped"),
+        );
+        fs::create_dir_all(&bin_dir).expect("temp dir");
+        let docker = fake_docker(&bin_dir, "exited");
+        let error = crate::docker::with_dry_run_state(false, || {
+            crate::docker::with_docker_command(&docker, || {
+                wait_until_http_healthy(&make_target(Driver::Frankenphp), None, 1, Some("/up"))
+            })
+        })
+        .expect_err("a stopped container never becomes healthy");
+        assert!(
+            error.to_string().contains("stopped while starting"),
+            "{error}"
+        );
     }
 
     #[test]
     fn wait_until_http_healthy_reports_last_unhealthy_response_on_timeout() {
         with_fake_curl("bad gateway\n502", || {
             let error =
-                wait_until_http_healthy(&make_target(Driver::Frankenphp), 0, 1, Some("/up"))
+                wait_until_http_healthy(&make_target(Driver::Frankenphp), Some(0), 1, Some("/up"))
                     .expect_err("timeout expected");
             let message = error.to_string();
             assert!(message.contains("did not become healthy"));
@@ -275,7 +392,7 @@ mod tests {
         let mut target = make_target(Driver::Gotenberg);
         target.health_path = Some("/health/ready".to_owned());
         with_fake_curl("status\":\"down\n200", || {
-            let error = wait_until_http_healthy(&target, 0, 1, Some("/health/ready"))
+            let error = wait_until_http_healthy(&target, Some(0), 1, Some("/health/ready"))
                 .expect_err("gotenberg body rejected");
             assert!(error.to_string().contains("did not become healthy"));
         });
@@ -296,7 +413,7 @@ done
 printf '{"status":"up"}\n200'
 "#,
             || {
-                wait_until_http_healthy(&target, 1, 1, Some("/health"))
+                wait_until_http_healthy(&target, None, 1, Some("/health"))
                     .expect("gotenberg body should be available");
             },
         );

@@ -4,7 +4,6 @@
 use anyhow::Result;
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
 
 use crate::config::ServiceConfig;
 
@@ -194,7 +193,7 @@ fn prepare_gateway(service: &ServiceConfig) -> Result<(String, String)> {
         }
     } else if !known {
         let dirs = GatewayDirs::ensure()?;
-        let _lock = crate::home::HostLock::acquire("gateway", Duration::from_secs(180))?;
+        let _lock = crate::home::HostLock::acquire("gateway")?;
         let ports = GatewayPorts::current()?;
         super::publish::start_gateway(&installation, ports, &dirs)?;
         super::publish::attach_for_probes(&gateway, &network)?;

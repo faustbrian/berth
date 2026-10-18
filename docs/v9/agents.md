@@ -16,7 +16,7 @@ berth artisan --no-tty --non-interactive test --parallel
 berth down --purge                              # containers, databases, volumes, credentials
 ```
 
-Thirty agents can run this at once in thirty worktrees of one project: each
+A dozen agents can run this at once in a dozen worktrees of one project: each
 checkout is its own instance, with its own containers, network, tenants and
 route, and nothing is configured per agent.
 
@@ -52,7 +52,15 @@ different value fails. Port 443 is left out of URLs.
 stdout holds exactly one JSON document; progress, hook output and pulls go
 to stderr. With `--wait` (the default) `up` returns after every selected
 service accepts connections and a Laravel app has booted (`php artisan
-about`); `--wait-timeout` (default 120 s) bounds it.
+about`). There is no deadline: how long a start takes depends on how loaded
+the machine is, so `up` waits as long as each container runs and fails at
+once on a real error (a container that stops, `artisan about` failing, an
+HTTP 3xx, 4xx or 5xx other than 408/425/429 and 502/503/504, or a status
+`health_statuses` accepts). `--wait-timeout N` gives each readiness wait (a
+service, a shared server, the gateway) at most N seconds from when it starts,
+when a caller wants a cap.
+A wait for a lock another berth process holds blocks until it is free, and
+says so on stderr.
 
 ```json
 {

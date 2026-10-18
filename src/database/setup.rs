@@ -28,7 +28,7 @@ pub(super) fn ensure_sql_dump_service(service: &ServiceConfig) -> Result<()> {
     )
 }
 
-pub(crate) fn setup(service: &ServiceConfig, timeout: u64) -> Result<()> {
+pub(crate) fn setup(service: &ServiceConfig, timeout: Option<u64>) -> Result<()> {
     crate::docker::up(service, PullPolicy::Missing, false)
         .context("Failed to start service container")?;
 
@@ -133,7 +133,7 @@ mod tests {
     fn setup_uses_dry_run_path_without_create_database_for_non_dump_services() {
         let service = service(Driver::Redis);
         crate::docker::with_dry_run_lock(|| {
-            setup(&service, 10).expect("setup should succeed in dry-run");
+            setup(&service, Some(10)).expect("setup should succeed in dry-run");
         });
     }
 
@@ -141,7 +141,7 @@ mod tests {
     fn setup_uses_dry_run_path_and_skips_create_database_for_dump_backends() {
         let service = service(Driver::Mysql);
         crate::docker::with_dry_run_lock(|| {
-            setup(&service, 10).expect("setup should succeed in dry-run");
+            setup(&service, Some(10)).expect("setup should succeed in dry-run");
         });
     }
 }

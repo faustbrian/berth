@@ -47,7 +47,7 @@ pub(crate) fn handle_health(
     crate::cli::support::run_selected_services(&selected, options.parallel, move |service| {
         let status = match docker::wait_until_healthy(
             service,
-            options.timeout,
+            Some(options.timeout),
             options.interval,
             options.retries,
         ) {

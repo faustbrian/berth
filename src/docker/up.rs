@@ -57,7 +57,7 @@ pub fn up(service: &ServiceConfig, pull: PullPolicy, recreate: bool) -> Result<(
 
 fn ensure_object_store_bucket_ready(service: &ServiceConfig) -> Result<()> {
     if service.kind == Kind::ObjectStore {
-        super::wait_until_healthy(service, 30, 2, None)?;
+        super::wait_until_healthy(service, crate::wait::cap_secs(), 2, None)?;
     }
     object_store_bucket::ensure_bucket_exists(service)
 }

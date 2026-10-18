@@ -4,8 +4,6 @@ use anyhow::Result;
 
 use crate::{cli, config, docker};
 
-const TEST_HEALTH_TIMEOUT_SECS: u64 = 60;
-
 pub(super) fn resolve_testing_startup_services<'a>(
     config: &'a config::Config,
     selected_service: Option<&'a str>,
@@ -66,7 +64,7 @@ where
             false,
             docker::PullPolicy::Missing,
             wait_healthy,
-            TEST_HEALTH_TIMEOUT_SECS,
+            None,
             true,
         )?;
     }

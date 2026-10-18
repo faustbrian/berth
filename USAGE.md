@@ -465,7 +465,7 @@ Options:
   - `object-store`: S3-compatible object storage
   - `search`: Search engines
   - `app`: Application runtimes (web apps, workers, tooling)
-- `--timeout <TIMEOUT>`: [default: 30]
+- `--timeout <TIMEOUT>`: Optional cap in seconds on the readiness wait; without it berth waits as long as the database container is alive
 - `--parallel <PARALLEL>`: [default: 4]
 
 ### `berth start`
@@ -488,7 +488,7 @@ Options:
 - `--profile <PROFILE>`: Start a named service profile (full, infra, data, app, web, api)
 - `--no-wait`: Skip health waits during startup (default behavior for `start`)
 - `--wait`: Wait for service(s) to accept connections
-- `--wait-timeout <WAIT_TIMEOUT>`: Timeout in seconds for readiness checks [default: 30]
+- `--wait-timeout <WAIT_TIMEOUT>`: Optional cap in seconds on readiness waits. Without it berth waits as long as the service is alive and fails only on a real error (the container stops, the framework hits a fatal error)
 - `--pull <PULL>`: Pull image before start [default: missing] [possible values: always, missing, never]
 - `--force-recreate`: Recreate containers even if their configuration and image haven't changed
 - `--no-open`: Disable automatic browser launch + URL summary
@@ -518,7 +518,7 @@ Options:
 - `--profile <PROFILE>`: Start a named service profile (full, infra, data, app, web, api)
 - `--wait`: Wait for service(s) to accept connections (enabled by default for `up`)
 - `--no-wait`: Skip health waits during startup
-- `--wait-timeout <WAIT_TIMEOUT>`: Timeout in seconds for --wait. A cold start of many parallel instances (image pulls, first framework boot) needs more than 30s [default: 120]
+- `--wait-timeout <WAIT_TIMEOUT>`: Optional cap in seconds on readiness waits. Without it berth waits as long as the service is alive and fails only on a real error (the container stops, the framework hits a fatal error)
 - `--json`: Print one JSON document on stdout: URLs, per-service status, credentials and the managed environment (or the error on failure)
 - `--pull <PULL>`: Pull image before start [default: missing] [possible values: always, missing, never]
 - `--force-recreate`: Recreate containers even if their configuration and image haven't changed
@@ -563,7 +563,7 @@ Options:
 - `--force-recreate`
 - `--no-build`: Do not build images before starting containers
 - `--wait`
-- `--wait-timeout <WAIT_TIMEOUT>`: [default: 30]
+- `--wait-timeout <WAIT_TIMEOUT>`: Optional cap in seconds on readiness waits. Without it berth waits as long as the service is alive and fails only on a real error (the container stops, the framework hits a fatal error)
 
 ### `berth down`
 
@@ -651,7 +651,7 @@ Options:
 - `--profile <PROFILE>`: Recreate a named service profile (full, infra, data, app, web, api)
 - `--wait`: Wait for service(s) to accept connections after recreating (enabled by default)
 - `--no-wait`: Skip health waits during recreate
-- `--wait-timeout <WAIT_TIMEOUT>`: Timeout in seconds for --wait [default: 30]
+- `--wait-timeout <WAIT_TIMEOUT>`: Optional cap in seconds on readiness waits. Without it berth waits as long as the service is alive and fails only on a real error (the container stops, the framework hits a fatal error)
 - `-P, --publish-all`: Publish all exposed ports to random host ports after start
 - `--no-deps`: Skip recreating workspace swarm dependencies
 - `--env-output`: Write inferred service vars to local `.env`
@@ -676,7 +676,7 @@ Options:
   - `app`: Application runtimes (web apps, workers, tooling)
 - `--profile <PROFILE>`: Restart a named service profile (full, infra, data, app, web, api)
 - `--wait`
-- `--wait-timeout <WAIT_TIMEOUT>`: [default: 30]
+- `--wait-timeout <WAIT_TIMEOUT>`: Optional cap in seconds on readiness waits. Without it berth waits as long as the service is alive and fails only on a real error (the container stops, the framework hits a fatal error)
 - `--parallel <PARALLEL>`: [default: 4]
 
 ### `berth relabel`
@@ -698,7 +698,7 @@ Options:
   - `app`: Application runtimes (web apps, workers, tooling)
 - `--profile <PROFILE>`: Relabel a named service profile (full, infra, data, app, web, api)
 - `--wait`: Wait for service(s) to accept connections after relabeling
-- `--wait-timeout <WAIT_TIMEOUT>`: Timeout in seconds for --wait [default: 30]
+- `--wait-timeout <WAIT_TIMEOUT>`: Optional cap in seconds on readiness waits. Without it berth waits as long as the service is alive and fails only on a real error (the container stops, the framework hits a fatal error)
 - `--parallel <PARALLEL>`: [default: 4]
 
 ### `berth url`

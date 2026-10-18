@@ -12,6 +12,9 @@ use super::common::{run_mysql_exec, run_postgres_exec, sql_context};
 /// Executes dump command for the selected database service.
 pub(super) fn run_dump_command(service: &ServiceConfig) -> Result<std::process::Output> {
     ensure_sql_dump_service(service)?;
+    if service.runtime.shared.is_some() {
+        return crate::docker::run_tenant_dump(service);
+    }
 
     let ctx = sql_context(service)?;
 

@@ -15,11 +15,6 @@ pub(crate) const ROUTE_PORT_LABEL: &str = "dev.berth.route.port";
 /// Label carrying the container's instance network.
 pub(crate) const NETWORK_LABEL: &str = "dev.berth.network";
 
-/// How long a berth process waits for another one to finish publishing.
-const PUBLISH_LOCK_TIMEOUT: Duration = Duration::from_secs(180);
-/// How long a freshly started gateway may take to accept its admin API.
-const START_TIMEOUT: Duration = Duration::from_secs(20);
-
 /// A routed container as its labels describe it.
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct LabeledRoute {
@@ -75,7 +70,7 @@ pub(crate) fn publish_routes(mode: PublishMode<'_>) -> Result<()> {
     }
     let installation = crate::home::installation_id()?;
     let dirs = GatewayDirs::ensure()?;
-    let _lock = crate::home::HostLock::acquire("gateway", PUBLISH_LOCK_TIMEOUT)?;
+    let _lock = crate::home::HostLock::acquire("gateway")?;
     // Read under the lock, so a concurrent first run's record is seen.
     let ports = GatewayPorts::current()?;
 
@@ -452,7 +447,7 @@ pub(crate) fn is_attached(network: &str) -> Result<bool> {
 ///
 /// Returns an error when Docker fails.
 pub(crate) fn remove_gateway_if_unused() -> Result<std::result::Result<String, String>> {
-    let _lock = crate::home::HostLock::acquire("gateway", PUBLISH_LOCK_TIMEOUT)?;
+    let _lock = crate::home::HostLock::acquire("gateway")?;
     let gateway = gateway_container_name(&crate::home::installation_id()?);
     if !super::container::exists(&gateway)? {
         return Ok(Err("no gateway exists".to_owned()));
@@ -564,9 +559,13 @@ fn reload(gateway: &str, config: &str) -> Result<()> {
     Ok(())
 }
 
+/// Waits until the gateway's admin API answers, as long as the gateway
+/// runs: a slow start on a loaded machine is not a failure, a stopped
+/// gateway is.
 fn wait_until_admin_ready(gateway: &str) -> Result<()> {
-    let started = std::time::Instant::now();
+    let deadline = crate::wait::Deadline::start();
     loop {
+        crate::parallel::ensure_no_sibling_failed()?;
         let output = crate::docker::run_docker_output_owned(
             &[
                 "exec".to_owned(),
@@ -584,11 +583,16 @@ fn wait_until_admin_ready(gateway: &str) -> Result<()> {
         if output.status.success() {
             return Ok(());
         }
-        if started.elapsed() >= START_TIMEOUT {
-            anyhow::bail!(
-                "the berth gateway did not start within {}s; see `docker logs {gateway}`",
-                START_TIMEOUT.as_secs()
-            );
+        deadline.ensure("the berth gateway")?;
+        match crate::docker::container_state(gateway) {
+            crate::docker::ContainerState::Running | crate::docker::ContainerState::Unknown => {}
+            crate::docker::ContainerState::NotRunning(status) => anyhow::bail!(
+                "the berth gateway stopped while starting (it is {status}); see `docker logs \
+                 {gateway}`"
+            ),
+            crate::docker::ContainerState::Missing => {
+                anyhow::bail!("the berth gateway container {gateway} does not exist")
+            }
         }
         std::thread::sleep(Duration::from_millis(250));
     }

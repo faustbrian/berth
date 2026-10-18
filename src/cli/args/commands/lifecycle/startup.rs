@@ -14,8 +14,10 @@ pub(crate) struct SetupArgs {
     pub(crate) service: Option<String>,
     #[arg(long, value_enum)]
     pub(crate) kind: Option<config::Kind>,
-    #[arg(long, default_value_t = 30)]
-    pub(crate) timeout: u64,
+    /// Optional cap in seconds on the readiness wait; without it berth waits
+    /// as long as the database container is alive.
+    #[arg(long)]
+    pub(crate) timeout: Option<u64>,
     #[arg(long, default_value_t = default_parallelism())]
     pub(crate) parallel: usize,
 }
@@ -45,9 +47,11 @@ pub(crate) struct StartArgs {
     /// Wait for service(s) to accept connections
     #[arg(long, default_value_t = false)]
     pub(crate) wait: bool,
-    /// Timeout in seconds for readiness checks
-    #[arg(long, default_value_t = 30)]
-    pub(crate) wait_timeout: u64,
+    /// Optional cap in seconds on readiness waits. Without it berth waits
+    /// as long as the service is alive and fails only on a real error (the
+    /// container stops, the framework hits a fatal error).
+    #[arg(long)]
+    pub(crate) wait_timeout: Option<u64>,
     /// Pull image before start
     #[arg(long, value_enum, default_value_t = PullPolicyArg::Missing)]
     pub(crate) pull: PullPolicyArg,
@@ -112,10 +116,11 @@ pub(crate) struct UpArgs {
     /// Skip health waits during startup
     #[arg(long, default_value_t = false, conflicts_with = "wait")]
     pub(crate) no_wait: bool,
-    /// Timeout in seconds for --wait. A cold start of many parallel
-    /// instances (image pulls, first framework boot) needs more than 30s.
-    #[arg(long, default_value_t = 120)]
-    pub(crate) wait_timeout: u64,
+    /// Optional cap in seconds on readiness waits. Without it berth waits
+    /// as long as the service is alive and fails only on a real error (the
+    /// container stops, the framework hits a fatal error).
+    #[arg(long)]
+    pub(crate) wait_timeout: Option<u64>,
     /// Print one JSON document on stdout: URLs, per-service status,
     /// credentials and the managed environment (or the error on failure)
     #[arg(long, default_value_t = false)]
@@ -193,8 +198,11 @@ pub(crate) struct UpdateArgs {
     pub(crate) no_build: bool,
     #[arg(long, default_value_t = false)]
     pub(crate) wait: bool,
-    #[arg(long, default_value_t = 30)]
-    pub(crate) wait_timeout: u64,
+    /// Optional cap in seconds on readiness waits. Without it berth waits
+    /// as long as the service is alive and fails only on a real error (the
+    /// container stops, the framework hits a fatal error).
+    #[arg(long)]
+    pub(crate) wait_timeout: Option<u64>,
 }
 
 impl UpdateArgs {

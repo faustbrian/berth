@@ -3,6 +3,7 @@
 
 mod acl_seed_script;
 mod assign;
+mod best_effort;
 mod engine;
 mod gc;
 mod lifecycle;
@@ -15,6 +16,7 @@ mod server;
 mod server_network;
 
 pub(crate) use assign::assign_shared_target;
+pub(crate) use best_effort::best_effort;
 pub(crate) use gc::collect_servers;
 pub(crate) use lifecycle::{
     detach, drop_instance_tenants, drop_tenant, refuse_server_operation, status, up,

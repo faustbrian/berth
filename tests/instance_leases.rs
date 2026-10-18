@@ -69,6 +69,8 @@ case "$1" in
       done
       [ $keep = 1 ] || continue
       case "$*" in
+        *'.Label "dev.berth.installation"'*)
+          printf '%s\t%s\n' "$(basename "$f")" "$(grep '^dev.berth.installation=' "$f" | cut -d= -f2-)" ;;
         *'.Label "dev.berth.project"'*)
           get() { grep "^$1=" "$f" | cut -d= -f2-; }
           printf '%s\t%s\t%s\trunning\t%s\n' "$(get dev.berth.project)" "$(get dev.berth.instance)" "$(get dev.berth.root)" "$(basename "$f")" ;;
@@ -1211,6 +1213,59 @@ fn a_dead_slots_containers_go_even_when_its_lock_file_is_gone() {
         !host.containers().contains(&name),
         "{:?}",
         host.containers()
+    );
+}
+
+#[test]
+fn prune_all_dry_run_previews_this_installations_own_stopped_containers() {
+    let host = Host::new("prune-preview");
+    let a = host.checkout("a");
+    assert!(host.berth(&a, &["up", "--no-wait"]).status.success());
+    let installation = std::fs::read_to_string(host.base.join("home/installation-id"))
+        .expect("installation")
+        .trim()
+        .to_owned();
+    let containers = host.base.join("state/c");
+    std::fs::write(containers.join("unlabeled"), "").expect("seed");
+    std::fs::write(
+        containers.join("this-installations"),
+        format!("dev.berth.installation={installation}\n"),
+    )
+    .expect("seed");
+    std::fs::write(
+        containers.join("foreign"),
+        format!("dev.berth.installation={}\n", "f".repeat(32)),
+    )
+    .expect("seed");
+
+    let preview = host.berth(&a, &["--dry-run", "prune", "--all", "--force"]);
+    assert!(preview.status.success(), "{}", text(&preview.stderr));
+    let output = format!("{}{}", text(&preview.stdout), text(&preview.stderr));
+    assert!(
+        output.contains("this-installations"),
+        "this installation's container: {output}"
+    );
+    assert!(output.contains("unlabeled"), "{output}");
+    assert!(
+        !output.contains("foreign"),
+        "another installation's: {output}"
+    );
+    assert!(
+        output.contains(&format!("label=dev.berth.installation={installation}")),
+        "the printed prune names this installation: {output}"
+    );
+    assert!(!output.contains("<installation-id>"), "{output}");
+}
+
+#[test]
+fn prune_all_dry_run_on_a_fresh_home_creates_no_installation_id() {
+    let host = Host::new("prune-fresh");
+    let a = host.checkout("a");
+    let preview = host.berth(&a, &["--dry-run", "prune", "--all", "--force"]);
+    assert!(preview.status.success(), "{}", text(&preview.stderr));
+    assert!(
+        !host.base.join("home/installation-id").exists(),
+        "a dry run writes nothing, not even the installation ID"
     );
 }
 

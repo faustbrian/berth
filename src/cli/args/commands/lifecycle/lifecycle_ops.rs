@@ -134,9 +134,11 @@ pub(crate) struct RecreateArgs {
     /// Skip health waits during recreate
     #[arg(long, default_value_t = false, conflicts_with = "wait")]
     pub(crate) no_wait: bool,
-    /// Timeout in seconds for --wait
-    #[arg(long, default_value_t = 30)]
-    pub(crate) wait_timeout: u64,
+    /// Optional cap in seconds on readiness waits. Without it berth waits
+    /// as long as the service is alive and fails only on a real error (the
+    /// container stops, the framework hits a fatal error).
+    #[arg(long)]
+    pub(crate) wait_timeout: Option<u64>,
     /// Publish all exposed ports to random host ports after start
     #[arg(long, short = 'P', default_value_t = false)]
     pub(crate) publish_all: bool,
@@ -183,8 +185,11 @@ pub(crate) struct RestartArgs {
     pub(crate) profile: Option<String>,
     #[arg(long, default_value_t = false)]
     pub(crate) wait: bool,
-    #[arg(long, default_value_t = 30)]
-    pub(crate) wait_timeout: u64,
+    /// Optional cap in seconds on readiness waits. Without it berth waits
+    /// as long as the service is alive and fails only on a real error (the
+    /// container stops, the framework hits a fatal error).
+    #[arg(long)]
+    pub(crate) wait_timeout: Option<u64>,
     #[arg(long, default_value_t = default_parallelism())]
     pub(crate) parallel: usize,
 }
@@ -219,9 +224,11 @@ pub(crate) struct RelabelArgs {
     /// Wait for service(s) to accept connections after relabeling
     #[arg(long, default_value_t = false)]
     pub(crate) wait: bool,
-    /// Timeout in seconds for --wait
-    #[arg(long, default_value_t = 30)]
-    pub(crate) wait_timeout: u64,
+    /// Optional cap in seconds on readiness waits. Without it berth waits
+    /// as long as the service is alive and fails only on a real error (the
+    /// container stops, the framework hits a fatal error).
+    #[arg(long)]
+    pub(crate) wait_timeout: Option<u64>,
     #[arg(long, default_value_t = default_parallelism())]
     pub(crate) parallel: usize,
 }
@@ -302,7 +309,7 @@ mod tests {
             profile: None,
             wait: true,
             no_wait: false,
-            wait_timeout: 5,
+            wait_timeout: Some(5),
             publish_all: false,
             no_deps: false,
             env_output: true,
@@ -310,14 +317,14 @@ mod tests {
         };
         assert_eq!(recreate.service(), Some("db"));
         assert!(recreate.should_wait());
-        assert_eq!(recreate.wait_timeout, 5);
+        assert_eq!(recreate.wait_timeout, Some(5));
 
         let restart = RestartArgs {
             service: vec!["redis".to_owned()],
             kind: Some(Kind::Cache),
             profile: None,
             wait: false,
-            wait_timeout: 10,
+            wait_timeout: Some(10),
             parallel: 4,
         };
         assert_eq!(restart.service(), Some("redis"));
@@ -327,7 +334,7 @@ mod tests {
             kind: None,
             profile: None,
             wait: false,
-            wait_timeout: 1,
+            wait_timeout: Some(1),
             parallel: 4,
         };
         assert_eq!(relabel.kind(), None);

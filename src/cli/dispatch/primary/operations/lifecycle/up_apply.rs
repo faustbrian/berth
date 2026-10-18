@@ -46,7 +46,7 @@ pub(super) fn dispatch(
                 profile: None,
                 wait: true,
                 no_wait: false,
-                wait_timeout: 120,
+                wait_timeout: None,
                 pull: crate::cli::args::PullPolicyArg::Missing,
                 force_recreate: false,
                 publish_all: false,

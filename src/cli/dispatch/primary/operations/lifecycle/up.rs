@@ -18,7 +18,7 @@ pub(super) struct DispatchUpOptions<'a> {
     pub(super) profile: Option<&'a str>,
     pub(super) wait: bool,
     pub(super) no_wait: bool,
-    pub(super) wait_timeout: u64,
+    pub(super) wait_timeout: Option<u64>,
     pub(super) pull: PullPolicyArg,
     pub(super) force_recreate: bool,
     pub(super) publish_all: bool,

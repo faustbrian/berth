@@ -14,7 +14,7 @@ pub(super) struct StartFlowOptions<'a> {
     pub(super) profile: Option<&'a str>,
     pub(super) wait: bool,
     pub(super) no_wait: bool,
-    pub(super) wait_timeout: u64,
+    pub(super) wait_timeout: Option<u64>,
     pub(super) pull_policy: docker::PullPolicy,
     pub(super) force_recreate: bool,
     pub(super) include_project_deps: bool,

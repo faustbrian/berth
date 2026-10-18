@@ -62,7 +62,7 @@ fn service_is_healthy(
     interval_secs: u64,
     retries: Option<u32>,
 ) -> bool {
-    docker::wait_until_healthy(service, timeout_secs, interval_secs, retries).is_ok()
+    docker::wait_until_healthy(service, Some(timeout_secs), interval_secs, retries).is_ok()
 }
 
 fn restart_then_wait(service: &config::ServiceConfig) -> bool {

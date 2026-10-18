@@ -31,7 +31,7 @@ pub(crate) struct HandleUpOptions<'a> {
     pub(crate) profile: Option<&'a str>,
     pub(crate) wait: bool,
     pub(crate) no_wait: bool,
-    pub(crate) wait_timeout: u64,
+    pub(crate) wait_timeout: Option<u64>,
     pub(crate) pull_policy: docker::PullPolicy,
     pub(crate) force_recreate: bool,
     pub(crate) publish_all: bool,

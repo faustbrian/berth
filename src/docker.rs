@@ -254,6 +254,7 @@ pub(crate) fn docker_command() -> String {
     active_engine_adapter().command_binary().to_owned()
 }
 
+mod engine_exec_failure;
 mod instance_purge;
 pub(crate) use instance_purge::purge_instance_objects;
 mod volume_targets;
@@ -305,7 +306,8 @@ pub(crate) use cmd::{
     spawn_docker_stdin_stdout_stderr_piped, spawn_docker_stdout_stderr_piped,
 };
 pub(crate) use engine::RuntimeDiagnosticCheck;
-pub(crate) use exec::build_exec_args;
+pub(crate) use engine_exec_failure::is_engine_exec_failure;
+pub(crate) use exec::{build_exec_args, run_tenant_dump};
 pub use exec::{
     exec_command, exec_command_to_stderr, exec_interactive, exec_piped, exec_tenant_client,
 };
@@ -313,6 +315,7 @@ pub(crate) use failure_message::command_failed_in_container;
 pub use health::wait_until_healthy;
 pub(crate) use image_inspect::{docker_image_exists, docker_image_repo_digest};
 pub(crate) use image_pull::docker_pull;
+pub(crate) use inspect::{ContainerState, container_state};
 pub use inspect::{
     inspect_host_port_binding, inspect_json, inspect_label, inspect_service_status, inspect_status,
 };

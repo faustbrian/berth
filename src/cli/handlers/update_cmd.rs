@@ -15,7 +15,7 @@ pub(crate) struct HandleUpdateOptions<'a> {
     pub(crate) force_recreate: bool,
     pub(crate) no_build: bool,
     pub(crate) wait: bool,
-    pub(crate) wait_timeout: u64,
+    pub(crate) wait_timeout: Option<u64>,
     pub(crate) config_path: Option<&'a Path>,
     pub(crate) project_root: Option<&'a Path>,
 }
@@ -50,7 +50,7 @@ fn update_service(
     start_context: &cli::support::ServiceStartContext<'_>,
     recreate: bool,
     wait_healthy: bool,
-    health_timeout_secs: u64,
+    health_timeout_secs: Option<u64>,
     build: bool,
 ) -> Result<()> {
     output::event(

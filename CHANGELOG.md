@@ -24,6 +24,34 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- Nothing fails because it took long: a wait for a lock another berth
+  process holds (the gateway, a shared server, network allocation, reaping,
+  a lease, a derived-image build, an engine-operation or test slot) blocks
+  until the lock is free and says so on stderr, and readiness waits (`up`,
+  `start`, `update`, `apply`, `recreate`, `restart`, `relabel`, `setup`,
+  `artisan test`, shared servers, the gateway, object stores) have no default
+  deadline. They fail at once on a real error instead: a container that
+  stops, `artisan about` failing (a PHP fatal, or an exception Laravel
+  rendered), an HTTP 3xx, 4xx or 5xx other than 408/425/429 and
+  502/503/504, a permanent PostgreSQL connection error, a rejected admin
+  password. `--wait-timeout` (and `setup --timeout`) is now an optional cap
+  that gives each readiness wait its own N seconds from when it starts; it
+  used to default to 120 s for `up` and 30 s elsewhere, which failed
+  healthy starts on a loaded machine. In a parallel `up`, one service's
+  failure ends the other services' waits. Reaping another instance in
+  passing skips a shared server that is busy or not answering yet instead
+  of waiting for it; the next pass or `berth gc` retries.
+- `berth restore` and `berth dump` of a shared server's tenant run the
+  client and the dump program in a throwaway container on the instance
+  network, as the tenant over TCP, instead of inside the shared server: run
+  there, a dump's `\connect` to the trusted local socket or its shell escape
+  reached every instance's data.
+- The engine-operation and derived-image locks are `flock`s, released when
+  their holder dies, instead of lock files a crashed berth could leave
+  behind; the engine-operation slots live under `~/.berth/locks` instead of
+  the shared temp directory.
+- The agent acceptance run defaults to 12 parallel agents, and its release
+  gate is N=12: 8 to 12 agents is what one developer machine runs.
 - `berth exec --service <shared database or cache>` without a command opens
   the tenant's client in a throwaway container of the server's image on the
   instance network, instead of inside the shared server: a shell escape from
@@ -37,6 +65,13 @@ All notable changes to this project are documented in this file.
 
 ### Fixed
 
+- Dropping a shared Redis or Valkey tenant (`down --purge`, a test run's
+  reset, `gc`) scans every logical database in one `exec` instead of one per
+  database. The scan holds the server's lock, and on a loaded engine sixteen
+  `exec`s kept every other instance's test run waiting for minutes.
+- `berth prune --all --dry-run` lists this installation's own stopped
+  containers and prints the prune commands with its real installation ID;
+  it showed fewer containers than a real `prune --all` removes.
 - `berth gc` removes a shared MariaDB server nothing uses: the official
   image's own `healthcheck` user no longer counts as a tenant.
 - Health checks, `exec`, `dump` and `restore` reach MySQL and MariaDB over

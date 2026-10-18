@@ -35,9 +35,12 @@ pub(in crate::cli::support::run_doctor::app) fn repair_unhealthy_http_runtime(
         ));
         return true;
     }
-    if let Err(err) =
-        serve::wait_until_http_healthy(target, REPAIR_TIMEOUT_SECS, REPAIR_INTERVAL_SECS, None)
-    {
+    if let Err(err) = serve::wait_until_http_healthy(
+        target,
+        Some(REPAIR_TIMEOUT_SECS),
+        REPAIR_INTERVAL_SECS,
+        None,
+    ) {
         report::error(&format!(
             "App service '{}' did not recover after restart: {err}",
             target.name

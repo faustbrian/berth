@@ -17,7 +17,7 @@ pub(crate) struct HandleRecreateOptions<'a> {
     pub(crate) kind: Option<config::Kind>,
     pub(crate) profile: Option<&'a str>,
     pub(crate) healthy: bool,
-    pub(crate) timeout: u64,
+    pub(crate) timeout: Option<u64>,
     pub(crate) random_ports: bool,
     pub(crate) env_output: bool,
     pub(crate) parallel: usize,

@@ -4,6 +4,10 @@
 
 use anyhow::Result;
 
+mod sibling_failure;
+
+pub(crate) use sibling_failure::{ensure_no_sibling_failed, try_for_each_ending_siblings};
+
 pub(crate) fn validate_parallelism(parallel: usize) -> Result<()> {
     if parallel == 0 {
         anyhow::bail!("--parallel must be >= 1");

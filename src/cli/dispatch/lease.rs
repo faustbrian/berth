@@ -116,7 +116,7 @@ pub(super) fn reap_in_passing(keep: Option<(&str, &str)>) {
     if cfg!(test) {
         return;
     }
-    if let Err(error) = crate::instance::reap(false, keep) {
+    if let Err(error) = crate::shared::best_effort(|| crate::instance::reap(false, keep)) {
         crate::output::event(
             "reap",
             crate::output::LogLevel::Warn,

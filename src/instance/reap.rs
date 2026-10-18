@@ -44,7 +44,7 @@ pub(crate) fn reap(force: bool, keep: Option<(&str, &str)>) -> Result<ReapReport
     // A forced pass (`berth gc`) waits for a pass in progress instead of
     // reporting that nothing was reaped; ordinary commands never wait.
     let _lock = if force {
-        crate::home::HostLock::acquire("reap", Duration::from_secs(600))?
+        crate::home::HostLock::acquire("reap")?
     } else {
         let Some(lock) = crate::home::HostLock::try_acquire("reap")? else {
             return Ok(ReapReport::default());

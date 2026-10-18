@@ -95,10 +95,7 @@ pub(crate) fn renew_lease(
     owner: Option<super::owner::OwnerProcess>,
     take_over: bool,
 ) -> Result<Lease> {
-    let _lock = crate::home::HostLock::acquire(
-        &format!("lease_{project}_{instance}"),
-        Duration::from_secs(30),
-    )?;
+    let _lock = crate::home::HostLock::acquire(&format!("lease_{project}_{instance}"))?;
     let existing = read_lease(project, instance)?;
     let ttl_secs = match ttl {
         TtlChange::Set(ttl) => Some(ttl.as_secs()),

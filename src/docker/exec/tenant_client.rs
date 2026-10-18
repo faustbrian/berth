@@ -5,6 +5,16 @@ use anyhow::Result;
 
 use crate::config::{Driver, ServiceConfig};
 
+/// Which of the tenant's programs the throwaway container runs.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum TenantProgram {
+    /// The interactive or piped client (`psql`, `mysql`/`mariadb`,
+    /// `redis-cli`); `restore` streams a dump into it.
+    Client,
+    /// The dump program (`pg_dump`, `mysqldump`/`mariadb-dump`).
+    Dump,
+}
+
 /// `docker run` arguments for the tenant's own client (`psql`, `mysql` or
 /// `mariadb`, `redis-cli`) in a throwaway container of the server's image.
 ///
@@ -19,7 +29,11 @@ use crate::config::{Driver, ServiceConfig};
 ///
 /// Returns an error when the service has no instance network, credentials
 /// or tenant client, or the ownership labels cannot be built.
-pub(super) fn tenant_client_run_args(service: &ServiceConfig, tty: bool) -> Result<Vec<String>> {
+pub(super) fn tenant_client_run_args(
+    service: &ServiceConfig,
+    tty: bool,
+    program: TenantProgram,
+) -> Result<Vec<String>> {
     let network = service
         .runtime
         .network
@@ -37,7 +51,10 @@ pub(super) fn tenant_client_run_args(service: &ServiceConfig, tty: bool) -> Resu
     let port = service.default_port().to_string();
     let (program, password_env, client_args): (&str, &str, Vec<String>) = match service.driver {
         Driver::Postgres => (
-            "psql",
+            match program {
+                TenantProgram::Client => "psql",
+                TenantProgram::Dump => "pg_dump",
+            },
             "PGPASSWORD",
             vec![
                 "-h".to_owned(),
@@ -50,7 +67,13 @@ pub(super) fn tenant_client_run_args(service: &ServiceConfig, tty: bool) -> Resu
             ],
         ),
         Driver::Mysql => (
-            crate::docker::mysql_program(&service.image, crate::docker::MysqlProgram::Client),
+            crate::docker::mysql_program(
+                &service.image,
+                match program {
+                    TenantProgram::Client => crate::docker::MysqlProgram::Client,
+                    TenantProgram::Dump => crate::docker::MysqlProgram::Dump,
+                },
+            ),
             "MYSQL_PWD",
             [
                 // The server's certificate is self-signed, so it cannot be
@@ -70,11 +93,14 @@ pub(super) fn tenant_client_run_args(service: &ServiceConfig, tty: bool) -> Resu
                 format!("--port={port}"),
                 "-u".to_owned(),
                 username.to_owned(),
-                database(service)?.to_owned(),
             ])
+            // `--no-tablespaces`: dumping tablespaces needs the global
+            // PROCESS privilege, which a tenant does not have.
+            .chain((program == TenantProgram::Dump).then(|| "--no-tablespaces".to_owned()))
+            .chain([database(service)?.to_owned()])
             .collect(),
         ),
-        Driver::Redis | Driver::Valkey => (
+        Driver::Redis | Driver::Valkey if program == TenantProgram::Client => (
             "redis-cli",
             "REDISCLI_AUTH",
             vec![
