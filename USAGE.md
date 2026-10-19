@@ -186,7 +186,9 @@ consumer's containers; sources must be in `depends_on` and running.
 missing; other commands (`artisan test`, `up --no-deps`) only read it. berth never switches
 or pulls an existing checkout, so every source must already be on a branch
 with a `.berth.yaml` (usually its default branch); one on an older branch, or
-still on helm or stackctl, stops the consumer with a message naming it. Test
+still on helm or stackctl, stops the consumer with a message naming it and
+the fix (with a `git.branch` pin: check out that branch, or move the pin if
+it has no `.berth.yaml` either). Test
 runs (`artisan test`) need no source running, but they still read each
 source's `.berth.yaml` to name its endpoints.
 

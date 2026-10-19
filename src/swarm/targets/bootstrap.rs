@@ -31,13 +31,21 @@ pub(super) fn bootstrap_swarm_targets(
         clone_missing_root(&target.name, &target.root, git, quiet)?;
     }
 
-    ensure_target_configs_exist(targets)
+    ensure_target_configs_exist(config, targets)
 }
 
 /// Ensures target configs exist exists and is in the required state.
-pub(super) fn ensure_target_configs_exist(targets: &[ResolvedSwarmTarget]) -> Result<()> {
+pub(super) fn ensure_target_configs_exist(
+    config: &crate::config::Config,
+    targets: &[ResolvedSwarmTarget],
+) -> Result<()> {
     for target in targets {
-        crate::swarm::target_config_path(&target.name, &target.root)?;
+        let git = config
+            .swarm
+            .iter()
+            .find(|item| item.name == target.name)
+            .and_then(|item| item.git.as_ref());
+        crate::swarm::target_config_path(&target.name, &target.root, git)?;
     }
 
     Ok(())
@@ -50,6 +58,42 @@ mod tests {
     use anyhow::Context;
     use std::path::Path;
     use std::process::Command;
+
+    #[test]
+    fn a_missing_root_is_reported_with_the_targets_own_git_repo() {
+        let root = crate::test_support::temp_root()
+            .join(format!("berth-swarm-missing-root-{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&root));
+        let config = Config {
+            schema_version: 1,
+            project_type: crate::config::ProjectType::Project,
+            container_prefix: None,
+            domain_strategy: None,
+            service: Vec::new(),
+            swarm: vec![SwarmTarget {
+                name: "rate".to_owned(),
+                root: root.clone(),
+                depends_on: vec![],
+                inject_env: vec![],
+                git: Some(SwarmGit {
+                    repo: "git@github.com:acme/rate.git".to_owned(),
+                    branch: None,
+                }),
+            }],
+        };
+        let targets = vec![ResolvedSwarmTarget {
+            name: "rate".to_owned(),
+            root,
+        }];
+        let message = format!(
+            "{:#}",
+            ensure_target_configs_exist(&config, &targets).expect_err("no checkout")
+        );
+        assert!(
+            message.contains("git@github.com:acme/rate.git"),
+            "{message}"
+        );
+    }
 
     #[test]
     fn bootstrap_swarm_targets_clones_missing_roots_with_git_config() -> Result<()> {

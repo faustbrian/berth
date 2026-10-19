@@ -72,7 +72,7 @@ pub(super) fn resolve_execution_targets(
     if subcommand == "up" {
         bootstrap_swarm_targets(config, &targets, quiet)?;
     }
-    ensure_swarm_target_configs_exist(&targets)?;
+    ensure_swarm_target_configs_exist(config, &targets)?;
 
     if include_deps && subcommand == "down" {
         enforce_shared_down_dependency_guard(

@@ -39,8 +39,11 @@ pub(crate) fn bootstrap_swarm_targets(
 }
 
 /// Ensures swarm target configs exist exists and is in the required state.
-pub(crate) fn ensure_swarm_target_configs_exist(targets: &[ResolvedSwarmTarget]) -> Result<()> {
-    bootstrap::ensure_target_configs_exist(targets)
+pub(crate) fn ensure_swarm_target_configs_exist(
+    config: &crate::config::Config,
+    targets: &[ResolvedSwarmTarget],
+) -> Result<()> {
+    bootstrap::ensure_target_configs_exist(config, targets)
 }
 
 pub(crate) fn enforce_shared_down_dependency_guard(
