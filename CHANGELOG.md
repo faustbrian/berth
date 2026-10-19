@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- A swarm source whose checkout has no `.berth.yaml` now fails naming the
+  target, any helm or stackctl file still there, and the fix: check out a
+  branch that has one, since berth clones only a missing checkout and never
+  switches or pulls an existing one. A legacy file in a source checkout no
+  longer suggests running `berth config migrate` in someone else's repo.
+
 ## [10.1.1] - 2026-10-19
 
 ### Fixed

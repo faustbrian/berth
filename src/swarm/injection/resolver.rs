@@ -40,14 +40,8 @@ pub(super) fn resolve_injected_env_from_swarm_context(
 
         if !loaded_dependency_configs.contains_key(target_name) {
             let dependency_root = resolve_swarm_root(&context.workspace_root, &source_target.root);
-            let dependency_config_path = crate::config::config_path_in_dir(&dependency_root)?
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "missing Berth config (.berth.yaml) for swarm target '{}' at {}",
-                        target_name,
-                        dependency_root.display()
-                    )
-                })?;
+            let dependency_config_path =
+                crate::swarm::target_config_path(target_name, &dependency_root)?;
             let dependency_config = super::load_config_from_path(&dependency_config_path)
                 .with_context(|| {
                     format!(
@@ -115,14 +109,8 @@ pub(super) fn resolve_dependency_endpoints_from_swarm_context(
             );
         };
         let dependency_root = resolve_swarm_root(&context.workspace_root, &source_target.root);
-        let dependency_config_path = crate::config::config_path_in_dir(&dependency_root)?
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "missing Berth config (.berth.yaml) for swarm target '{}' at {}",
-                    target_name,
-                    dependency_root.display()
-                )
-            })?;
+        let dependency_config_path =
+            crate::swarm::target_config_path(target_name, &dependency_root)?;
         let dependency_config = super::load_config_from_path(&dependency_config_path)?;
         let source_service =
             crate::config::resolve_app_service(&dependency_config, inject.service.as_deref())?;

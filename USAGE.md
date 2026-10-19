@@ -182,6 +182,14 @@ swarm:
 Injected endpoints name the source app's container, reachable from the
 consumer's containers; sources must be in `depends_on` and running.
 
+`berth up` and `berth swarm up` clone a target with `git` when its root is
+missing; other commands (`artisan test`, `up --no-deps`) only read it. berth never switches
+or pulls an existing checkout, so every source must already be on a branch
+with a `.berth.yaml` (usually its default branch); one on an older branch, or
+still on helm or stackctl, stops the consumer with a message naming it. Test
+runs (`artisan test`) need no source running, but they still read each
+source's `.berth.yaml` to name its endpoints.
+
 ## Value enums
 
 - `KIND`: `database`, `cache`, `object-store`, `search`, `app`.

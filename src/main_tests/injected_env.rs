@@ -178,3 +178,99 @@ fn project_dependency_runner_is_noop_outside_swarm_workspace() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn a_test_run_whose_source_checkout_predates_berth_says_how_to_fix_it() -> Result<()> {
+    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let workspace =
+        crate::test_support::temp_root().join(format!("berth-project-deps-legacy-{nonce}"));
+    let api_root = workspace.join("api");
+    let location_root = workspace.join("location");
+    std::fs::create_dir_all(&api_root)?;
+    std::fs::create_dir_all(&location_root)?;
+    crate::config::project_file::write_test_config_file(
+        api_root.join(".berth.yaml"),
+        "project_type = \"project\"\ncontainer_prefix = \"api\"\n",
+    )?;
+    // The sibling checkout is on a branch from before its berth migration.
+    std::fs::write(
+        location_root.join(".helm.toml"),
+        "container_prefix = \"location\"\n",
+    )?;
+    crate::config::project_file::write_test_config_file(
+        workspace.join(".berth.yaml"),
+        r#"
+project_type = "project"
+[[swarm]]
+name = "api"
+root = "api"
+depends_on = ["location"]
+
+[[swarm.inject_env]]
+env = "LOCATION_API_BASE_URL"
+from = "location"
+value = ":base_url"
+
+[[swarm]]
+name = "location"
+root = "location"
+"#,
+    )?;
+
+    let error = resolve_project_dependency_injected_env(&api_root, Some("testing-0a1b2c3d"))
+        .expect_err("the source has no berth config");
+    let message = format!("{error:#}");
+    assert!(
+        message.contains("swarm target 'location'")
+            && message.contains("predates berth")
+            && message.contains(".helm.toml"),
+        "{message}"
+    );
+    std::fs::remove_dir_all(workspace)?;
+    Ok(())
+}
+
+#[test]
+fn a_test_run_whose_source_was_never_cloned_names_the_commands_that_clone() -> Result<()> {
+    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let workspace =
+        crate::test_support::temp_root().join(format!("berth-project-deps-absent-{nonce}"));
+    let api_root = workspace.join("api");
+    std::fs::create_dir_all(&api_root)?;
+    crate::config::project_file::write_test_config_file(
+        api_root.join(".berth.yaml"),
+        "project_type = \"project\"\ncontainer_prefix = \"api\"\n",
+    )?;
+    crate::config::project_file::write_test_config_file(
+        workspace.join(".berth.yaml"),
+        r#"
+project_type = "project"
+[[swarm]]
+name = "api"
+root = "api"
+depends_on = ["location"]
+
+[[swarm.inject_env]]
+env = "LOCATION_API_BASE_URL"
+from = "location"
+value = ":base_url"
+
+[[swarm]]
+name = "location"
+root = "location"
+git = [{ repo = "git@github.com:acme/location.git" }]
+"#,
+    )?;
+
+    let error = resolve_project_dependency_injected_env(&api_root, Some("testing-0a1b2c3d"))
+        .expect_err("the source was never cloned");
+    let message = format!("{error:#}");
+    assert!(
+        message.contains("swarm target 'location' has no checkout")
+            && message.contains("`berth swarm up`")
+            && !message.contains("give the target"),
+        "{message}"
+    );
+    std::fs::remove_dir_all(workspace)?;
+    Ok(())
+}

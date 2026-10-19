@@ -37,13 +37,7 @@ pub(super) fn bootstrap_swarm_targets(
 /// Ensures target configs exist exists and is in the required state.
 pub(super) fn ensure_target_configs_exist(targets: &[ResolvedSwarmTarget]) -> Result<()> {
     for target in targets {
-        if crate::config::config_path_in_dir(&target.root)?.is_none() {
-            anyhow::bail!(
-                "missing Berth config (.berth.yaml) for swarm target '{}' at {}",
-                target.name,
-                target.root.display()
-            );
-        }
+        crate::swarm::target_config_path(&target.name, &target.root)?;
     }
 
     Ok(())

@@ -1,6 +1,7 @@
 //! Swarm orchestration helpers for multi-project Berth workflows.
 
 mod injection;
+mod missing_target_config;
 mod runner;
 mod target_exec;
 mod targets;
@@ -15,6 +16,7 @@ pub(crate) use runner::{
 
 #[cfg(test)]
 pub(crate) use injection::resolve_injected_env_value;
+pub(crate) use missing_target_config::target_config_path;
 #[cfg(test)]
 pub(crate) use runner::swarm_child_args;
 #[cfg(test)]
