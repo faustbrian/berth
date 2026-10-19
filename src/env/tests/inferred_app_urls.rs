@@ -255,3 +255,69 @@ fn asset_url_follows_only_the_app_that_sets_app_url() {
     );
     assert_eq!(host.get("ASSET_URL"), None, "{host:?}");
 }
+
+#[test]
+fn the_host_view_takes_app_url_from_the_same_web_app_as_the_containers() {
+    for driver in [Driver::Mailhog, Driver::Reverb, Driver::Soketi] {
+        for routed in [false, true] {
+            let mut config = routed_config(Some(8443));
+            if !routed {
+                config.service[0].routes = None;
+                config.service[0].runtime.extra_routes.clear();
+            }
+            let app = config.service.remove(0);
+            let mut worker = svc("queue", Kind::App, Driver::Frankenphp, 8091);
+            worker.command = Some(vec![
+                "php".to_owned(),
+                "artisan".to_owned(),
+                "queue:work".to_owned(),
+            ]);
+            let mut peer = routed_peer("peer", driver);
+            peer.routes = Some(std::collections::BTreeMap::from([(
+                "extra".to_owned(),
+                "APP_PEER_EXTRA_URL".to_owned(),
+            )]));
+            peer.runtime.extra_routes = vec![crate::config::ExtraRoute {
+                label: "extra".to_owned(),
+                env: "APP_PEER_EXTRA_URL".to_owned(),
+                host: "a-1-app-peer-extra.berth.localhost".to_owned(),
+            }];
+            config.service = vec![worker, peer, app];
+
+            let containers = inferred_app_env(&config);
+            let host = crate::env::host_env(&config);
+            let label = format!("{driver:?} routed={routed}");
+            assert_eq!(
+                host.get("APP_URL"),
+                Some(&"https://a-1-app.berth.localhost:8443".to_owned()),
+                "{label}: {host:?}"
+            );
+            assert_eq!(host.get("APP_URL"), containers.get("APP_URL"), "{label}");
+            assert_eq!(
+                host.get("ASSET_URL"),
+                containers.get("ASSET_URL"),
+                "{label}"
+            );
+            if routed {
+                assert_eq!(host.get("ASSET_URL"), None, "{label}");
+                assert_eq!(
+                    host.get("APP_EE_URL"),
+                    containers.get("APP_EE_URL"),
+                    "{label}"
+                );
+            } else {
+                assert_eq!(
+                    host.get("ASSET_URL"),
+                    Some(&"https://a-1-app.berth.localhost:8443".to_owned()),
+                    "{label}"
+                );
+            }
+            assert_eq!(
+                host.get("APP_PEER_EXTRA_URL"),
+                containers.get("APP_PEER_EXTRA_URL"),
+                "{label}"
+            );
+            assert!(host.contains_key("APP_PEER_EXTRA_URL"), "{label}");
+        }
+    }
+}

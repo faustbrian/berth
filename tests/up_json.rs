@@ -905,3 +905,36 @@ fn up_json_reports_extra_route_urls_and_their_env_vars() {
         "{document}"
     );
 }
+
+#[test]
+fn the_host_environment_takes_app_url_from_the_web_app_not_a_mail_ui_listed_first() {
+    let fixture = Fixture::new("mail-first");
+    fixture.write_project(
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  mailpit:\n    preset: mailpit\n  app:\n    preset: laravel\n",
+    );
+    let up = fixture.berth(&["up", "--json"], &[]);
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    let document = one_document(&up.stdout);
+    let app_url = document["environment"]["APP_URL"]
+        .as_str()
+        .expect("APP_URL");
+    assert!(
+        app_url.ends_with(&format!("-shop.berth.localhost:{}", fixture.ports.0)),
+        "{app_url}"
+    );
+    assert_eq!(
+        document["host_environment"]["APP_URL"].as_str(),
+        Some(app_url),
+        "{document}"
+    );
+    assert_eq!(
+        document["environment"]["ASSET_URL"].as_str(),
+        Some(app_url),
+        "{document}"
+    );
+    assert_eq!(
+        document["host_environment"]["ASSET_URL"].as_str(),
+        Some(app_url),
+        "{document}"
+    );
+}

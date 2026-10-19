@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- An app with `routes` whose loaded dotenv (`.env.{APP_ENV}` or `.env`)
+  sets `ASSET_URL` no longer starts with every site's assets pinned to one
+  origin: berth refuses it, naming the service and the file. Runs without
+  routes (`--env`, `artisan test`) are unaffected. The file is the one
+  the container's `APP_ENV` selects, with the app's own `env` winning over
+  injected values.
+- The managed `APP_KEY` follows the dotenv the app's container loads: the
+  laravel preset's `APP_ENV=local` selects `.env.local` when it exists, so
+  a key there is no longer replaced and a key only in `.env` is no longer
+  missed. A dotenv value Laravel reads as null or empty (`null`, `(null)`,
+  `empty`, `(empty)`, `false`, `(false)`) no longer counts as set, and a
+  later definition of a key in the same file replaces an earlier one, as
+  in phpdotenv. `artisan test` decides the key from `.env.testing`, the
+  file its `--env=testing` loads, so a key there is never overridden by
+  the exported environment.
+- The host view of the environment (`up --json` `host_environment`, `env
+  --json` `host`, `env generate --host`) takes `APP_URL` and `ASSET_URL`
+  from the web app, as the containers do, instead of from a Mailpit,
+  Reverb or Soketi service listed before it.
+
 ## [10.1.0] - 2026-10-19
 
 ### Added

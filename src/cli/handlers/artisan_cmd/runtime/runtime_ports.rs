@@ -15,7 +15,7 @@ pub(super) fn prepare_testing_runtime(
     // key is needed. An explicit `APP_ENV` in the app's `env` still wins in
     // the container, but the test command's `--env=testing` selects the file.
     app_env.insert("APP_ENV".to_owned(), "testing".to_owned());
-    env::apply_managed_runtime_env(config, &mut app_env)?;
+    env::apply_managed_runtime_env(config, &mut app_env, Some("testing"))?;
 
     Ok((remapped_services, app_env))
 }

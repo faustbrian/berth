@@ -343,3 +343,64 @@ fn the_app_container_runs_as_the_invoking_user_with_no_spare_capabilities() {
         assert!(run.contains(expected), "missing {expected}: {run}");
     }
 }
+
+#[test]
+fn a_routed_app_whose_dotenv_sets_asset_url_never_starts() {
+    let dotenv = "APP_KEY=base64:mine\nASSET_URL=https://cdn.test\n";
+    let fixture = Fixture::new("asset-url", Some(dotenv));
+    std::fs::write(
+        fixture.base.join("project/.berth.yaml"),
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    routes:\n      ee: APP_EE_URL\n",
+    )
+    .expect("project file");
+
+    let up = fixture.berth(&["up", "--no-wait"]);
+    assert_eq!(up.status.code(), Some(125), "{}", text(&up.stderr));
+    let stderr = text(&up.stderr);
+    assert!(
+        stderr.contains("service 'app'") && stderr.contains(".env") && stderr.contains("ASSET_URL"),
+        "{stderr}"
+    );
+    assert!(
+        !std::fs::read_dir(fixture.base.join("state"))
+            .expect("state")
+            .filter_map(Result::ok)
+            .any(
+                |entry| entry.file_name().to_string_lossy().starts_with("run-")
+                    && entry.file_name().to_string_lossy().ends_with("_app")
+            ),
+        "the app never started"
+    );
+    assert_eq!(fixture.dotenv().as_deref(), Some(dotenv.as_bytes()));
+
+    let json = fixture.berth(&["up", "--json"]);
+    assert_eq!(json.status.code(), Some(125), "{}", text(&json.stderr));
+    let document: serde_json::Value =
+        serde_json::from_slice(&json.stdout).expect("one JSON document on stdout");
+    assert_eq!(document["status"], "failed", "{document}");
+    assert!(
+        document["error"]
+            .as_str()
+            .is_some_and(|error| error.contains("ASSET_URL") && error.contains(".env")),
+        "{document}"
+    );
+
+    // A runtime environment has no routes, so the dotenv value applies.
+    let staging = fixture.berth(&["--env", "staging", "up", "--no-wait"]);
+    assert!(staging.status.success(), "{}", text(&staging.stderr));
+    let staging_run = std::fs::read_dir(fixture.base.join("state"))
+        .expect("state")
+        .filter_map(Result::ok)
+        .find(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            name.starts_with("run-") && name.ends_with("_app-staging")
+        })
+        .map(|entry| std::fs::read_to_string(entry.path()).expect("run"))
+        .expect("staging app run");
+    let env = injected(&staging_run);
+    assert!(
+        !env.iter()
+            .any(|pair| pair.0 == "ASSET_URL" || pair.0 == "APP_EE_URL"),
+        "{env:?}"
+    );
+}

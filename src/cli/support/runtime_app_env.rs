@@ -9,10 +9,26 @@ use crate::{config, env};
 /// # Errors
 ///
 /// Returns an error when a swarm injects a var one of the project's
-/// `routes` sets, or when the managed `APP_KEY` cannot be read or created.
+/// `routes` sets, when a routed app's dotenv sets `ASSET_URL`, or when the
+/// managed `APP_KEY` cannot be read or created.
 pub(crate) fn runtime_app_env(
     config: &config::Config,
     project_dependency_env: &HashMap<String, String>,
+) -> anyhow::Result<HashMap<String, String>> {
+    runtime_app_env_for_dotenv(config, project_dependency_env, None)
+}
+
+/// [`runtime_app_env`] for a command that loads the dotenv of `dotenv_env`
+/// rather than the container's `APP_ENV`: `artisan test` passes `testing`,
+/// which its `--env=testing` selects.
+///
+/// # Errors
+///
+/// As [`runtime_app_env`].
+pub(crate) fn runtime_app_env_for_dotenv(
+    config: &config::Config,
+    project_dependency_env: &HashMap<String, String>,
+    dotenv_env: Option<&str>,
 ) -> anyhow::Result<HashMap<String, String>> {
     // Injected values replace inferred ones, so a route's URL would be lost.
     // The injecting workspace is resolved only here, not at config load.
@@ -29,13 +45,14 @@ pub(crate) fn runtime_app_env(
     }
     let mut inferred_env = env::inferred_app_env(config);
     env::merge_with_protected_https_app_urls(&mut inferred_env, project_dependency_env);
-    env::apply_managed_runtime_env(config, &mut inferred_env)?;
+    env::ensure_no_dotenv_asset_url(config, &inferred_env)?;
+    env::apply_managed_runtime_env(config, &mut inferred_env, dotenv_env)?;
     Ok(inferred_env)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::runtime_app_env;
+    use super::{runtime_app_env, runtime_app_env_for_dotenv};
     use crate::config;
     use crate::config::{Driver, Kind, ServiceConfig};
     use std::collections::HashMap;
@@ -147,5 +164,42 @@ mod tests {
             )
             .is_ok()
         );
+    }
+
+    #[test]
+    fn a_test_run_exports_no_managed_key_when_its_env_testing_has_one() {
+        let root = crate::test_support::temp_root()
+            .join(format!("berth-runtime-env-testing-{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&root));
+        std::fs::create_dir_all(&root).expect("root");
+        std::fs::write(root.join("artisan"), "#!/usr/bin/env php\n").expect("artisan");
+        std::fs::write(root.join(".env.testing"), "APP_KEY=base64:testing\n").expect("env");
+        let mut app = app_service();
+        // The laravel preset's `APP_ENV=local`; no `.env.local` or `.env`.
+        app.env = Some(HashMap::from([("APP_ENV".to_owned(), "local".to_owned())]));
+        app.runtime.root = Some(root.clone());
+        app.runtime.project = Some("api".to_owned());
+        app.runtime.instance = Some("a-1".to_owned());
+        let config = config::Config {
+            schema_version: 1,
+            project_type: config::ProjectType::Project,
+            container_prefix: Some("api".to_owned()),
+            domain_strategy: None,
+            service: vec![app],
+            swarm: Vec::new(),
+        };
+
+        let test_env =
+            runtime_app_env_for_dotenv(&config, &HashMap::new(), Some("testing")).expect("env");
+        assert!(
+            !test_env.contains_key("APP_KEY"),
+            ".env.testing has one: {test_env:?}"
+        );
+        let dev_env = runtime_app_env(&config, &HashMap::new()).expect("env");
+        assert!(
+            dev_env.contains_key("APP_KEY"),
+            ".env.local has none: {dev_env:?}"
+        );
+        std::fs::remove_dir_all(&root).expect("cleanup");
     }
 }

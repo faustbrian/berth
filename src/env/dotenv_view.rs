@@ -24,11 +24,18 @@ pub(crate) fn host_env(config: &Config) -> HashMap<String, String> {
         if let Some(url) = crate::gateway::route_urls(service).into_iter().next()
             && crate::gateway::has_gateway_routes(service)
         {
-            // `ASSET_URL` belongs to the service that sets `APP_URL`.
-            if !vars.contains_key("APP_URL") && service.routes.is_none() {
-                vars.insert("ASSET_URL".to_owned(), url.clone());
+            // The app URL is the web app's, as in the containers: a mail UI
+            // or WebSocket server listed first has routes but is not the app.
+            let web_app = service.kind == crate::config::Kind::App
+                && service.driver == crate::config::Driver::Frankenphp
+                && crate::gateway::is_routable(service);
+            if web_app && !vars.contains_key("APP_URL") {
+                // `ASSET_URL` belongs to the service that sets `APP_URL`.
+                if service.routes.is_none() {
+                    vars.insert("ASSET_URL".to_owned(), url.clone());
+                }
+                vars.insert("APP_URL".to_owned(), url);
             }
-            vars.entry("APP_URL".to_owned()).or_insert(url);
             if let Some(port) = service.runtime.gateway_https_port {
                 for route in crate::gateway::extra_routes(service) {
                     vars.entry(route.env.clone())

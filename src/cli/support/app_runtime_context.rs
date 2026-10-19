@@ -42,6 +42,27 @@ pub(crate) fn resolve_app_runtime_context_with_workspace_root<'a>(
     service: Option<&str>,
     workspace_root: PathBuf,
 ) -> Result<AppRuntimeContext<'a>> {
+    resolve_context(config, service, workspace_root, None)
+}
+
+/// [`resolve_app_runtime_context_with_workspace_root`] for `artisan test`,
+/// whose `--env=testing` makes Laravel load `.env.testing`: the managed key
+/// is decided from that file, so a key it sets is never overridden by the
+/// exported environment.
+pub(crate) fn resolve_artisan_test_runtime_context<'a>(
+    config: &'a config::Config,
+    service: Option<&str>,
+    workspace_root: PathBuf,
+) -> Result<AppRuntimeContext<'a>> {
+    resolve_context(config, service, workspace_root, Some("testing"))
+}
+
+fn resolve_context<'a>(
+    config: &'a config::Config,
+    service: Option<&str>,
+    workspace_root: PathBuf,
+    dotenv_env: Option<&str>,
+) -> Result<AppRuntimeContext<'a>> {
     let runtime_env = config
         .service
         .iter()
@@ -51,7 +72,7 @@ pub(crate) fn resolve_app_runtime_context_with_workspace_root<'a>(
     Ok(AppRuntimeContext {
         target: config::resolve_app_service(config, service)?,
         workspace_root,
-        app_env: super::runtime_app_env(config, &project_dependency_env)?,
+        app_env: super::runtime_app_env_for_dotenv(config, &project_dependency_env, dotenv_env)?,
     })
 }
 

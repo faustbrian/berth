@@ -124,7 +124,7 @@ pub(crate) fn handle_artisan(
         workspace_root = Some(resolved_workspace_root);
     }
     let runtime = if let Some(ref workspace_root) = workspace_root {
-        cli::support::resolve_app_runtime_context_with_workspace_root(
+        cli::support::resolve_artisan_test_runtime_context(
             &effective_config,
             selected_service.as_deref(),
             workspace_root.clone(),

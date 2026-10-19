@@ -128,7 +128,9 @@ An app with `routes` gets no `ASSET_URL`, so each site loads its assets from
 its own host. Laravel then builds asset URLs from the request, so the app must
 trust the gateway's forwarded headers (`trustProxies(at: '*')` with
 `X-Forwarded-Host`, `-Port` and `-Proto`); otherwise its pages link `http://`
-assets on an `https` port. Under `--env` and in `artisan test` runs there are no routes,
+assets on an `https` port. An `ASSET_URL` in the dotenv Laravel loads
+(`.env.{APP_ENV}` or `.env`) would override that on every host, so berth
+refuses to start such an app until it is removed. Under `--env` and in `artisan test` runs there are no routes,
 and the vars are left to the app's own env files. Adding or changing
 `routes` on a running instance takes effect after `berth recreate`.
 

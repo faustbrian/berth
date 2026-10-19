@@ -3,7 +3,6 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
-use std::path::Path;
 
 use crate::config::{Config, Driver, Kind, ServiceConfig};
 
@@ -19,8 +18,11 @@ pub(crate) const LARAVEL_CONFIG_CACHE: &str = "/tmp/berth-laravel-config.php";
 const DRY_RUN_APP_KEY: &str = "<berth-managed-app-key>";
 
 /// Adds `APP_CONFIG_CACHE` for Laravel apps, and a managed per-instance
-/// `APP_KEY` when neither the app's config nor the project's `.env` sets one.
-/// Values already present (explicit app env) are kept.
+/// `APP_KEY` when neither the app's config nor the dotenv Laravel loads sets
+/// one. Values already present (explicit app env) are kept. `dotenv_env`
+/// names the environment whose dotenv Laravel loads (test runs pass
+/// `testing`, which their `--env=testing` selects); `None` means the
+/// container's own `APP_ENV`.
 ///
 /// # Errors
 ///
@@ -28,6 +30,7 @@ const DRY_RUN_APP_KEY: &str = "<berth-managed-app-key>";
 pub(crate) fn apply_managed_runtime_env(
     config: &Config,
     vars: &mut HashMap<String, String>,
+    dotenv_env: Option<&str>,
 ) -> Result<()> {
     let Some(app) = config
         .service
@@ -51,11 +54,13 @@ pub(crate) fn apply_managed_runtime_env(
             .or_insert_with(|| explicit.clone());
         return Ok(());
     }
-    let dotenv_key = app
-        .runtime
-        .root
-        .as_deref()
-        .is_some_and(|root| dotenv_has_app_key(&loaded_dotenv(root, vars.get("APP_ENV"))));
+    let dotenv_key = app.runtime.root.as_deref().is_some_and(|root| {
+        let app_env = dotenv_env
+            .map(ToOwned::to_owned)
+            .or_else(|| super::dotenv_file::container_app_env(app, vars).cloned());
+        let dotenv = super::dotenv_file::loaded_dotenv(root, app_env.as_ref());
+        super::dotenv_file::dotenv_sets(&dotenv, "APP_KEY")
+    });
     if vars.contains_key("APP_KEY") || dotenv_key {
         return Ok(());
     }
@@ -86,41 +91,6 @@ pub(crate) fn is_laravel_app(service: &ServiceConfig) -> bool {
             .root
             .as_deref()
             .is_some_and(|root| root.join("artisan").is_file())
-}
-
-/// The dotenv file Laravel loads: `.env.{APP_ENV}` when `APP_ENV` is set
-/// and that file exists (test runs use `.env.testing`), else `.env`.
-fn loaded_dotenv(root: &Path, app_env: Option<&String>) -> std::path::PathBuf {
-    if let Some(name) = app_env.filter(|name| !name.is_empty()) {
-        let specific = root.join(format!(".env.{name}"));
-        if specific.is_file() {
-            return specific;
-        }
-    }
-    root.join(".env")
-}
-
-/// Whether a dotenv file sets a non-empty `APP_KEY`, in any form phpdotenv
-/// accepts (`export APP_KEY=…`, spaces around `=`, quoted values). A missing
-/// or unreadable file sets none.
-fn dotenv_has_app_key(path: &Path) -> bool {
-    let Ok(contents) = std::fs::read_to_string(path) else {
-        return false;
-    };
-    contents.lines().any(|line| {
-        let line = line.trim();
-        let line = line.strip_prefix("export ").map_or(line, str::trim_start);
-        line.split_once('=').is_some_and(|(key, value)| {
-            key.trim() == "APP_KEY"
-                && !value
-                    .split(" #")
-                    .next()
-                    .unwrap_or_default()
-                    .trim()
-                    .trim_matches(|quote| quote == '"' || quote == '\'')
-                    .is_empty()
-        })
-    })
 }
 
 #[cfg(test)]
@@ -161,7 +131,7 @@ mod tests {
     fn laravel_apps_bypass_the_config_cache_and_get_a_managed_key_without_a_dotenv() {
         let root = root("fresh");
         let mut vars = HashMap::new();
-        apply_managed_runtime_env(&laravel(&root), &mut vars).expect("env");
+        apply_managed_runtime_env(&laravel(&root), &mut vars, None).expect("env");
         assert_eq!(vars["APP_CONFIG_CACHE"], LARAVEL_CONFIG_CACHE);
         assert!(vars["APP_KEY"].starts_with("base64:"), "{vars:?}");
         std::fs::remove_dir_all(&root).expect("cleanup");
@@ -172,7 +142,7 @@ mod tests {
         let root = root("dotenv");
         std::fs::write(root.join(".env"), "APP_NAME=x\nAPP_KEY=base64:own\n").expect("env");
         let mut vars = HashMap::new();
-        apply_managed_runtime_env(&laravel(&root), &mut vars).expect("env");
+        apply_managed_runtime_env(&laravel(&root), &mut vars, None).expect("env");
         assert!(!vars.contains_key("APP_KEY"), "{vars:?}");
 
         std::fs::write(root.join(".env"), "APP_KEY=\n").expect("env");
@@ -182,7 +152,7 @@ mod tests {
             "base64:explicit".to_owned(),
         )]));
         let mut vars = HashMap::new();
-        apply_managed_runtime_env(&config, &mut vars).expect("env");
+        apply_managed_runtime_env(&config, &mut vars, None).expect("env");
         assert_eq!(
             vars["APP_KEY"], "base64:explicit",
             "the explicit key is shared"
@@ -201,7 +171,7 @@ mod tests {
         ] {
             std::fs::write(root.join(".env"), contents).expect("env");
             let mut vars = HashMap::new();
-            apply_managed_runtime_env(&laravel(&root), &mut vars).expect("env");
+            apply_managed_runtime_env(&laravel(&root), &mut vars, None).expect("env");
             assert!(!vars.contains_key("APP_KEY"), "{contents:?}: {vars:?}");
         }
         for empty in [
@@ -209,10 +179,16 @@ mod tests {
             "APP_KEY=\"\"\n",
             "# APP_KEY=base64:x\n",
             "APP_KEYS=x\n",
+            "APP_KEY=null\n",
+            "APP_KEY=(null)\n",
+            "APP_KEY=empty\n",
+            "APP_KEY=(EMPTY)\n",
+            "APP_KEY=false\n",
+            "APP_KEY=base64:own\nAPP_KEY=\n",
         ] {
             std::fs::write(root.join(".env"), empty).expect("env");
             let mut vars = HashMap::new();
-            apply_managed_runtime_env(&laravel(&root), &mut vars).expect("env");
+            apply_managed_runtime_env(&laravel(&root), &mut vars, None).expect("env");
             assert!(vars.contains_key("APP_KEY"), "{empty:?}");
         }
         std::fs::remove_dir_all(&root).expect("cleanup");
@@ -224,11 +200,34 @@ mod tests {
         std::fs::write(root.join(".env"), "APP_KEY=base64:own\n").expect("env");
         std::fs::write(root.join(".env.testing"), "APP_ENV=testing\n").expect("env");
         let mut vars = HashMap::from([("APP_ENV".to_owned(), "testing".to_owned())]);
-        apply_managed_runtime_env(&laravel(&root), &mut vars).expect("env");
+        apply_managed_runtime_env(&laravel(&root), &mut vars, Some("testing")).expect("env");
         assert!(
             vars.contains_key("APP_KEY"),
             ".env.testing has no key: {vars:?}"
         );
+        std::fs::remove_dir_all(&root).expect("cleanup");
+    }
+
+    #[test]
+    fn the_dotenv_of_the_apps_own_app_env_decides_the_managed_key() {
+        // The laravel preset sets `APP_ENV=local` in the app's own env, so
+        // its container loads `.env.local` when that file exists.
+        let root = root("own-app-env");
+        std::fs::write(root.join(".env.local"), "APP_KEY=base64:own\n").expect("env");
+        let mut config = laravel(&root);
+        config.service[0].env = Some(HashMap::from([("APP_ENV".to_owned(), "local".to_owned())]));
+        let mut vars = HashMap::new();
+        apply_managed_runtime_env(&config, &mut vars, None).expect("env");
+        assert!(
+            !vars.contains_key("APP_KEY"),
+            ".env.local has a key: {vars:?}"
+        );
+
+        std::fs::write(root.join(".env.local"), "APP_DEBUG=true\n").expect("env");
+        std::fs::write(root.join(".env"), "APP_KEY=base64:own\n").expect("env");
+        let mut vars = HashMap::new();
+        apply_managed_runtime_env(&config, &mut vars, None).expect("env");
+        assert!(vars.contains_key("APP_KEY"), ".env is not loaded: {vars:?}");
         std::fs::remove_dir_all(&root).expect("cleanup");
     }
 
@@ -241,7 +240,7 @@ mod tests {
             "base64:explicit".to_owned(),
         )]));
         let mut vars = HashMap::new();
-        apply_managed_runtime_env(&config, &mut vars).expect("env");
+        apply_managed_runtime_env(&config, &mut vars, None).expect("env");
         assert_eq!(vars["APP_KEY"], "base64:explicit");
         std::fs::remove_dir_all(&root).expect("cleanup");
     }
@@ -253,7 +252,7 @@ mod tests {
         std::fs::remove_file(root.join("artisan")).expect("rm");
         config.service[0].runtime.root = Some(root.clone());
         let mut vars = HashMap::new();
-        apply_managed_runtime_env(&config, &mut vars).expect("env");
+        apply_managed_runtime_env(&config, &mut vars, None).expect("env");
         assert!(vars.is_empty());
         std::fs::remove_dir_all(&root).expect("cleanup");
     }

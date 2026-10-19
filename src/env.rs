@@ -2,6 +2,8 @@
 
 #![allow(clippy::print_stdout)] // Env updates need to print status
 
+mod dotenv_asset_url;
+mod dotenv_file;
 mod dotenv_view;
 mod files;
 mod infer;
@@ -21,6 +23,7 @@ pub fn update_env(service: &ServiceConfig, env_path: &Path, create_missing: bool
     files::update_env(service, env_path, create_missing)
 }
 
+pub(crate) use dotenv_asset_url::ensure_no_dotenv_asset_url;
 pub(crate) use dotenv_view::{host_env, render_dotenv};
 pub(crate) use managed_runtime::{apply_managed_runtime_env, is_laravel_app};
 

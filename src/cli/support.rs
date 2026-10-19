@@ -46,7 +46,7 @@ mod workspace_root;
 mod workspace_with_project_deps;
 
 pub(crate) use app_runtime_context::{
-    resolve_app_runtime_context, resolve_app_runtime_context_with_workspace_root,
+    resolve_app_runtime_context, resolve_artisan_test_runtime_context,
 };
 pub(crate) use app_services::app_services;
 pub(crate) use artisan_command::{build_artisan_command, build_artisan_subcommand};
@@ -90,7 +90,7 @@ pub(crate) use run_doctor::{
 };
 pub(crate) use run_random_ports_flow::{RandomPortsPersistenceOptions, run_random_ports_flow};
 pub(crate) use run_service_command::{run_service_command_with_tty, run_service_commands};
-pub(crate) use runtime_app_env::runtime_app_env;
+pub(crate) use runtime_app_env::{runtime_app_env, runtime_app_env_for_dotenv};
 pub(crate) use scrub_env_file::scrub_env_file;
 pub(crate) use select_up_targets::select_up_targets;
 pub(crate) use selected_runtime_services::selected_runtime_services;
