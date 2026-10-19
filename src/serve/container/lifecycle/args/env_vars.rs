@@ -242,6 +242,7 @@ mod tests {
             domain: Some("shipit-api.berth.localhost".to_owned()),
             domains: Some(vec!["alt-api.berth.localhost".to_owned()]),
             resolved_domain: None,
+            routes: None,
             container_port: Some(80),
             smtp_port: None,
             volumes: None,

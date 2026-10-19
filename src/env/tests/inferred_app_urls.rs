@@ -154,3 +154,104 @@ fn a_worker_listed_before_the_web_app_never_sets_app_url() {
         Some(&"https://a-1-app.berth.localhost:8443".to_owned())
     );
 }
+
+fn routed_config(gateway_https_port: Option<u16>) -> Config {
+    let mut app = svc("app", Kind::App, Driver::Frankenphp, 8080);
+    app.routes = Some(std::collections::BTreeMap::from([
+        ("ee".to_owned(), "APP_EE_URL".to_owned()),
+        ("fi".to_owned(), "APP_FI_URL".to_owned()),
+    ]));
+    if let Some(port) = gateway_https_port {
+        app.resolved_domain = Some("a-1-app.berth.localhost".to_owned());
+        app.runtime.gateway_https_port = Some(port);
+        app.runtime.extra_routes = ["ee", "fi"]
+            .into_iter()
+            .map(|label| crate::config::ExtraRoute {
+                label: label.to_owned(),
+                env: format!("APP_{}_URL", label.to_ascii_uppercase()),
+                host: format!("a-1-app-{label}.berth.localhost"),
+            })
+            .collect();
+    }
+    Config {
+        schema_version: 1,
+        project_type: crate::config::ProjectType::Project,
+        container_prefix: Some("app".to_owned()),
+        domain_strategy: None,
+        service: vec![app],
+        swarm: vec![],
+    }
+}
+
+#[test]
+fn routes_inject_their_urls_formatted_like_app_url() {
+    let vars = inferred_app_env(&routed_config(Some(8443)));
+    assert_eq!(
+        vars.get("APP_URL"),
+        Some(&"https://a-1-app.berth.localhost:8443".to_owned())
+    );
+    assert_eq!(
+        vars.get("APP_EE_URL"),
+        Some(&"https://a-1-app-ee.berth.localhost:8443".to_owned())
+    );
+    assert_eq!(
+        vars.get("APP_FI_URL"),
+        Some(&"https://a-1-app-fi.berth.localhost:8443".to_owned())
+    );
+
+    let vars = inferred_app_env(&routed_config(Some(443)));
+    assert_eq!(
+        vars.get("APP_EE_URL"),
+        Some(&"https://a-1-app-ee.berth.localhost".to_owned())
+    );
+}
+
+#[test]
+fn unrouted_apps_leave_their_route_variables_to_the_app() {
+    let vars = inferred_app_env(&routed_config(None));
+    assert!(vars.contains_key("APP_URL"));
+    assert_eq!(vars.get("APP_EE_URL"), None);
+    assert_eq!(vars.get("APP_FI_URL"), None);
+}
+
+#[test]
+fn apps_with_routes_get_no_asset_url_so_assets_follow_the_site_host() {
+    let vars = inferred_app_env(&routed_config(Some(8443)));
+    assert_eq!(vars.get("ASSET_URL"), None);
+    assert_eq!(
+        vars.get("APP_URL"),
+        Some(&"https://a-1-app.berth.localhost:8443".to_owned())
+    );
+    let vars = inferred_app_env(&routed_config(None));
+    assert_eq!(vars.get("ASSET_URL"), None);
+}
+
+fn routed_peer(name: &str, driver: Driver) -> crate::config::ServiceConfig {
+    let mut peer = svc(name, Kind::App, driver, 8090);
+    peer.resolved_domain = Some(format!("a-1-app-{name}.berth.localhost"));
+    peer.runtime.gateway_https_port = Some(8443);
+    peer
+}
+
+#[test]
+fn asset_url_follows_only_the_app_that_sets_app_url() {
+    let mut config = routed_config(Some(8443));
+    config
+        .service
+        .push(routed_peer("admin", Driver::Frankenphp));
+    config.service.push(routed_peer("mail", Driver::Mailhog));
+
+    let vars = inferred_app_env(&config);
+    assert_eq!(
+        vars.get("APP_URL"),
+        Some(&"https://a-1-app.berth.localhost:8443".to_owned())
+    );
+    assert_eq!(vars.get("ASSET_URL"), None, "{vars:?}");
+
+    let host = crate::env::host_env(&config);
+    assert_eq!(
+        host.get("APP_URL"),
+        Some(&"https://a-1-app.berth.localhost:8443".to_owned())
+    );
+    assert_eq!(host.get("ASSET_URL"), None, "{host:?}");
+}

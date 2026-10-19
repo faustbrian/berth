@@ -193,6 +193,7 @@ mod tests {
             domain: None,
             domains: None,
             resolved_domain: None,
+            routes: None,
             container_port: None,
             smtp_port: None,
             volumes: None,

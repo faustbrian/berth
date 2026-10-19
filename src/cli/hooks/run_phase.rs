@@ -46,6 +46,7 @@ mod tests {
             domain: Some("app.localhost".to_owned()),
             domains: None,
             resolved_domain: None,
+            routes: None,
             container_port: None,
             smtp_port: None,
             volumes: None,

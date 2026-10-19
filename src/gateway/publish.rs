@@ -14,6 +14,10 @@ pub(crate) const ROUTE_HOSTS_LABEL: &str = "dev.berth.route.hosts";
 pub(crate) const ROUTE_PORT_LABEL: &str = "dev.berth.route.port";
 /// Label carrying the container's instance network.
 pub(crate) const NETWORK_LABEL: &str = "dev.berth.network";
+/// Label carrying how many leading route hosts the container owns: its
+/// instance route and that route's `routes` extensions. The hosts after
+/// them are authored domains, which yield to an owner.
+pub(crate) const ROUTE_OWNED_LABEL: &str = "dev.berth.route.owned";
 
 /// A routed container as its labels describe it.
 #[derive(Debug, Eq, PartialEq)]
@@ -22,24 +26,52 @@ pub(super) struct LabeledRoute {
     pub(super) hosts: Vec<String>,
     pub(super) port: String,
     pub(super) network: String,
+    /// The `dev.berth.route.owned` value; empty on containers berth 10.0.0
+    /// labeled, which own only their first host.
+    pub(super) owned: String,
 }
 
 impl LabeledRoute {
-    /// The container's own instance route: `route_hosts` labels it first,
-    /// ahead of any authored domains.
-    pub(super) fn derived_route(&self) -> Option<&str> {
-        self.hosts.first().map(String::as_str)
+    /// The hosts the container owns: its instance route, which
+    /// `route_hosts` labels first, and its `routes` extensions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an owned count that is not a number between 1
+    /// and the number of hosts.
+    pub(super) fn owned_hosts(&self) -> Result<&[String]> {
+        let count = if self.owned.is_empty() {
+            1
+        } else {
+            self.owned.parse::<usize>().map_err(|_| {
+                anyhow::anyhow!(
+                    "container {} has an invalid {ROUTE_OWNED_LABEL} label '{}'",
+                    self.container,
+                    self.owned
+                )
+            })?
+        };
+        if count == 0 || count > self.hosts.len() {
+            anyhow::bail!(
+                "container {} has an invalid {ROUTE_OWNED_LABEL} label '{}' for {} hosts",
+                self.container,
+                self.owned,
+                self.hosts.len()
+            );
+        }
+        Ok(&self.hosts[..count])
     }
 }
 
 /// Why routes are being published.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PublishMode<'a> {
-    /// A container (name, unique instance route) was started and claims its
-    /// routes: the gateway is created if needed, and a collision of its
-    /// instance route fails. Authored domains that collide are withheld with
-    /// a warning; the instance stays reachable on its own route.
-    Claim(&'a str, &'a str, u16),
+    /// A container (by name) was started and claims its routes: the gateway
+    /// is created if needed, and a collision of a route it owns (its
+    /// instance route or an extension) fails. Authored domains that collide
+    /// are withheld with a warning; the instance stays reachable on its own
+    /// routes.
+    Claim(&'a str, u16),
     /// A container was removed: routes are withdrawn without ever creating
     /// or starting the gateway.
     Withdraw,
@@ -85,7 +117,7 @@ pub(crate) fn publish_routes(mode: PublishMode<'_>) -> Result<()> {
 
     let gateway = gateway_container_name(&installation);
     let running = match mode {
-        PublishMode::Claim(_, _, baked_port) => {
+        PublishMode::Claim(_, baked_port) => {
             start_gateway(&installation, ports, &dirs)?;
             // A first run that loaded its config before another process
             // recorded different ports would serve URLs on the wrong port.
@@ -113,11 +145,15 @@ pub(crate) fn publish_routes(mode: PublishMode<'_>) -> Result<()> {
     std::fs::rename(&candidate, &current)
         .with_context(|| format!("failed to install {}", current.display()))?;
 
+    let own_hosts: &[String] = match mode {
+        PublishMode::Claim(own, _) => match labeled.iter().find(|entry| entry.container == own) {
+            Some(entry) => entry.owned_hosts()?,
+            None => &[],
+        },
+        PublishMode::Withdraw => &[],
+    };
     for (host, claimants) in &plan.conflicts {
-        if let PublishMode::Claim(own, own_route, _) = mode
-            && host == own_route
-            && claimants.iter().any(|claimant| claimant == own)
-        {
+        if own_hosts.contains(host) {
             anyhow::bail!(
                 "route {host} is claimed by {}; use another --instance or bring the other \
                  down",
@@ -149,34 +185,50 @@ pub(crate) fn publish_routes(mode: PublishMode<'_>) -> Result<()> {
 }
 
 /// Fails before a container starts when another running container of this
-/// installation already serves its unique instance route (possible only
-/// when `-` in names makes two instance/project/service triples spell the
-/// same label).
+/// installation already serves one of its instance routes: its unique route
+/// or a `routes` extension of it (possible only when `-` in names makes two
+/// instance/project/service triples spell the same label).
 ///
 /// # Errors
 ///
 /// Returns an error naming the host and its owner, or when Docker fails.
-pub(crate) fn ensure_route_unclaimed(own_container: &str, route: &str) -> Result<()> {
+pub(crate) fn ensure_route_unclaimed(own_container: &str, own_hosts: &[String]) -> Result<()> {
     if crate::docker::is_dry_run() {
         return Ok(());
     }
     let installation = crate::home::installation_id()?;
-    for entry in discover_routes(&installation)? {
-        if entry.container == own_container {
-            continue;
-        }
-        // Only another instance route blocks it; an authored domain spelled
-        // the same yields to it (see `plan_routes`).
-        if let Some(host) = entry.derived_route().filter(|host| *host == route) {
-            anyhow::bail!(
-                "route {host} is already served by {}; use another --instance or bring {} \
-                 down first",
-                entry.container,
-                entry.container
-            );
-        }
+    let entries = discover_routes(&installation)?;
+    if let Some((host, owner)) = instance_route_clash(own_container, own_hosts, &entries)? {
+        anyhow::bail!(
+            "route {host} is already served by {owner}; use another --instance or bring \
+             {owner} down first"
+        );
     }
     Ok(())
+}
+
+/// The first of `own_hosts` (an instance route, then its `routes`
+/// extensions) that another container owns. An authored domain spelled the
+/// same yields instead (see `plan_routes`).
+///
+/// # Errors
+///
+/// Returns an error for a container with an invalid owned-host label.
+pub(super) fn instance_route_clash<'a>(
+    own_container: &str,
+    own_hosts: &'a [String],
+    entries: &'a [LabeledRoute],
+) -> Result<Option<(&'a str, &'a str)>> {
+    for entry in entries
+        .iter()
+        .filter(|entry| entry.container != own_container)
+    {
+        let owned = entry.owned_hosts()?;
+        if let Some(host) = own_hosts.iter().find(|host| owned.contains(host)) {
+            return Ok(Some((host.as_str(), entry.container.as_str())));
+        }
+    }
+    Ok(None)
 }
 
 /// Routes, per-network aliases and withheld hosts derived from the labels.
@@ -206,6 +258,7 @@ pub(super) fn plan_routes(labeled: &[LabeledRoute]) -> Result<RoutePlan> {
                 entry.port
             );
         }
+        entry.owned_hosts()?;
         for host in &entry.hosts {
             claimants.entry(host).or_default().push(entry);
         }
@@ -214,7 +267,11 @@ pub(super) fn plan_routes(labeled: &[LabeledRoute]) -> Result<RoutePlan> {
     for (host, entries) in claimants {
         let owners: Vec<&&LabeledRoute> = entries
             .iter()
-            .filter(|entry| entry.derived_route() == Some(host))
+            .filter(|entry| {
+                entry
+                    .owned_hosts()
+                    .is_ok_and(|owned| owned.iter().any(|owned| owned == host))
+            })
             .collect();
         let winner = match (entries.as_slice(), owners.as_slice()) {
             ([entry], _) => Some(*entry),
@@ -292,10 +349,11 @@ pub(crate) fn detach_network(network: &str) -> Result<()> {
 fn discover_routes(installation: &str) -> Result<Vec<LabeledRoute>> {
     let label = crate::docker::label_template;
     let format = format!(
-        "{{{{.Names}}}}\t{}\t{}\t{}",
+        "{{{{.Names}}}}\t{}\t{}\t{}\t{}",
         label(ROUTE_HOSTS_LABEL),
         label(ROUTE_PORT_LABEL),
-        label(NETWORK_LABEL)
+        label(NETWORK_LABEL),
+        label(ROUTE_OWNED_LABEL)
     );
     let output = crate::docker::run_docker_output_owned(
         &[
@@ -327,6 +385,7 @@ pub(super) fn parse_routes(listing: &str) -> Vec<LabeledRoute> {
             let hosts = fields.next()?;
             let port = fields.next()?.trim();
             let network = fields.next().unwrap_or_default().trim();
+            let owned = fields.next().unwrap_or_default().trim();
             let hosts: Vec<String> = hosts
                 .split(',')
                 .map(str::trim)
@@ -338,6 +397,7 @@ pub(super) fn parse_routes(listing: &str) -> Vec<LabeledRoute> {
                 hosts,
                 port: port.to_owned(),
                 network: network.to_owned(),
+                owned: owned.to_owned(),
             })
         })
         .collect()
@@ -600,7 +660,96 @@ fn wait_until_admin_ready(gateway: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_aliases, parse_routes, plan_routes};
+    use super::{instance_route_clash, parse_aliases, parse_routes, plan_routes};
+
+    #[test]
+    fn owned_routes_clash_but_authored_domains_yield() {
+        // Project `shop` of instance `alpha` owns its route and its `api`
+        // extension, and authors `alpha-shop-x`.
+        let labeled = parse_routes(
+            "berth_shop_alpha_app\talpha-shop.berth.localhost,alpha-shop-api.berth.localhost,alpha-shop-x.berth.localhost\t80\tberth_shop_alpha\t2\n",
+        );
+        let hosts = |hosts: &[&str]| {
+            hosts
+                .iter()
+                .map(|host| (*host).to_owned())
+                .collect::<Vec<_>>()
+        };
+
+        // Project `shop-api` of instance `alpha` spells the extension.
+        assert_eq!(
+            instance_route_clash(
+                "berth_shop-api_alpha_app",
+                &hosts(&["alpha-shop-api.berth.localhost"]),
+                &labeled
+            )
+            .expect("labels"),
+            Some(("alpha-shop-api.berth.localhost", "berth_shop_alpha_app"))
+        );
+        // An extension spelling another container's instance route.
+        assert_eq!(
+            instance_route_clash(
+                "berth_sh_alpha_app",
+                &hosts(&["alpha-sh.berth.localhost", "alpha-shop.berth.localhost"]),
+                &labeled
+            )
+            .expect("labels"),
+            Some(("alpha-shop.berth.localhost", "berth_shop_alpha_app"))
+        );
+        // An authored domain yields, even when it is spelled like an
+        // extension; the own container never clashes with itself.
+        assert_eq!(
+            instance_route_clash(
+                "berth_shop-x_alpha_app",
+                &hosts(&["alpha-shop-x.berth.localhost"]),
+                &labeled
+            )
+            .expect("labels"),
+            None
+        );
+        assert_eq!(
+            instance_route_clash(
+                "berth_shop_alpha_app",
+                &hosts(&[
+                    "alpha-shop.berth.localhost",
+                    "alpha-shop-api.berth.localhost"
+                ]),
+                &labeled
+            )
+            .expect("labels"),
+            None
+        );
+    }
+
+    #[test]
+    fn an_owned_extension_wins_over_an_authored_domain_spelled_the_same() {
+        let labeled = parse_routes(
+            "one\tone.berth.localhost,one-ee.berth.localhost\t80\tn1\t2\n\
+             two\ttwo.berth.localhost,one-ee.berth.localhost\t80\tn2\t1\n",
+        );
+        let plan = plan_routes(&labeled).expect("plan");
+        let route = plan
+            .routes
+            .iter()
+            .find(|route| route.host == "one-ee.berth.localhost")
+            .expect("served");
+        assert_eq!(route.upstream, "one:80");
+        assert_eq!(plan.overridden["one-ee.berth.localhost"], ["two"]);
+        assert!(plan.conflicts.is_empty());
+    }
+
+    #[test]
+    fn containers_without_an_owned_label_own_only_their_first_host() {
+        // berth 10.0.0 labels: no owned count.
+        let labeled = parse_routes(
+            "old\told.berth.localhost,old-ee.berth.localhost\t80\tn1\n\
+             new\tnew.berth.localhost,old-ee.berth.localhost\t80\tn2\t1\n",
+        );
+        let plan = plan_routes(&labeled).expect("plan");
+        assert!(plan.conflicts.contains_key("old-ee.berth.localhost"));
+        let invalid = parse_routes("bad\tbad.berth.localhost\t80\tn1\t3\n");
+        assert!(plan_routes(&invalid).is_err());
+    }
 
     #[test]
     fn listing_parses_into_routes_and_per_network_aliases() {

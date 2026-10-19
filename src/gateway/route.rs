@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 
-use crate::config::{Driver, Kind, ServiceConfig};
+use crate::config::{Driver, ExtraRoute, Kind, ServiceConfig};
 
 /// Suffix every berth route lives under.
 pub(crate) const ROUTE_SUFFIX: &str = "berth.localhost";
@@ -36,6 +36,41 @@ pub(crate) fn route_host(instance: &str, project: &str, service: &str) -> Result
     Ok(format!("{label}.{ROUTE_SUFFIX}"))
 }
 
+/// Builds the host of an extra route: the service's own route label with
+/// `-{label}` appended. Extending the instance route keeps the host unique
+/// to the instance, one label under the wildcard certificate, and an
+/// instance route for `is_instance_route`.
+///
+/// # Errors
+///
+/// Returns an error when the first label would exceed the 63-byte DNS limit.
+pub(crate) fn extra_route_host(primary: &str, label: &str) -> Result<String> {
+    let Some(base) = primary.strip_suffix(&format!(".{ROUTE_SUFFIX}")) else {
+        anyhow::bail!("route '{primary}' is not under {ROUTE_SUFFIX}");
+    };
+    let composed = format!("{base}-{label}");
+    if composed.len() > 63 {
+        anyhow::bail!(
+            "route label '{composed}' for route '{label}' is {} bytes; DNS labels are limited \
+             to 63. Shorten the route label or the instance or project name",
+            composed.len()
+        );
+    }
+    Ok(format!("{composed}.{ROUTE_SUFFIX}"))
+}
+
+/// The extra routes a service serves right now, in label order. Empty when
+/// the service has no gateway routes (`--env` namespaces and test leases),
+/// so those runtimes never claim the default instance's hosts.
+#[must_use]
+pub(crate) fn extra_routes(service: &ServiceConfig) -> &[ExtraRoute] {
+    if has_gateway_routes(service) {
+        &service.runtime.extra_routes
+    } else {
+        &[]
+    }
+}
+
 /// Whether the service is served through the gateway right now: it has its
 /// instance route and is not a direct `localhost` TLS target (the test
 /// runtime).
@@ -46,14 +81,27 @@ pub(crate) fn has_gateway_routes(service: &ServiceConfig) -> bool {
         && service.resolved_domain.is_some()
 }
 
-/// The hosts the gateway serves for a service: its unique instance route
-/// first, then its authored domains.
+/// The hosts a service owns: its unique instance route, then its `routes`
+/// extensions. They lead `route_hosts`, and the route labels record how many
+/// there are, so the gateway tells them from authored domains.
+#[must_use]
+pub(crate) fn owned_route_hosts(service: &ServiceConfig) -> Vec<String> {
+    if !has_gateway_routes(service) {
+        return Vec::new();
+    }
+    let mut hosts: Vec<String> = service.resolved_domain.iter().cloned().collect();
+    hosts.extend(extra_routes(service).iter().map(|route| route.host.clone()));
+    hosts
+}
+
+/// The hosts the gateway serves for a service: its owned hosts first, then
+/// its authored domains.
 #[must_use]
 pub(crate) fn route_hosts(service: &ServiceConfig) -> Vec<String> {
     if !has_gateway_routes(service) {
         return Vec::new();
     }
-    let mut hosts: Vec<String> = service.resolved_domain.iter().cloned().collect();
+    let mut hosts = owned_route_hosts(service);
     for domain in service
         .domain
         .iter()

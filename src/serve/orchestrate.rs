@@ -37,8 +37,11 @@ pub fn run(options: RunServeOptions<'_>) -> Result<()> {
         .resolved_domain
         .clone()
         .filter(|_| publishes_routes(options.target));
-    if let Some(route) = &own_route {
-        crate::gateway::ensure_route_unclaimed(&container_name, route)?;
+    if own_route.is_some() {
+        crate::gateway::ensure_route_unclaimed(
+            &container_name,
+            &crate::gateway::owned_route_hosts(options.target),
+        )?;
     }
     let runtime_image = resolve_runtime_image(
         options.target,
@@ -56,13 +59,12 @@ pub fn run(options: RunServeOptions<'_>) -> Result<()> {
     if options.trust_container_ca {
         trust_inner_container_ca(options.target, options.detached)?;
     }
-    if let Some(route) = &own_route {
+    if own_route.is_some() {
         let baked_port = options.target.runtime.gateway_https_port.ok_or_else(|| {
             anyhow::anyhow!("service '{}' has no gateway port", options.target.name)
         })?;
         crate::gateway::publish_routes(crate::gateway::PublishMode::Claim(
             &container_name,
-            route,
             baked_port,
         ))?;
     }
@@ -165,6 +167,7 @@ mod tests {
             domain: Some("app.berth".to_owned()),
             domains: None,
             resolved_domain: None,
+            routes: None,
             container_port: Some(80),
             smtp_port: None,
             volumes: None,

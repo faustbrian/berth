@@ -229,7 +229,9 @@ Only the default runtime environment of an instance has routes. `--env`
 namespaces, including the per-run `artisan test` leases, keep 7.0.0's direct,
 port-offset local URLs. Every routed service always has its unique instance
 route, which is also its `APP_URL`; an authored `domain`/`domains` adds extra
-routes. A host claimed by two running containers (an authored domain committed
+routes. `routes` adds per-instance routes `{instance route label}-{label}`
+after the instance route, each injected into the env var it names; they are
+the instance's own, so two worktrees never compete for them. A host claimed by two running containers (an authored domain committed
 to a project with two worktrees up, say) is withheld from both with a warning
 while every other route keeps being published (8.x FI-53), so committed config
 never needs editing per worktree. When all but one claimant go down, the

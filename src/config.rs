@@ -41,7 +41,7 @@ pub(crate) use service_methods::network::{
 #[cfg(test)]
 pub(crate) use types::ServiceRuntime;
 pub use types::{
-    Config, ContainerEngine, DomainStrategy, Driver, HookOnError, HookPhase, HookRun, Isolation,
-    Kind, LockedImage, Lockfile, ProjectType, RestartPolicy, ServiceConfig, ServiceHook,
+    Config, ContainerEngine, DomainStrategy, Driver, ExtraRoute, HookOnError, HookPhase, HookRun,
+    Isolation, Kind, LockedImage, Lockfile, ProjectType, RestartPolicy, ServiceConfig, ServiceHook,
     SharedEngine, SharedTarget, SwarmGit, SwarmTarget,
 };

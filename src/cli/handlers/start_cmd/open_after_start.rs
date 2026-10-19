@@ -108,6 +108,7 @@ mod tests {
             domain: domain.map(ToOwned::to_owned),
             domains: None,
             resolved_domain: None,
+            routes: None,
             container_port: None,
             smtp_port: None,
             volumes: None,

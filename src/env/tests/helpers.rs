@@ -20,6 +20,7 @@ pub(super) fn svc(name: &str, kind: Kind, driver: Driver, port: u16) -> ServiceC
         domain: None,
         domains: None,
         resolved_domain: None,
+        routes: None,
         container_port: None,
         smtp_port: None,
         volumes: None,

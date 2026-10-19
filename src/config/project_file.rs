@@ -13,6 +13,7 @@ pub(crate) use legacy::{LEGACY_CONFIG_FILE_NAMES, legacy_config_error};
 pub(crate) use migrate::convert_legacy_config;
 pub(crate) use migrate::{MigratedProjectFile, is_migratable_file_name, migrate_project_file};
 pub(crate) use schema::parse_project_file;
+pub(crate) use service_policy::validate_env_key;
 
 /// Canonical project file name.
 pub(crate) const PROJECT_FILE_NAME: &str = ".berth.yaml";

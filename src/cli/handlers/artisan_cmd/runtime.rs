@@ -179,6 +179,32 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_leases_leave_route_variables_to_the_apps_test_env() {
+        let app_port = cli::support::random_free_port("127.0.0.1").expect("app test port");
+        let mut app = app_service("app", app_port);
+        app.routes = Some(std::collections::BTreeMap::from([(
+            "ee".to_owned(),
+            "APP_EE_URL".to_owned(),
+        )]));
+        // A lease starts from the default environment's routed app.
+        app.resolved_domain = Some("ci-7-shop.berth.localhost".to_owned());
+        app.runtime.gateway_https_port = Some(8443);
+        let mut config = Config {
+            schema_version: 1,
+            project_type: crate::config::ProjectType::Project,
+            container_prefix: None,
+            domain_strategy: None,
+            service: vec![app],
+            swarm: Vec::new(),
+        };
+
+        let (_, app_env) = prepare_testing_runtime(&mut config).expect("prepare runtime");
+        let app_url = app_env.get("APP_URL").expect("APP_URL");
+        assert!(app_url.starts_with("https://localhost:"), "{app_url}");
+        assert_eq!(app_env.get("APP_EE_URL"), None);
+    }
+
     fn service(name: &str, port: u16, smtp_port: Option<u16>) -> ServiceConfig {
         ServiceConfig {
             name: name.to_owned(),
@@ -199,6 +225,7 @@ mod tests {
             domain: None,
             domains: None,
             resolved_domain: None,
+            routes: None,
             container_port: None,
             smtp_port,
             volumes: None,

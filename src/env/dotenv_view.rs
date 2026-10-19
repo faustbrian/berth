@@ -24,9 +24,17 @@ pub(crate) fn host_env(config: &Config) -> HashMap<String, String> {
         if let Some(url) = crate::gateway::route_urls(service).into_iter().next()
             && crate::gateway::has_gateway_routes(service)
         {
-            vars.entry("APP_URL".to_owned())
-                .or_insert_with(|| url.clone());
-            vars.entry("ASSET_URL".to_owned()).or_insert(url);
+            // `ASSET_URL` belongs to the service that sets `APP_URL`.
+            if !vars.contains_key("APP_URL") && service.routes.is_none() {
+                vars.insert("ASSET_URL".to_owned(), url.clone());
+            }
+            vars.entry("APP_URL".to_owned()).or_insert(url);
+            if let Some(port) = service.runtime.gateway_https_port {
+                for route in crate::gateway::extra_routes(service) {
+                    vars.entry(route.env.clone())
+                        .or_insert_with(|| crate::gateway::https_origin(&route.host, port));
+                }
+            }
             continue;
         }
         if service.kind == crate::config::Kind::App || !crate::network::is_published(service) {

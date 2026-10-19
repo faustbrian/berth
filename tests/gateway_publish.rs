@@ -83,7 +83,7 @@ case "$1" in
         for f in "$S"/c/*; do
           [ -f "$f" ] || continue
           n=$(basename "$f"); h=$(label "$n" dev.berth.route.hosts)
-          [ -n "$h" ] && printf '%s\t%s\t%s\t%s\n' "$n" "$h" "$(label "$n" dev.berth.route.port)" "$(label "$n" dev.berth.network)"
+          [ -n "$h" ] && printf '%s\t%s\t%s\t%s\t%s\n' "$n" "$h" "$(label "$n" dev.berth.route.port)" "$(label "$n" dev.berth.network)" "$(label "$n" dev.berth.route.owned)"
         done ;;
       *network=*)
         net=""; for arg in "$@"; do case "$arg" in network=*) net="${arg#network=}" ;; esac; done
@@ -708,6 +708,138 @@ fn a_second_instance_spelling_the_same_route_is_refused() {
     assert_eq!(
         upstream_of(&fixture.document(), "a-b-c.berth.localhost").as_deref(),
         Some("berth_c_a-b_app:80"),
+        "{}",
+        fixture.document()
+    );
+}
+
+const ROUTED: &str = "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    routes:\n      ee: APP_EE_URL\n      fi: APP_FI_URL\n";
+
+#[test]
+fn every_instance_serves_its_own_extra_routes_until_it_goes_down() {
+    let mut fixture = Fixture::new("extra-routes");
+    let alpha = up_instance(&mut fixture, "alpha", ROUTED);
+    assert!(alpha.status.success(), "{}", stderr(&alpha));
+    let calls = fixture.calls();
+    let alpha_run = calls
+        .iter()
+        .find(|call| call.starts_with("run") && call.contains("berth_shop_alpha_app"))
+        .expect("alpha app run")
+        .clone();
+    let beta = up_instance(&mut fixture, "beta", ROUTED);
+    assert!(beta.status.success(), "{}", stderr(&beta));
+
+    let document = fixture.document();
+    let calls = fixture.calls();
+    for instance in ["alpha", "beta"] {
+        for label in ["ee", "fi"] {
+            let host = format!("{instance}-shop-{label}.berth.localhost");
+            assert_eq!(
+                upstream_of(&document, &host).as_deref(),
+                Some(format!("berth_shop_{instance}_app:80").as_str()),
+                "{host}: {document}"
+            );
+            assert!(
+                calls
+                    .iter()
+                    .any(|call| call.starts_with("network connect --alias")
+                        && call.contains(&host)
+                        && call.contains(&format!("berth_shop_{instance}"))),
+                "{host}: {calls:#?}"
+            );
+        }
+    }
+    let ee = format!(
+        "-e APP_EE_URL=https://alpha-shop-ee.berth.localhost:{}",
+        fixture.https_port
+    );
+    assert!(alpha_run.contains(&ee), "{alpha_run}");
+    assert!(
+        !alpha_run.contains("--add-host alpha-shop-ee.berth.localhost"),
+        "{alpha_run}"
+    );
+
+    let down = fixture.berth(&["--non-interactive", "--instance", "alpha", "down"], false);
+    assert!(down.status.success(), "{}", stderr(&down));
+    let document = fixture.document();
+    assert_eq!(
+        upstream_of(&document, "alpha-shop-ee.berth.localhost"),
+        None
+    );
+    assert_eq!(
+        upstream_of(&document, "beta-shop-ee.berth.localhost").as_deref(),
+        Some("berth_shop_beta_app:80"),
+        "{document}"
+    );
+}
+
+#[test]
+fn a_runtime_environment_never_claims_the_default_instances_extra_routes() {
+    let mut fixture = Fixture::new("extra-routes-env");
+    let alpha = up_instance(&mut fixture, "alpha", ROUTED);
+    assert!(alpha.status.success(), "{}", stderr(&alpha));
+    fixture.clear_log();
+    let staging = fixture.berth(
+        &[
+            "--non-interactive",
+            "--instance",
+            "alpha",
+            "--env",
+            "staging",
+            "up",
+            "--no-wait",
+        ],
+        false,
+    );
+    assert!(staging.status.success(), "{}", stderr(&staging));
+    assert_eq!(
+        upstream_of(&fixture.document(), "alpha-shop-ee.berth.localhost").as_deref(),
+        Some("berth_shop_alpha_app:80"),
+        "{}",
+        fixture.document()
+    );
+    let calls = fixture.calls();
+    let run = calls
+        .iter()
+        .find(|call| call.starts_with("run") && call.contains("berth_shop_alpha_app-staging"))
+        .expect("staging app run");
+    assert!(!run.contains("-ee.berth.localhost"), "{run}");
+    let value = |key: &str| {
+        run.split(" -e ")
+            .find_map(|pair| pair.strip_prefix(&format!("{key}=")))
+            .and_then(|rest| rest.split(' ').next())
+            .map(ToOwned::to_owned)
+    };
+    assert!(value("APP_URL").is_some(), "{run}");
+    assert_eq!(value("APP_EE_URL"), None, "{run}");
+}
+
+#[test]
+fn a_project_whose_route_is_another_instances_extension_is_refused() {
+    // `shop` of instance `alpha` extends its route with `api`; `shop-api`
+    // of instance `alpha` derives the same host.
+    let mut fixture = Fixture::new("extension-clash");
+    let shop = up_instance(
+        &mut fixture,
+        "alpha",
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    routes:\n      api: APP_API_URL\n",
+    );
+    assert!(shop.status.success(), "{}", stderr(&shop));
+    let clash = up_instance(
+        &mut fixture,
+        "alpha",
+        &PLAIN.replace("project: shop", "project: shop-api"),
+    );
+    assert_eq!(clash.status.code(), Some(125), "{}", stderr(&clash));
+    assert!(
+        stderr(&clash)
+            .contains("alpha-shop-api.berth.localhost is already served by berth_shop_alpha_app"),
+        "{}",
+        stderr(&clash)
+    );
+    assert_eq!(
+        upstream_of(&fixture.document(), "alpha-shop-api.berth.localhost").as_deref(),
+        Some("berth_shop_alpha_app:80"),
         "{}",
         fixture.document()
     );

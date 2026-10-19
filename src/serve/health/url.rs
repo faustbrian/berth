@@ -68,6 +68,7 @@ mod tests {
             container_name: Some("api".to_owned()),
             resolved_container_name: Some("api".to_owned()),
             resolved_domain: Some("app.berth.localhost".to_owned()),
+            routes: None,
             runtime: crate::config::ServiceRuntime {
                 gateway_https_port: Some(8443),
                 ..Default::default()

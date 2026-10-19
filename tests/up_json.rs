@@ -857,3 +857,51 @@ fn bounded_output(command: &mut Command) -> Output {
         stderr: stderr.join().expect("stderr"),
     }
 }
+
+#[test]
+fn up_json_reports_extra_route_urls_and_their_env_vars() {
+    let fixture = Fixture::new("extra-routes");
+    fixture.write_project(&PROJECT.replace(
+        "  app:\n    preset: laravel\n",
+        "  app:\n    preset: laravel\n    routes:\n      ee: APP_EE_URL\n",
+    ));
+    let up = fixture.berth(&["up", "--json"], &[]);
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    let document = one_document(&up.stdout);
+    let urls: Vec<&str> = document["urls"]
+        .as_array()
+        .expect("urls")
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .collect();
+    let app_url = document["environment"]["APP_URL"]
+        .as_str()
+        .expect("APP_URL");
+    let ee_url = document["environment"]["APP_EE_URL"]
+        .as_str()
+        .expect("APP_EE_URL");
+    assert_eq!(
+        ee_url,
+        app_url.replace(".berth.localhost", "-ee.berth.localhost")
+    );
+    assert!(ee_url.ends_with(&format!("-ee.berth.localhost:{}", fixture.ports.0)));
+    let app_position = urls
+        .iter()
+        .position(|url| *url == app_url)
+        .expect("app url");
+    let ee_position = urls.iter().position(|url| *url == ee_url).expect("ee url");
+    assert!(app_position < ee_position, "{urls:?}");
+    assert_eq!(
+        document["host_environment"]["APP_EE_URL"].as_str(),
+        Some(ee_url),
+        "{document}"
+    );
+    assert!(
+        document["environment"].get("ASSET_URL").is_none(),
+        "{document}"
+    );
+    assert!(
+        document["host_environment"].get("ASSET_URL").is_none(),
+        "{document}"
+    );
+}

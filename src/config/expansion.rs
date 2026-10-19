@@ -90,6 +90,7 @@ mod tests {
             scheme: None,
             domain: Some("acme.berth".to_owned()),
             domains: None,
+            routes: None,
             container_port: Some(80),
             smtp_port: None,
             volumes: None,

@@ -110,7 +110,7 @@ pub(crate) fn validate_service_name(name: &str) -> Result<()> {
     Ok(())
 }
 
-fn is_dns_label(name: &str) -> bool {
+pub(crate) fn is_dns_label(name: &str) -> bool {
     let bytes = name.as_bytes();
     bytes
         .iter()

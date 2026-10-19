@@ -133,6 +133,7 @@ mod tests {
             domain: Some("app.berth".to_owned()),
             domains: None,
             resolved_domain: None,
+            routes: None,
             container_port: Some(80),
             smtp_port: None,
             volumes: None,

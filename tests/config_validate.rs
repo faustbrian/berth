@@ -168,3 +168,37 @@ fn a_symlinked_project_file_is_refused() {
         "{stderr}"
     );
 }
+
+#[test]
+fn routes_are_validated_without_a_container_engine() {
+    let scratch = Scratch::new("routes");
+    let path = scratch.write(
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    routes:\n      ee: APP_EE_URL\n      fi: APP_FI_URL\n",
+    );
+    let valid = scratch.berth(&[
+        "--config",
+        path.to_str().expect("utf8"),
+        "config",
+        "validate",
+    ]);
+    assert!(
+        valid.status.success(),
+        "{}",
+        String::from_utf8_lossy(&valid.stderr)
+    );
+
+    let path = scratch.write(
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    routes:\n      EE: APP_EE_URL\n",
+    );
+    let invalid = scratch.berth(&[
+        "--config",
+        path.to_str().expect("utf8"),
+        "config",
+        "validate",
+    ]);
+    assert_eq!(invalid.status.code(), Some(125));
+    assert!(invalid.stdout.is_empty(), "stdout stays empty on failure");
+    let stderr = String::from_utf8_lossy(&invalid.stderr);
+    assert!(stderr.contains("service 'app' route 'EE'"), "{stderr}");
+    assert_eq!(scratch.engine_calls(), None);
+}

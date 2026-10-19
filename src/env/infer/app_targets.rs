@@ -27,14 +27,24 @@ pub(super) fn apply_app_target_env(vars: &mut HashMap<String, String>, service: 
     if is_app_driver(service, Driver::Frankenphp)
         && let Some(url) = inferred_app_public_url(service)
     {
-        insert_if_absent(vars, "APP_URL", url.clone());
-        insert_if_absent(vars, "ASSET_URL", url);
+        // A site served on an extra route would load its assets from the
+        // primary origin, and browsers refuse cross-origin module scripts
+        // without CORS headers. Without `ASSET_URL`, Laravel's `asset()`
+        // follows the host each request came in on.
+        // `ASSET_URL` belongs to the app that sets `APP_URL`, never to a
+        // later web app of the project.
+        if !vars.contains_key("APP_URL") && service.routes.is_none() {
+            insert_if_absent(vars, "ASSET_URL", url.clone());
+        }
+        insert_if_absent(vars, "APP_URL", url);
         insert_if_absent(
             vars,
             "LIVEWIRE_TEMPORARY_FILE_UPLOAD_DISK",
             "local".to_owned(),
         );
     }
+
+    apply_route_env(vars, service);
 
     if is_app_driver(service, Driver::Gotenberg) {
         insert_if_absent(vars, "GOTENBERG_BASE_URL", service_endpoint(service));
@@ -103,5 +113,22 @@ pub(super) fn apply_app_target_env(vars: &mut HashMap<String, String>, service: 
 
     if is_app_driver(service, Driver::Dusk) {
         dusk::apply(vars, service);
+    }
+}
+
+/// Gives each of the service's `routes` env vars its route's URL. Without
+/// gateway routes (`--env` namespaces and test leases) the extra hosts are
+/// not served, and the vars are left to the app's own env files (its
+/// `.env.testing`, say) rather than all set to one URL.
+fn apply_route_env(vars: &mut HashMap<String, String>, service: &ServiceConfig) {
+    let Some(port) = service.runtime.gateway_https_port else {
+        return;
+    };
+    for route in crate::gateway::extra_routes(service) {
+        insert_if_absent(
+            vars,
+            &route.env,
+            crate::gateway::https_origin(&route.host, port),
+        );
     }
 }

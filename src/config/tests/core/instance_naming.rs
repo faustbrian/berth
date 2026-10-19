@@ -214,3 +214,182 @@ fn runtime_environments_have_no_gateway_routes_even_with_long_test_pool_names() 
     assert_eq!(routed, ["app"], "the default environment is routed");
     std::fs::remove_dir_all(&base).expect("cleanup");
 }
+
+const ROUTED_PROJECT: &str = "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    routes:\n      ee: APP_EE_URL\n      fi: APP_FI_URL\n      se: APP_SE_URL\n";
+
+fn routed_worktree(base: &std::path::Path, name: &str, contents: &str) -> std::path::PathBuf {
+    let root = base.join(name);
+    std::fs::create_dir_all(&root).expect("create worktree");
+    std::fs::write(root.join(".berth.yaml"), contents).expect("write project file");
+    root
+}
+
+fn app_route_hosts(config: &Config) -> Vec<String> {
+    let app = config
+        .service
+        .iter()
+        .find(|service| service.name == "app")
+        .expect("app");
+    crate::gateway::route_hosts(app)
+}
+
+#[test]
+fn routes_give_every_instance_its_own_extra_hosts_after_its_primary_route() {
+    let base = base("extra-routes");
+    let root = routed_worktree(&base, "checkout", ROUTED_PROJECT);
+    let first = load(&root, Some("ci-7"));
+    let second = load(&root, Some("ci-8"));
+
+    assert_eq!(
+        app_route_hosts(&first),
+        [
+            "ci-7-shipit-api.berth.localhost",
+            "ci-7-shipit-api-ee.berth.localhost",
+            "ci-7-shipit-api-fi.berth.localhost",
+            "ci-7-shipit-api-se.berth.localhost",
+        ]
+    );
+    let second_hosts = app_route_hosts(&second);
+    assert!(
+        app_route_hosts(&first)
+            .iter()
+            .all(|host| !second_hosts.contains(host)),
+        "{second_hosts:?}"
+    );
+    std::fs::create_dir_all(root.join("app")).expect("subdir");
+    assert_eq!(
+        app_route_hosts(&load(&root.join("app"), Some("ci-7"))),
+        app_route_hosts(&first)
+    );
+    std::fs::remove_dir_all(&base).expect("cleanup");
+}
+
+#[test]
+fn routes_are_not_served_outside_the_default_runtime_environment() {
+    let base = base("extra-routes-env");
+    let root = routed_worktree(&base, "checkout", ROUTED_PROJECT);
+    for env in ["staging", "testing-pool-0123456789abcdef-12"] {
+        let mut config = load(&root, Some("ci-7"));
+        apply_runtime_env(&mut config, env).expect("apply env");
+        assert!(app_route_hosts(&config).is_empty(), "{env}");
+    }
+    let mut local = load(&root, Some("ci-7"));
+    apply_runtime_env(&mut local, "local").expect("apply local");
+    assert_eq!(app_route_hosts(&local).len(), 4);
+    std::fs::remove_dir_all(&base).expect("cleanup");
+}
+
+#[test]
+fn invalid_or_colliding_routes_fail_at_load_naming_the_route() {
+    let base = base("extra-routes-invalid");
+    let app = |routes: &str| {
+        format!(
+            "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    routes:\n{routes}"
+        )
+    };
+    let cases = [
+        ("upper", app("      EE: APP_EE_URL\n"), "EE"),
+        ("underscore", app("      e_e: APP_EE_URL\n"), "e_e"),
+        ("dot", app("      ee.fi: APP_EE_URL\n"), "ee.fi"),
+        ("leading", app("      -ee: APP_EE_URL\n"), "-ee"),
+        ("trailing", app("      ee-: APP_EE_URL\n"), "ee-"),
+        ("empty", app("      \"\": APP_EE_URL\n"), "app"),
+        ("space", app("      e e: APP_EE_URL\n"), "e e"),
+        ("duplicate", app("      ee: APP_EE_URL\n      ee: APP_FI_URL\n"), "ee"),
+        ("same-var", app("      ee: APP_EE_URL\n      fi: APP_EE_URL\n"), "APP_EE_URL"),
+        ("app-url", app("      ee: APP_URL\n"), "APP_URL"),
+        ("asset-url", app("      ee: ASSET_URL\n"), "ASSET_URL"),
+        (
+            "no-routes",
+            "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    routes: {}\n".to_owned(),
+            "`routes` is empty",
+        ),
+        ("app-key", app("      ee: APP_KEY\n"), "APP_KEY"),
+        (
+            "backend-var",
+            "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  s3:\n    preset: rustfs\n    isolation: dedicated\n  app:\n    preset: laravel\n    routes:\n      cdn: AWS_URL\n".to_owned(),
+            "AWS_URL",
+        ),
+        (
+            "localhost-tls",
+            "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    localhost_tls: true\n    routes:\n      ee: APP_EE_URL\n".to_owned(),
+            "localhost_tls",
+        ),
+        (
+            "var-in-two-services",
+            "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    routes:\n      ee: APP_EE_URL\n  admin:\n    preset: laravel\n    routes:\n      ee: APP_EE_URL\n".to_owned(),
+            "APP_EE_URL",
+        ),
+        ("bad-var", app("      ee: APP-EE\n"), "APP-EE"),
+        (
+            "explicit-env",
+            "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    env:\n      APP_EE_URL: https://ee.example\n    routes:\n      ee: APP_EE_URL\n".to_owned(),
+            "APP_EE_URL",
+        ),
+        (
+            "service-collision",
+            "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    routes:\n      mail: APP_MAIL_URL\n  mail:\n    preset: mailpit\n".to_owned(),
+            "ci-7-shipit-api-mail.berth.localhost",
+        ),
+        (
+            "domain-collision",
+            "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    domain: ci-7-shipit-api-ee.berth.localhost\n    routes:\n      ee: APP_EE_URL\n".to_owned(),
+            "ci-7-shipit-api-ee.berth.localhost",
+        ),
+        (
+            "not-routable",
+            "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n  cache:\n    preset: valkey\n    isolation: dedicated\n    routes:\n      ee: APP_EE_URL\n".to_owned(),
+            "cache",
+        ),
+    ];
+    for (name, contents, expected) in cases {
+        let root = routed_worktree(&base, name, &contents);
+        let error = load_config_with(
+            LoadConfigPathOptions::new(None, Some(&root)).with_instance(Some("ci-7")),
+        )
+        .expect_err(name);
+        let message = format!("{error:#}");
+        assert!(message.contains(expected), "{name}: {message}");
+    }
+    std::fs::remove_dir_all(&base).expect("cleanup");
+}
+
+#[test]
+fn a_no_label_is_a_route_like_any_other() {
+    let base = base("extra-routes-no");
+    let root = routed_worktree(
+        &base,
+        "checkout",
+        "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    routes:\n      no: APP_NO_URL\n",
+    );
+    assert_eq!(
+        app_route_hosts(&load(&root, Some("ci-7")))[1],
+        "ci-7-shipit-api-no.berth.localhost"
+    );
+    std::fs::remove_dir_all(&base).expect("cleanup");
+}
+
+#[test]
+fn a_route_label_may_fill_but_not_exceed_the_dns_label_limit() {
+    let base = base("extra-routes-length");
+    // `ci-7-shipit-api-` is 16 bytes, leaving 47 for the route label.
+    let fits = "a".repeat(47);
+    let too_long = "a".repeat(48);
+    let project = |label: &str| {
+        format!(
+            "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  app:\n    preset: laravel\n    routes:\n      {label}: APP_LONG_URL\n"
+        )
+    };
+    let fits_root = routed_worktree(&base, "fits", &project(&fits));
+    assert_eq!(
+        app_route_hosts(&load(&fits_root, Some("ci-7")))[1],
+        format!("ci-7-shipit-api-{fits}.berth.localhost")
+    );
+    let long_root = routed_worktree(&base, "long", &project(&too_long));
+    let error = load_config_with(
+        LoadConfigPathOptions::new(None, Some(&long_root)).with_instance(Some("ci-7")),
+    )
+    .expect_err("64-byte label");
+    assert!(format!("{error:#}").contains("63"), "{error:#}");
+    std::fs::remove_dir_all(&base).expect("cleanup");
+}

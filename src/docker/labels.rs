@@ -83,6 +83,11 @@ pub(crate) fn ownership_label_args(
             crate::gateway::ROUTE_PORT_LABEL,
             service.resolved_container_port()
         ));
+        labels.push(format!(
+            "{}={}",
+            crate::gateway::ROUTE_OWNED_LABEL,
+            crate::gateway::owned_route_hosts(service).len()
+        ));
     }
     Ok(labels
         .into_iter()
@@ -198,6 +203,25 @@ mod tests {
         );
         assert!(labels.contains(&"dev.berth.route.port=3306"), "{labels:?}");
 
+        service.runtime.extra_routes = vec![crate::config::ExtraRoute {
+            label: "ee".to_owned(),
+            env: "APP_EE_URL".to_owned(),
+            host: "a-p-db-ee.berth.localhost".to_owned(),
+        }];
+        let extra = ownership_label_args(&service, "c", ContainerRole::Service).expect("labels");
+        let extra = labels_of(&extra);
+        assert!(
+            extra.contains(
+                &"dev.berth.route.hosts=a-p-db.berth.localhost,a-p-db-ee.berth.localhost"
+                    .to_owned()
+            ),
+            "the instance route stays first: {extra:?}"
+        );
+        assert!(
+            extra.contains(&"dev.berth.route.owned=2".to_owned()),
+            "{extra:?}"
+        );
+
         let one_off = ownership_label_args(&service, "c", ContainerRole::OneOff).expect("labels");
         assert!(
             !labels_of(&one_off)
@@ -217,6 +241,11 @@ mod tests {
         service.resolved_domain = Some("a-p-db.berth.localhost".to_owned());
         service.runtime.gateway_https_port = Some(8443);
         service.localhost_tls = true;
+        service.runtime.extra_routes = vec![crate::config::ExtraRoute {
+            label: "ee".to_owned(),
+            env: "APP_EE_URL".to_owned(),
+            host: "a-p-db-ee.berth.localhost".to_owned(),
+        }];
         let args = ownership_label_args(&service, "c", ContainerRole::Service).expect("labels");
         assert!(
             !labels_of(&args)

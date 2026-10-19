@@ -48,6 +48,13 @@ pub(crate) struct RawServiceConfig {
     pub domain: Option<String>,
     #[serde(default)]
     pub domains: Option<Vec<String>>,
+    /// Extra per-instance routes: label → the env var that receives the
+    /// route's URL.
+    #[serde(
+        default,
+        deserialize_with = "crate::config::unique_map::optional_unique_hash_map"
+    )]
+    pub routes: Option<HashMap<String, String>>,
     #[serde(default)]
     pub container_port: Option<u16>,
     #[serde(default)]

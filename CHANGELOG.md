@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- `routes` on a web app gives each instance extra routes for an app that
+  serves several sites on separate domains: `routes: {ee: APP_EE_URL}` serves
+  `https://{instance}-{project}-ee.berth.localhost` for every worktree and
+  injects that URL as `APP_EE_URL`. Such an app gets no `ASSET_URL`, so each
+  site loads its assets from its own host; the app must trust the gateway's
+  forwarded host, port and proto headers. An empty `routes`, invalid
+  labels, labels that make
+  the route longer than a DNS label, routes that are another route of the
+  instance, `routes` on an app without gateway routes (`localhost_tls`), and
+  vars that berth (`APP_URL`, `APP_KEY`, service endpoints), the service's
+  `env` or another route already set fail validation; a var a swarm
+  workspace injects, or a route another running instance serves, fails
+  before the app starts. Under `--env` and in `artisan test` runs the vars
+  are left to the app's env files. Route containers carry
+  `dev.berth.route.owned`, the number of hosts they own.
+
 ## [10.0.0] - 2026-10-18
 
 ### Added

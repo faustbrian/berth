@@ -67,7 +67,7 @@ never rewritten.
 
 Service fields: `preset`, `kind`, `driver`, `image`, `host`, `port`,
 `database`, `username`, `password`, `bucket`, `access_key`, `secret_key`,
-`api_key`, `region`, `scheme`, `domain`, `domains`, `container_port`,
+`api_key`, `region`, `scheme`, `domain`, `domains`, `routes`, `container_port`,
 `smtp_port`, `volumes`, `env`, `command`, `depends_on`, `seed_file`, `hook`,
 `health_path`, `health_statuses`, `restart`, `localhost_tls`, `octane`,
 `octane_workers`, `octane_max_requests`, `php_extensions`,
@@ -102,6 +102,35 @@ Every routable app gets `https://{instance}-{project}[-{service}].berth.localhos
 through one local gateway (port 8443 by default, `BERTH_GATEWAY_HTTPS_PORT`).
 Services reach each other by service name inside the instance network. Host
 ports are opt-in: `publish: true` on a dedicated service, or `up -P`.
+
+An app that serves several sites on separate domains, like production, lists
+them under `routes`: each label gets its own route for every instance, and the
+named env var receives its URL.
+
+```yaml
+services:
+  app:
+    preset: laravel
+    routes:
+      ee: APP_EE_URL   # https://{instance}-{project}-ee.berth.localhost:8443
+      fi: APP_FI_URL
+```
+
+Labels are DNS labels, and the whole route label stays within 63 bytes. A
+route that is also another route of the instance, a var that berth already
+sets (`APP_URL`, `ASSET_URL`, `APP_KEY`, service endpoints), sets in the
+service's `env` or sets for another route, and `routes` on a service without
+a gateway route (including `localhost_tls`) all fail validation. A var a
+swarm workspace injects into the project fails before the app starts, and so
+does an app when another running instance already serves one of its routes.
+
+An app with `routes` gets no `ASSET_URL`, so each site loads its assets from
+its own host. Laravel then builds asset URLs from the request, so the app must
+trust the gateway's forwarded headers (`trustProxies(at: '*')` with
+`X-Forwarded-Host`, `-Port` and `-Proto`); otherwise its pages link `http://`
+assets on an `https` port. Under `--env` and in `artisan test` runs there are no routes,
+and the vars are left to the app's own env files. Adding or changing
+`routes` on a running instance takes effect after `berth recreate`.
 
 ### Service hooks
 

@@ -20,6 +20,7 @@ pub(super) fn app_service() -> ServiceConfig {
         domain: Some("acme-api.berth".to_owned()),
         domains: None,
         resolved_domain: None,
+        routes: None,
         container_port: Some(80),
         smtp_port: None,
         volumes: None,

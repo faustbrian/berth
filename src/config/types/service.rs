@@ -3,7 +3,7 @@
 //! Contains config types service logic used by Berth command workflows.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use super::{Driver, Kind, RestartPolicy, ServiceHook};
 use crate::javascript::JavaScriptToolchain;
@@ -48,6 +48,10 @@ pub struct ServiceConfig {
     /// Additional public domains for app services.
     #[serde(default)]
     pub domains: Option<Vec<String>>,
+    /// Extra per-instance gateway routes, by label, each naming the env var
+    /// that receives its URL.
+    #[serde(default)]
+    pub routes: Option<BTreeMap<String, String>>,
     /// Resolved generated primary domain at runtime (not serialized).
     #[serde(skip)]
     pub resolved_domain: Option<String>,

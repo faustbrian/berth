@@ -4,6 +4,7 @@
 
 mod config_root;
 mod enums;
+mod extra_route;
 mod lockfile;
 mod service;
 mod service_hook;
@@ -15,6 +16,7 @@ pub use config_root::Config;
 pub use enums::{
     ContainerEngine, DomainStrategy, Driver, Isolation, Kind, ProjectType, RestartPolicy,
 };
+pub use extra_route::ExtraRoute;
 pub use lockfile::{LockedImage, Lockfile};
 pub use service::ServiceConfig;
 pub use service_hook::{HookOnError, HookPhase, HookRun, ServiceHook};

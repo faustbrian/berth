@@ -37,6 +37,7 @@ pub fn preset_preview(preset: &str) -> Result<ServiceConfig> {
         scheme: None,
         domain: None,
         domains: None,
+        routes: None,
         container_port: None,
         smtp_port: None,
         volumes: None,

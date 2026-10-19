@@ -5,6 +5,8 @@ use anyhow::Result;
 use crate::config::{Config, Kind, ServiceConfig};
 use crate::instance::InstanceIdentity;
 
+mod routes;
+
 /// Names every service `berth_{project}_{instance}_{service}`, namespaces the
 /// named volumes of non-application services the same way, and records the
 /// project, instance and root each service runs under.
@@ -56,7 +58,8 @@ pub(crate) fn apply_instance_identity(
         assign_route(service, &project, &identity.id)?;
         crate::shared::assign_shared_target(service, &project, &identity.id, None)?;
     }
-    Ok(())
+    routes::ensure_extra_routes_are_unique(&config.service)?;
+    routes::ensure_route_vars_are_free(config)
 }
 
 /// Gives a routable service its gateway route
@@ -65,9 +68,23 @@ pub(crate) fn apply_instance_identity(
 /// route.
 fn assign_route(service: &mut ServiceConfig, project: &str, instance: &str) -> Result<()> {
     service.runtime.gateway_https_port = None;
+    service.runtime.extra_routes.clear();
     if !crate::gateway::is_routable(service) {
+        if service.routes.is_some() {
+            anyhow::bail!(
+                "service '{}' sets `routes`, but only web apps get gateway routes",
+                service.name
+            );
+        }
         service.resolved_domain = None;
         return Ok(());
+    }
+    if service.routes.is_some() && service.localhost_tls {
+        anyhow::bail!(
+            "service '{}' sets `routes` and `localhost_tls`; an app served directly on \
+             localhost has no gateway routes",
+            service.name
+        );
     }
     let authored: Vec<String> = service
         .domain
@@ -81,11 +98,9 @@ fn assign_route(service: &mut ServiceConfig, project: &str, instance: &str) -> R
     }
     // Every instance keeps its own unique route; authored domains are extra
     // routes, so committed config never needs editing per worktree.
-    service.resolved_domain = Some(crate::gateway::route_host(
-        instance,
-        project,
-        &service.name,
-    )?);
+    let primary = crate::gateway::route_host(instance, project, &service.name)?;
+    service.runtime.extra_routes = routes::resolve_extra_routes(service, &primary)?;
+    service.resolved_domain = Some(primary);
     service.runtime.gateway_https_port = Some(crate::gateway::GatewayPorts::current()?.https);
     Ok(())
 }
