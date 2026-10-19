@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [10.1.3] - 2026-10-19
+
+### Changed
+
+- The missing-config error for a swarm source names the right fix for its
+  `git` settings: a missing checkout with `git` points at `berth up` /
+  `berth swarm up` and the repo, one without `git` says to clone it or add
+  `git` instead of sending you back to `swarm up`, and a target with a
+  `git.branch` pin is told to check out that branch, or move the pin if it
+  has no `.berth.yaml` either.
+
 ## [10.1.2] - 2026-10-19
 
 ### Changed
