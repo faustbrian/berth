@@ -3,7 +3,6 @@
 use anyhow::{Context, Result};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
-use std::process::Command;
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -234,7 +233,7 @@ fn host_memory_bytes() -> Option<u64> {
 
 #[cfg(target_os = "macos")]
 fn host_memory_bytes() -> Option<u64> {
-    let output = Command::new("sysctl")
+    let output = std::process::Command::new("sysctl")
         .args(["-n", "hw.memsize"])
         .output()
         .ok()?;
