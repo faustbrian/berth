@@ -169,7 +169,13 @@ fn ran_recently(stamp: &std::path::Path) -> bool {
 fn purge(record: &InstanceRecord) -> Result<()> {
     let tenants = crate::shared::drop_instance_tenants(&record.project, &record.instance);
     let objects = crate::docker::purge_instance_objects(&record.project, &record.instance);
-    tenants.and(objects)?;
+    tenants.and(objects).map_err(|error| {
+        anyhow::anyhow!(
+            "{error:#}; the instance is kept, so fix the cause and the next berth command (or \
+             {}) retries",
+            crate::followup::global("gc")
+        )
+    })?;
     crate::home::remove_instance_state(&record.project, &record.instance)?;
     super::lease::remove_in_use_lock(&record.project, &record.instance)
 }

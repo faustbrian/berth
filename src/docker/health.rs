@@ -52,7 +52,7 @@ pub fn wait_until_healthy(
     let start = std::time::Instant::now();
     let sleep_secs = interval.max(1);
 
-    ensure_running(service, &container_name)?;
+    ensure_running(service, &container_name, Waited::Not)?;
 
     output::event(
         &service.name,
@@ -66,7 +66,7 @@ pub fn wait_until_healthy(
         attempts = attempts.saturating_add(1);
         if attempts > 1 {
             crate::parallel::ensure_no_sibling_failed()?;
-            ensure_running(service, &container_name)?;
+            ensure_running(service, &container_name, Waited::Yet)?;
         }
 
         match check_service_health(service, &container_name) {
@@ -91,10 +91,10 @@ pub fn wait_until_healthy(
                 }
                 if retries.is_some_and(|max| attempts >= max) {
                     anyhow::bail!(
-                        "Failed health check for '{}' after {} retries: {}",
+                        "service '{}' failed its health check {} times: {err:#}; see why with {}",
                         service.name,
                         attempts,
-                        err
+                        crate::followup::logs(service)
                     );
                 }
             }
@@ -103,9 +103,10 @@ pub fn wait_until_healthy(
 
         if retries.is_some_and(|max| attempts >= max) {
             anyhow::bail!(
-                "Failed health check for '{}' after {} retries",
+                "service '{}' failed its health check {} times; see why with {}",
                 service.name,
-                attempts
+                attempts,
+                crate::followup::logs(service)
             );
         }
 
@@ -113,8 +114,11 @@ pub fn wait_until_healthy(
             && start.elapsed() >= std::time::Duration::from_secs(timeout)
         {
             anyhow::bail!(
-                "Timed out after {timeout}s waiting for '{}' to become ready",
-                service.name
+                "service '{}' was not ready after the {timeout}s limit; see what it is doing with \
+                 {}; if it is only slow, {}",
+                service.name,
+                crate::followup::logs(service),
+                crate::followup::raise_limit()
             );
         }
 
@@ -122,18 +126,46 @@ pub fn wait_until_healthy(
     }
 }
 
+/// Whether the wait had started when a check failed: the first check also
+/// serves `berth health` on an instance that was never started, so only a
+/// later one may blame something that happened meanwhile.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Waited {
+    Not,
+    Yet,
+}
+
 /// Fails when the container no longer runs: a stopped or restarting
 /// container will not become ready by waiting. A failed `inspect` is no
 /// answer, so the wait goes on.
-fn ensure_running(service: &ServiceConfig, container_name: &str) -> Result<()> {
+fn ensure_running(service: &ServiceConfig, container_name: &str, waited: Waited) -> Result<()> {
     match super::container_state(container_name) {
         super::ContainerState::Running | super::ContainerState::Unknown => Ok(()),
-        super::ContainerState::NotRunning(status) => anyhow::bail!(
-            "Container '{container_name}' is not running (status: {status}); see `berth logs {}`",
-            service.name
+        super::ContainerState::NotRunning(status) if waited == Waited::Not => anyhow::bail!(
+            "service '{}' is not running (container {container_name} is {status}); {} shows why \
+             it stopped; once fixed, start it with {}",
+            service.name,
+            crate::followup::logs(service),
+            crate::followup::for_service(service, "up")
         ),
-        super::ContainerState::Missing => {
-            anyhow::bail!("Container '{container_name}' does not exist")
-        }
+        super::ContainerState::Missing if waited == Waited::Not => anyhow::bail!(
+            "service '{}' has no container {container_name} (not started yet, or removed by \
+             `berth down`); start it with {}",
+            service.name,
+            crate::followup::for_service(service, "up")
+        ),
+        super::ContainerState::NotRunning(status) => anyhow::bail!(
+            "service '{}' stopped while berth waited for it (container {container_name} is \
+             {status}); see why with {}, fix it and run {} again",
+            service.name,
+            crate::followup::logs(service),
+            crate::followup::for_service(service, "up")
+        ),
+        super::ContainerState::Missing => anyhow::bail!(
+            "service '{}' has no container {container_name}: it was removed while berth waited \
+             for it (another `berth down`?); run {} again",
+            service.name,
+            crate::followup::for_service(service, "up")
+        ),
     }
 }

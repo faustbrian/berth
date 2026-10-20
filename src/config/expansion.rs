@@ -12,7 +12,8 @@ mod service;
 pub(super) fn expand_raw_config(raw: RawConfig) -> Result<Config> {
     let schema_version = raw.schema_version.unwrap_or(1);
     if schema_version != 1 {
-        anyhow::bail!("unsupported schema_version '{schema_version}'; run `berth config migrate`");
+        // `parse_project_file` always converts to schema 1.
+        anyhow::bail!("internal error: converted config has schema_version {schema_version}");
     }
     let project_type = raw.project_type.unwrap_or(ProjectType::Project);
 
@@ -42,8 +43,10 @@ pub(super) fn expand_raw_config(raw: RawConfig) -> Result<Config> {
                     }),
                     _ => {
                         anyhow::bail!(
-                            "swarm target '{}' must define at most one git block",
-                            target.name
+                            "swarm target '{}' lists {} `git` entries; keep one: `git: [{{repo: \
+                             <url>, branch: <name>}}]`",
+                            target.name,
+                            target.git.len()
                         );
                     }
                 };

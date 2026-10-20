@@ -27,6 +27,13 @@ pub(crate) fn app_key(project: &str, instance: &str) -> Result<String> {
         random_key,
         is_valid,
     )
+    .map_err(|error| {
+        super::advise_on_invalid(error, || {
+            "the file is the instance's APP_KEY: restore it from a backup, or delete it so berth \
+             creates a new one (sessions and data encrypted with the old key become unreadable)"
+                .to_owned()
+        })
+    })
 }
 
 fn is_valid(key: &str) -> bool {

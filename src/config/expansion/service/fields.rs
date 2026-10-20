@@ -9,9 +9,13 @@ pub(super) fn value_or_default<T: Copy>(
     default: Option<T>,
     field: &str,
 ) -> Result<T> {
-    value
-        .or(default)
-        .ok_or_else(|| anyhow::anyhow!("service is missing required field '{field}'"))
+    value.or(default).ok_or_else(|| {
+        anyhow::anyhow!(
+            "has no `preset`, so it must set `{field}` itself; set a `preset` (`berth preset \
+                 list` shows them) or both `kind` (database, cache, object_store, search, app) and \
+                 `driver`"
+        )
+    })
 }
 
 pub(super) fn pick_required(

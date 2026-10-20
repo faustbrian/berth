@@ -42,8 +42,9 @@ pub(super) fn run_script_hook(
             .with_context(|| format!("failed waiting for hook script {}", resolved.display()))?;
         if !status.success() {
             anyhow::bail!(
-                "hook script exited with non-zero status: {}",
-                resolved.display()
+                "hook script {} exited with {}",
+                resolved.display(),
+                exit_text(status)
             );
         }
     }
@@ -65,7 +66,10 @@ fn wait_with_timeout(
             if status.success() {
                 return Ok(());
             }
-            anyhow::bail!("hook command exited with non-zero status: {command_display}");
+            anyhow::bail!(
+                "hook command `{command_display}` exited with {}",
+                exit_text(status)
+            );
         }
 
         if started.elapsed() > timeout {
@@ -85,6 +89,15 @@ fn wait_with_timeout(
 
 pub(super) fn resolve_script_path(path: &str, workspace_root: &Path) -> PathBuf {
     crate::cli::support::resolve_workspace_path(workspace_root, path)
+}
+
+/// The exit status for an error; 127 is how `sh` reports a missing command.
+fn exit_text(status: std::process::ExitStatus) -> String {
+    match status.code() {
+        Some(127) => "code 127 (command not found)".to_owned(),
+        Some(code) => format!("code {code}"),
+        None => "a signal".to_owned(),
+    }
 }
 
 #[cfg(test)]
@@ -134,7 +147,7 @@ mod tests {
         let error = crate::docker::with_dry_run_state(false, || {
             run_script_hook(&script, None, &dir).expect_err("expected script error path")
         });
-        assert!(error.to_string().contains("non-zero status"));
+        assert!(error.to_string().contains("exited with code 3"), "{error}");
     }
 
     #[test]

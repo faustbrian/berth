@@ -27,7 +27,7 @@ fn load_config_with_rejects_duplicate_swarm_target_names() {
 
     let error = load_config_with(LoadConfigPathOptions::new(Some(&config_path), None))
         .expect_err("expected duplicate error");
-    assert!(error.to_string().contains("duplicate swarm target name"));
+    assert!(format!("{error:#}").contains("duplicate swarm target name"));
 
     std::fs::remove_dir_all(root).expect("cleanup temp config directory");
 }
@@ -56,11 +56,7 @@ fn load_config_with_rejects_unknown_swarm_dependency() {
 
     let error = load_config_with(LoadConfigPathOptions::new(Some(&config_path), None))
         .expect_err("expected dep error");
-    assert!(
-        error
-            .to_string()
-            .contains("depends on unknown target 'bill'")
-    );
+    assert!(format!("{error:#}").contains("depends on unknown target 'bill'"));
 
     std::fs::remove_dir_all(root).expect("cleanup temp config directory");
 }
@@ -92,7 +88,7 @@ fn load_config_with_rejects_empty_swarm_git_repo() {
 
     let error = load_config_with(LoadConfigPathOptions::new(Some(&config_path), None))
         .expect_err("expected git repo error");
-    assert!(error.to_string().contains("empty git.repo"));
+    assert!(format!("{error:#}").contains("empty git.repo"));
 
     std::fs::remove_dir_all(root).expect("cleanup temp config directory");
 }

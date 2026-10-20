@@ -37,7 +37,7 @@ pub(crate) fn handle_url(
                         anyhow::anyhow!(
                             "service '{}' is {}",
                             svc.name,
-                            crate::network::PUBLISH_HINT
+                            crate::network::publish_hint()
                         )
                     })?;
                     println!("{url}");
@@ -45,7 +45,7 @@ pub(crate) fn handle_url(
             } else {
                 for svc in selected {
                     let url = crate::network::host_url(svc)
-                        .unwrap_or_else(|| format!("({})", crate::network::PUBLISH_HINT));
+                        .unwrap_or_else(|| format!("({})", crate::network::publish_hint()));
                     println!("{}: {url}", svc.name.bold());
                 }
             }

@@ -84,7 +84,13 @@ pub(crate) fn handle_logs(config: &config::Config, options: HandleLogsOptions<'_
     } else if let Some(first) = selected.first() {
         *first
     } else {
-        anyhow::bail!("no services matched the requested selector")
+        return Err(cli::support::nothing_matched(
+            config,
+            options.service,
+            options.kind,
+            options.profile,
+            false,
+        ));
     };
     run_single_service_logs(
         svc,

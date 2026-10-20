@@ -40,7 +40,22 @@ pub(crate) fn handle_open(config: &config::Config, options: HandleOpenOptions<'_
     )?;
 
     if targets.is_empty() {
-        anyhow::bail!("no app services configured");
+        let apps: Vec<&str> = cli::support::app_services(config)
+            .iter()
+            .map(|service| service.name.as_str())
+            .collect();
+        if apps.is_empty() {
+            anyhow::bail!(
+                "this project has no app service to open; add one under `services:` in \
+                 .berth.yaml (for example `app: {{preset: laravel}}`), or open a database with {}",
+                crate::followup::command("open --database")
+            );
+        }
+        anyhow::bail!(
+            "--kind/--profile selected no app service; `berth open` opens app URLs (app services: \
+             {}), or use `--database` for a database URL",
+            apps.join(", ")
+        );
     }
 
     if options.json {

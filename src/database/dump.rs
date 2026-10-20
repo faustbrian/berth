@@ -29,7 +29,7 @@ pub(crate) fn dump(service: &ServiceConfig, file_path: &Path, gzip: bool) -> Res
         return Ok(());
     }
 
-    let output = run_dump_command_checked(service, true)?;
+    let output = run_dump_command_checked(service)?;
 
     let use_gzip = gzip || is_gzip_path(file_path);
     write_dump_file(file_path, &output.stdout, use_gzip)?;
@@ -52,7 +52,7 @@ pub(crate) fn dump_stdout(service: &ServiceConfig, gzip: bool) -> Result<()> {
         return Ok(());
     }
 
-    let output = run_dump_command_checked(service, false)?;
+    let output = run_dump_command_checked(service)?;
 
     write_dump_stdout(&output.stdout, gzip).context("Failed to write dump to stdout")
 }
@@ -75,17 +75,12 @@ fn emit_dump_dry_run(service: &ServiceConfig, streaming: bool) {
     );
 }
 
-fn run_dump_command_checked(
-    service: &ServiceConfig,
-    include_stderr: bool,
-) -> Result<std::process::Output> {
+fn run_dump_command_checked(service: &ServiceConfig) -> Result<std::process::Output> {
     let output = run_dump_command(service)?;
-    let failure_prefix = if include_stderr {
-        "Failed to dump database"
-    } else {
-        "Failed to dump database command"
-    };
-    ensure_sql_command_success(&output, failure_prefix)?;
+    ensure_sql_command_success(
+        &output,
+        &format!("Failed to dump the database of service '{}'", service.name),
+    )?;
     Ok(output)
 }
 

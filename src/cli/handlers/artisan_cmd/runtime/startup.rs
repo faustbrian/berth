@@ -33,7 +33,12 @@ pub(super) fn resolve_testing_startup_services<'a>(
             };
             Ok(service.depends_on.clone().unwrap_or_default())
         },
-        |path| format!("circular service dependency: {path}"),
+        |path| {
+            format!(
+                "circular service dependency: {path}; remove one of these from a service's \
+                 `depends_on` in .berth.yaml"
+            )
+        },
     )?;
 
     ordered_names

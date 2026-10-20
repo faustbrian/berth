@@ -50,14 +50,21 @@ pub fn save_lockfile_with(
 /// Verifies lockfile with and reports actionable failures.
 pub fn verify_lockfile_with(config: &Config, options: ProjectRootPathOptions<'_>) -> Result<()> {
     let expected = build_image_lock(config)?;
-    let actual = load_lockfile_with(options)
-        .context("failed to load .berth.lock.yaml; run `berth lock images` to generate it")?;
+    let actual = load_lockfile_with(options).with_context(|| {
+        format!(
+            "failed to load .berth.lock.yaml; run {} to generate it",
+            crate::followup::command("lock images")
+        )
+    })?;
     let diff = lockfile_diff(&expected, &actual);
     if diff.missing.is_empty() && diff.changed.is_empty() && diff.extra.is_empty() {
         return Ok(());
     }
 
-    anyhow::bail!("lockfile is out of sync; run `berth lock images`")
+    anyhow::bail!(
+        "lockfile is out of sync; run {}",
+        crate::followup::command("lock images")
+    )
 }
 
 #[cfg(test)]

@@ -37,6 +37,7 @@ mod scrub_env_file;
 mod select_up_targets;
 mod selected_runtime_services;
 mod selected_services;
+mod selector_error;
 mod serve_health;
 mod service_labels;
 mod service_scope;
@@ -53,7 +54,7 @@ pub(crate) use artisan_command::{build_artisan_command, build_artisan_subcommand
 pub(crate) use build_open_summary_json::build_open_summary_json;
 pub(crate) use default_env_path::default_env_path;
 pub(crate) use ensure_sql_service::ensure_sql_service;
-pub(crate) use env_output_path::{ENV_WRITE_REMOVED, env_output_path};
+pub(crate) use env_output_path::{env_output_path, env_write_removed};
 pub(crate) use filter_services::filter_services;
 pub(crate) use for_each_service::{
     for_each_service, run_selected_services, run_services_with_app_last,
@@ -95,6 +96,7 @@ pub(crate) use scrub_env_file::scrub_env_file;
 pub(crate) use select_up_targets::select_up_targets;
 pub(crate) use selected_runtime_services::selected_runtime_services;
 pub(crate) use selected_services::{selected_services, selected_services_with_filters};
+pub(crate) use selector_error::{nothing_matched, several_matched};
 pub(crate) use serve_health::{build_health_url, health_status_accepted};
 pub(crate) use service_labels::{driver_name, kind_name};
 pub(crate) use service_scope::ServiceScope;

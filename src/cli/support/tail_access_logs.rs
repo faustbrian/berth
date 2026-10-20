@@ -22,7 +22,10 @@ pub(crate) fn tail_access_logs(follow: bool, tail: Option<u64>) -> Result<()> {
     let status =
         crate::docker::run_docker_status_owned(&args, "failed to read gateway access logs")?;
     if !status.success() {
-        anyhow::bail!("the berth gateway is not running; start an app with `berth up` first");
+        anyhow::bail!(
+            "the berth gateway is not running; start an app with {} first",
+            crate::followup::command("up")
+        );
     }
     Ok(())
 }

@@ -33,7 +33,7 @@ pub(super) fn check_reproducibility(
         config::ProjectRootPathOptions::new(config_path, project_root),
     ) {
         has_error = true;
-        report::error(&format!("Lockfile check failed: {err}"));
+        report::error(&format!("Lockfile check failed: {err:#}"));
     }
 
     if !has_error {

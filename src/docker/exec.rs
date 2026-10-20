@@ -73,13 +73,16 @@ fn ensure_tenant_reachable(service: &ServiceConfig) -> Result<()> {
     match crate::shared::status(service).as_deref() {
         Some("running") => {}
         Some(state) => anyhow::bail!(
-            "service '{}' is {state} for this instance (server {server}); run `berth up` first",
-            service.name
+            "service '{}' is {state} for this instance (server {server}); run {} first",
+            service.name,
+            crate::followup::for_service(service, "up")
         ),
         None => anyhow::bail!(
-            "service '{}' has no shared server {server}, or Docker is unreachable; run `berth up` \
-             first",
-            service.name
+            "service '{}' has no shared server {server}, or the container engine is unreachable \
+             ({} checks it); otherwise run {} first",
+            service.name,
+            crate::followup::for_service(service, "doctor"),
+            crate::followup::for_service(service, "up")
         ),
     }
     Ok(())
@@ -116,12 +119,16 @@ fn ensure_container_running(service: &ServiceConfig, container_name: &str) -> Re
     match super::inspect_status(container_name).as_deref() {
         Some("running") => Ok(()),
         Some(status) => anyhow::bail!(
-            "service '{}' is {status} (container {container_name}); run `berth up` first",
-            service.name
+            "service '{}' is {status} (container {container_name}); run {} first",
+            service.name,
+            crate::followup::for_service(service, "up")
         ),
         None => anyhow::bail!(
-            "service '{}' has no container {container_name}, or Docker is unreachable; run `berth up` first",
-            service.name
+            "service '{}' has no container {container_name}, or the container engine is \
+             unreachable ({} checks it); otherwise run {} first",
+            service.name,
+            crate::followup::for_service(service, "doctor"),
+            crate::followup::for_service(service, "up")
         ),
     }
 }
@@ -166,6 +173,7 @@ pub fn exec_command_to_stderr(service: &ServiceConfig, command: &[String]) -> Re
 
     ensure_container_running(service, &container_name)?;
     let arg_refs = super::docker_arg_refs(&args);
+    super::ensure_engine_installed()?;
     let status = super::secret_env::docker_process(&arg_refs)?
         .stdout(std::io::stderr())
         .status()

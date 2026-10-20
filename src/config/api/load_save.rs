@@ -17,16 +17,23 @@ pub type LoadConfigPathOptions<'a> = ProjectRootPathOptions<'a>;
 ///
 /// Returns an error if path resolution, reading, or parsing fails.
 pub fn load_config_with(options: LoadConfigPathOptions<'_>) -> Result<Config> {
+    let config_path = super::config_io::resolve_config_path(options)?;
     let raw_config = load_raw_config_with(options)?;
-    let mut config = expansion::expand_raw_config(raw_config)?;
+    // Errors past the YAML parser name a service or field but not the file,
+    // which matters once runtime-environment and swarm-source files exist.
+    let in_file = || format!("invalid project file {}", config_path.display());
+    let mut config = expansion::expand_raw_config(raw_config).with_context(in_file)?;
     let project_root = super::project::project_root_with(ProjectRootPathOptions::new(
         options.config_path,
         options.project_root,
     ))?;
 
-    validation::validate_and_resolve_container_names(&mut config)?;
-    validation::validate_swarm_targets(&config)?;
+    validation::validate_and_resolve_container_names(&mut config).with_context(in_file)?;
+    validation::validate_swarm_targets(&config).with_context(in_file)?;
+    validation::validate_service_dependencies(&config).with_context(in_file)?;
     let identity = crate::instance::resolve_instance(&project_root, options.instance)?;
+    // Not `in_file`: naming the instance reads berth-home state (the
+    // installation ID, tenant passwords), whose errors are not the file's.
     super::super::instance_naming::apply_instance_identity(&mut config, &identity)?;
 
     Ok(config)
@@ -68,9 +75,11 @@ fn resolve_project_type(raw: &RawConfig, config_path: &Path) -> Result<ProjectTy
         })?;
     if !composer_path.exists() {
         anyhow::bail!(
-            "Unable to resolve project_type: set project_type in .berth.yaml or composer.json type \
-             (\"project\" or \"library\"). composer.json not found at {}",
-            composer_path.display()
+            "{} has no `project_type` and there is no {} to read it from; add `project_type: \
+             project` (an app berth runs) or `project_type: library` (a package) to {}",
+            config_path.display(),
+            composer_path.display(),
+            config_path.display()
         );
     }
 
@@ -92,9 +101,11 @@ fn resolve_project_type(raw: &RawConfig, config_path: &Path) -> Result<ProjectTy
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Unable to resolve project_type: set project_type in .berth.yaml or composer.json \
-                 type (\"project\" or \"library\"). composer.json missing \"type\" at {}",
-                composer_path.display()
+                "{} has no `project_type` and {} has no \"type\"; add `project_type: project` \
+                 (an app berth runs) or `project_type: library` (a package) to {}",
+                config_path.display(),
+                composer_path.display(),
+                config_path.display()
             )
         })?;
 
@@ -102,10 +113,12 @@ fn resolve_project_type(raw: &RawConfig, config_path: &Path) -> Result<ProjectTy
         "project" => Ok(ProjectType::Project),
         "library" => Ok(ProjectType::Library),
         _ => anyhow::bail!(
-            "Unable to resolve project_type: set project_type in .berth.yaml or composer.json type \
-             (\"project\" or \"library\"). composer.json type was \"{}\" at {}",
-            composer_type,
-            composer_path.display()
+            "{} has no `project_type`, and {} says \"type\": \"{composer_type}\", which is \
+             neither \"project\" nor \"library\"; add `project_type: project` or \
+             `project_type: library` to {}",
+            config_path.display(),
+            composer_path.display(),
+            config_path.display()
         ),
     }
 }
@@ -176,7 +189,7 @@ mod tests {
         let error =
             load_container_engine_with(LoadConfigPathOptions::new(Some(&config_path), None))
                 .expect_err("project type should be required");
-        assert!(error.to_string().contains("Unable to resolve project_type"));
+        assert!(error.to_string().contains("has no `project_type`"));
     }
 
     #[test]

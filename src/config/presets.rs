@@ -41,7 +41,10 @@ pub(super) fn preset_defaults(preset: &str) -> Result<PresetDefaults> {
         return Ok(defaults);
     }
 
-    anyhow::bail!("unknown preset '{preset}'")
+    anyhow::bail!(
+        "unknown preset '{preset}'; presets: {} (`berth preset show <name>` shows its defaults)",
+        preset_names().join(", ")
+    )
 }
 
 #[must_use]

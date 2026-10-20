@@ -20,7 +20,22 @@ pub(crate) fn resolve_app_service<'a>(
         return app_services
             .into_iter()
             .find(|target| target.name == target_name)
-            .ok_or_else(|| anyhow::anyhow!("app service '{target_name}' not found"));
+            .ok_or_else(|| {
+                let names: Vec<&str> = config
+                    .service
+                    .iter()
+                    .filter(|svc| svc.kind == Kind::App)
+                    .map(|svc| svc.name.as_str())
+                    .collect();
+                anyhow::anyhow!(
+                    "app service '{target_name}' not found; app services: {}",
+                    if names.is_empty() {
+                        "none".to_owned()
+                    } else {
+                        names.join(", ")
+                    }
+                )
+            });
     }
 
     if app_services.len() == 1 {
@@ -39,7 +54,10 @@ pub(crate) fn resolve_app_service<'a>(
     }
 
     if app_services.is_empty() {
-        anyhow::bail!("no app services configured")
+        anyhow::bail!(
+            "this project has no app service; add one under `services:` in .berth.yaml (for \
+             example `app: {{preset: laravel}}`)"
+        )
     }
 
     let available: Vec<&str> = app_services

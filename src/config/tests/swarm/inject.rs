@@ -76,7 +76,7 @@ fn load_config_with_rejects_unknown_swarm_inject_token() {
 
     let error = load_config_with(LoadConfigPathOptions::new(Some(&config_path), None))
         .expect_err("expected token error");
-    assert!(error.to_string().contains("unsupported token ':hostname'"));
+    assert!(format!("{error:#}").contains("unsupported token ':hostname'"));
 
     std::fs::remove_dir_all(root).expect("cleanup temp config directory");
 }

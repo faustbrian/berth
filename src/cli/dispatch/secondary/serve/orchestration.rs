@@ -44,7 +44,6 @@ pub(super) fn dispatch(
                 detached: args.detached,
                 env_output: args.env_output,
                 trust_container_ca: args.trust_container_ca,
-                runtime_env: context.runtime_env(),
                 config_path: context.config_path(),
                 project_root: context.project_root(),
             },

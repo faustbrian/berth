@@ -10,6 +10,7 @@ pub(crate) fn docker_arg_refs(args: &[String]) -> Vec<&str> {
 
 /// Runs `docker` with args and captures output.
 pub(crate) fn run_docker_output(args: &[&str], context: &str) -> Result<Output> {
+    super::ensure_engine_installed()?;
     super::secret_env::docker_process(args)?
         .output()
         .with_context(|| context.to_owned())
@@ -23,6 +24,7 @@ pub(crate) fn run_docker_output_owned(args: &[String], context: &str) -> Result<
 
 /// Runs `docker` with args and waits for exit status.
 pub(crate) fn run_docker_status(args: &[&str], context: &str) -> Result<ExitStatus> {
+    super::ensure_engine_installed()?;
     super::secret_env::docker_process(args)?
         .stdout(crate::output::child_stdout())
         .status()
@@ -37,6 +39,7 @@ pub(crate) fn run_docker_status_owned(args: &[String], context: &str) -> Result<
 
 /// Spawns `docker` with stdin/stderr piped.
 pub(crate) fn spawn_docker_stdin_stderr_piped(args: &[&str], context: &str) -> Result<Child> {
+    super::ensure_engine_installed()?;
     super::secret_env::docker_process(args)?
         .stdin(Stdio::piped())
         .stdout(crate::output::child_stdout())
@@ -50,6 +53,7 @@ pub(crate) fn spawn_docker_stdin_stdout_stderr_piped(
     args: &[&str],
     context: &str,
 ) -> Result<Child> {
+    super::ensure_engine_installed()?;
     super::secret_env::docker_process(args)?
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -60,6 +64,7 @@ pub(crate) fn spawn_docker_stdin_stdout_stderr_piped(
 
 /// Spawns `docker` with stdout/stderr piped.
 pub(crate) fn spawn_docker_stdout_stderr_piped(args: &[&str], context: &str) -> Result<Child> {
+    super::ensure_engine_installed()?;
     super::secret_env::docker_process(args)?
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

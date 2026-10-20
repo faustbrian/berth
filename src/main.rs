@@ -27,6 +27,8 @@ mod dependency_order;
 mod display;
 mod docker;
 mod env;
+mod error_hint;
+mod followup;
 mod gateway;
 mod home;
 mod instance;
@@ -63,10 +65,11 @@ fn main() -> ExitCode {
     match cli::dispatch::run(cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!(
-                "Error: {}",
-                docker::redact_known_secrets(&format!("{error:#}"))
-            );
+            let message = docker::redact_known_secrets(&format!("{error:#}"));
+            eprintln!("Error: {message}");
+            if let Some(hint) = error_hint::hint(&message) {
+                eprintln!("Hint: {hint}");
+            }
             let child_code = error
                 .chain()
                 .find_map(|cause| cause.downcast_ref::<docker::ChildExitError>())

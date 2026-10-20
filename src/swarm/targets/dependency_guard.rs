@@ -51,9 +51,10 @@ pub(super) fn enforce_shared_down_dependency_guard(
     }
 
     anyhow::bail!(
-        "refusing to down shared dependencies: {}. \
-         Re-run with --force-down-deps or --no-deps. \
-         workspace: {}",
+        "refusing to stop {}: other swarm targets in {} still depend on them. To stop them \
+         anyway, run the same command again with `--force`, or with `--no-deps` to leave \
+         dependencies running (for `berth swarm` both are swarm flags, so they go before \
+         `down`)",
         shared.join(", "),
         workspace_root.display()
     );

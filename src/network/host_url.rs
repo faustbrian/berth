@@ -3,8 +3,13 @@
 use crate::config::ServiceConfig;
 
 /// Hint for services without a host port.
-pub(crate) const PUBLISH_HINT: &str =
-    "not published on the host; set `publish: true` on the service or run `berth up -P`";
+#[must_use]
+pub(crate) fn publish_hint() -> String {
+    format!(
+        "not published on the host; set `publish: true` on the service or run {}",
+        crate::followup::command("up -P")
+    )
+}
 
 /// Returns the URL that reaches the service from the host: its gateway route,
 /// or its published host port. `None` when it has neither, because it is

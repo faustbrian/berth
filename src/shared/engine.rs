@@ -172,24 +172,29 @@ pub(super) fn is_auth_failure(engine: SharedEngine, stderr: &str) -> bool {
 
 /// How to recover when the admin secret no longer matches the server,
 /// without deleting the data every instance keeps there.
-pub(super) fn lost_secret_recovery(engine: SharedEngine, server: &str) -> String {
-    let secret = format!("~/.berth/shared/{server}/admin");
+pub(super) fn lost_secret_recovery(
+    engine: SharedEngine,
+    server: &str,
+    secret: &std::path::Path,
+) -> String {
+    let secret = crate::followup::quote(&secret.display().to_string());
+    let docker = crate::docker::docker_command();
     match engine {
         SharedEngine::Postgres => format!(
             "reset it over the container's local socket: `printf \"ALTER ROLE {admin} \
-             PASSWORD '%s';\" \"$(cat {secret})\" | docker exec -i {server} psql -U {admin} -d \
+             PASSWORD '%s';\" \"$(cat {secret})\" | {docker} exec -i {server} psql -U {admin} -d \
              postgres`",
             admin = postgres::ADMIN_USER
         ),
         SharedEngine::Mysql | SharedEngine::Mariadb => format!(
             "restore {secret} from a backup: MySQL does not trust the local socket, so the \
              password cannot be reset without it. Without a backup the only way forward is \
-             removing the server and its volume (`docker rm -f -v {server} && docker volume \
+             removing the server and its volume (`{docker} rm -f -v {server} && {docker} volume \
              rm {server}-data`), which deletes every instance's shared databases"
         ),
         SharedEngine::Redis | SharedEngine::Valkey => format!(
             "restore {secret} from a backup. Without one, removing the server and its volume \
-             (`docker rm -f -v {server} && docker volume rm {server}-data`) deletes only \
+             (`{docker} rm -f -v {server} && {docker} volume rm {server}-data`) deletes only \
              caches, sessions and queued jobs, which every instance recreates"
         ),
     }

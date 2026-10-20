@@ -12,8 +12,13 @@ use std::path::Path;
 /// Writes dump file to persisted or external state.
 pub(super) fn write_dump_file(path: &Path, bytes: &[u8], gzip: bool) -> Result<()> {
     if gzip {
-        let file = File::create(path)
-            .with_context(|| format!("Failed to create dump at {}", path.display()))?;
+        let file = File::create(path).with_context(|| {
+            format!(
+                "failed to create dump at {}; check that its directory exists and is writable, or \
+                 use `--stdout`",
+                path.display()
+            )
+        })?;
         let mut encoder = GzEncoder::new(file, Compression::default());
         encoder
             .write_all(bytes)
@@ -22,8 +27,13 @@ pub(super) fn write_dump_file(path: &Path, bytes: &[u8], gzip: bool) -> Result<(
         return Ok(());
     }
 
-    std::fs::write(path, bytes)
-        .with_context(|| format!("Failed to write dump to {}", path.display()))
+    std::fs::write(path, bytes).with_context(|| {
+        format!(
+            "failed to write dump to {}; check that its directory exists and is writable, or \
+                 use `--stdout`",
+            path.display()
+        )
+    })
 }
 
 /// Writes dump stdout to persisted or external state.

@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 
-use crate::cli::args::{Cli, Commands, ConfigCommands, PresetCommands, ProfileCommands};
+use crate::cli::args::{Cli, Commands, ConfigCommands, ProfileCommands};
 use crate::cli::dispatch::context::CliDispatchContext;
 use crate::cli::handlers;
 use crate::config::Config;
@@ -37,18 +37,9 @@ pub(super) fn dispatch_primary(
             }
             None => handlers::handle_config(config, &args.format),
         }),
-        Commands::Preset(args) => Some(match &args.command {
-            PresetCommands::List => {
-                handlers::handle_preset_list();
-                Ok(())
-            }
-            PresetCommands::Show { name, format } => handlers::handle_preset_show(name, format),
-        }),
         Commands::Profile(args) => Some(match &args.command {
-            ProfileCommands::List => {
-                handlers::handle_profile_list();
-                Ok(())
-            }
+            // Handled before the config loads (see `bootstrap`).
+            ProfileCommands::List => Ok(()),
             ProfileCommands::Show { name, format } => {
                 handlers::handle_profile_show(config, name, format)
             }
@@ -119,7 +110,8 @@ mod tests {
     #[test]
     fn primary_dispatch_handles_meta_commands() {
         assert!(dispatch_primary_result(&["berth", "config"]).is_some());
-        assert!(dispatch_primary_result(&["berth", "preset", "list"]).is_some());
+        // Presets run before the config loads (`bootstrap`).
+        assert!(dispatch_primary_result(&["berth", "preset", "list"]).is_none());
         assert!(dispatch_primary_result(&["berth", "profile", "list"]).is_some());
         assert!(dispatch_primary_result(&["berth", "doctor"]).is_some());
         assert!(dispatch_primary_result(&["berth", "lock", "images"]).is_some());

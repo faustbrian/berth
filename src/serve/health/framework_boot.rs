@@ -7,7 +7,7 @@
 
 use anyhow::{Context, Result};
 use std::io::Read;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use crate::config::ServiceConfig;
@@ -66,13 +66,16 @@ pub(crate) fn wait_until_laravel_boots(
             crate::docker::ContainerState::Running | crate::docker::ContainerState::Unknown => {}
             crate::docker::ContainerState::NotRunning(status) => anyhow::bail!(
                 "app service '{}' stopped while booting (container {container} is {status}); \
-                 see `berth logs {}`",
+                 see why with {}, fix it and run {} again",
                 service.name,
-                service.name
+                crate::followup::logs(service),
+                crate::followup::for_service(service, "up")
             ),
             crate::docker::ContainerState::Missing => anyhow::bail!(
-                "app service '{}' has no container {container}",
-                service.name
+                "app service '{}' has no container {container}: it was removed while berth \
+                 waited for it (another `berth down`?); run {} again",
+                service.name,
+                crate::followup::for_service(service, "up")
             ),
         }
         match probe(&container, cap)? {
@@ -98,9 +101,15 @@ pub(crate) fn wait_until_laravel_boots(
                     crate::docker::ContainerState::Running
                 ) => {}
             Probe::Failed(output) => anyhow::bail!(
-                "app service '{}' cannot boot: `php artisan about --only=environment` failed: {}",
+                "app service '{}' cannot boot: `php artisan about --only=environment` failed: {}; \
+                 fix that error (a missing vendor/ needs {}) and run {} again",
                 service.name,
-                tail(&output)
+                tail(&output),
+                crate::followup::for_service(
+                    service,
+                    &format!("composer --service {} install", service.name)
+                ),
+                crate::followup::for_service(service, "up")
             ),
             // The engine could not run the probe (the container is being
             // restarted, an overloaded engine): its state decides next.
@@ -153,7 +162,7 @@ fn probe(container: &str, cap: Option<Instant>) -> Result<Probe> {
 }
 
 fn run_artisan(container: &str, args: &[&str], cap: Option<Instant>) -> Result<Probe> {
-    let mut child = Command::new(crate::docker::docker_command())
+    let mut child = crate::docker::engine_command()?
         .args(["exec", container, "php", "artisan"])
         .args(args)
         .stdin(Stdio::null())

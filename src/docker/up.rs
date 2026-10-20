@@ -43,7 +43,13 @@ pub fn up(service: &ServiceConfig, pull: PullPolicy, recreate: bool) -> Result<(
 
     let run_args = args_builder::build_run_args(service, &container_name)?;
     let output = docker_output_owned(&run_args, &super::runtime_command_error_context("run"))?;
-    ensure_success(output, "Failed to start container")?;
+    ensure_success(
+        output,
+        &format!(
+            "service '{}' failed to start (container {container_name})",
+            service.name
+        ),
+    )?;
     ensure_object_store_bucket_ready(service)?;
 
     output::event(
@@ -94,7 +100,10 @@ pub(super) fn start_container(container_name: &str) -> Result<bool> {
                 &["start", container_name],
                 &super::runtime_command_error_context("start"),
             )?;
-            ensure_success(start_output, "Failed to start container")?;
+            ensure_success(
+                start_output,
+                &format!("failed to start existing container {container_name}"),
+            )?;
 
             output::event(
                 container_name,

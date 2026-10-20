@@ -40,7 +40,15 @@ pub(super) fn wait_for_restore_success(child: Child) -> Result<()> {
         .wait_with_output()
         .context("Failed to wait for restore process")?;
 
-    super::super::sql_admin::ensure_sql_command_success(&output, "Database restore failed")
+    super::super::sql_admin::ensure_sql_command_success(&output, "Database restore failed").map_err(
+        |error| {
+            anyhow::anyhow!(
+                "{error}; if the database already has these tables, rerun with `--reset` (it \
+                 drops the database's current data first), and a gzip file without a .gz name \
+                 needs `--gzip`"
+            )
+        },
+    )
 }
 
 #[cfg(test)]

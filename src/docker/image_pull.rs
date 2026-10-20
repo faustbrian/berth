@@ -61,6 +61,7 @@ pub(crate) fn docker_pull(image: &str, context: &str, failure_message: &str) -> 
 /// One pull with progress on berth's child stdout and stderr captured,
 /// returning the stderr of a failed pull.
 fn pull_once(image: &str, context: &str) -> Result<Option<String>> {
+    super::ensure_engine_installed()?;
     let output = super::secret_env::docker_process(&["pull", image])?
         .stdout(crate::output::child_stdout())
         .stderr(Stdio::piped())

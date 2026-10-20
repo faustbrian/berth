@@ -78,10 +78,14 @@ pub(crate) fn up(service: &ServiceConfig) -> Result<()> {
         // tell its own instance's problem from the server's (L063).
         server::admin_sql(target, &sql).with_context(|| {
             format!(
-                "failed to provision tenant {tenant} of instance {}/{} on shared server {}",
+                "failed to provision tenant {tenant} of instance {}/{} on shared server {} (other \
+                 instances on it are unaffected); see `{} logs {}`, then run {} again",
                 service.runtime.project.as_deref().unwrap_or("?"),
                 service.runtime.instance.as_deref().unwrap_or("?"),
-                target.server
+                target.server,
+                crate::docker::docker_command(),
+                target.server,
+                crate::followup::for_service(service, "up")
             )
         })?;
         attach(service, target)?;
@@ -203,12 +207,14 @@ pub(crate) fn drop_instance_tenants(project: &str, instance: &str) -> Result<()>
             }
         };
         if let Err(error) = dropped {
-            failures.push(format!("{error:#}"));
+            failures.push(error);
         }
     }
+    // The first failure keeps its type (an invalid secret carries its own
+    // recovery, which callers must not contradict).
     match failures.into_iter().next() {
         None => Ok(()),
-        Some(first) => anyhow::bail!("failed to drop tenants of {instance}: {first}"),
+        Some(first) => Err(first.context(format!("failed to drop tenants of {instance}"))),
     }
 }
 

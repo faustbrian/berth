@@ -62,7 +62,15 @@ fn usage(target: &SharedTarget) -> std::result::Result<Option<String>, String> {
     }
     match crate::docker::inspect_status(&target.server).as_deref() {
         Some("running") => {}
-        Some(state) => return Err(format!("{state}; start it or remove it yourself")),
+        Some(state) => {
+            return Err(format!(
+                "{state}; berth gc removes only servers it can inspect, so start it with `{} \
+                 start {}` and run {} again (removing it by hand deletes every tenant's data)",
+                crate::docker::docker_command(),
+                target.server,
+                crate::followup::global("gc")
+            ));
+        }
         None => return Err("cannot be inspected".to_owned()),
     }
     let tenants = tenants(target).map_err(|error| format!("cannot list tenants: {error:#}"))?;

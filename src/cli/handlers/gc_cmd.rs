@@ -14,7 +14,10 @@ pub(crate) fn handle_gc(json: bool) -> Result<()> {
     // Deciding what is unused needs real Docker reads, which `--dry-run`
     // stubs out: refuse instead of reporting guesses (L136).
     if crate::docker::is_dry_run() {
-        anyhow::bail!("`berth gc` does not support --dry-run; `berth ls --json` shows what exists");
+        anyhow::bail!(
+            "`berth gc` does not support --dry-run; {} shows what exists",
+            crate::followup::global("ls --json")
+        );
     }
     let reaped = crate::instance::reap(true, None)?;
     let slot_locks = reaped.slot_locks;

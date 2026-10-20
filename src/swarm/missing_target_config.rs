@@ -32,14 +32,23 @@ pub(crate) fn target_config_path(
 /// when that pin is the branch without one.
 fn missing_target_config(name: &str, root: &Path, git: Option<&SwarmGit>) -> anyhow::Error {
     let at = root.display();
+    let dir = crate::followup::quote(&root.display().to_string());
+    if root.exists() && !root.is_dir() {
+        // Bootstrap skips any existing path, so `up` would never clone here.
+        return anyhow::anyhow!(
+            "swarm target '{name}' root {at} is a file, not a directory; move or remove that \
+             file, or point the target's `root` in the workspace `.berth.yaml` at its checkout"
+        );
+    }
     if !root.is_dir() {
         // Only `up` and `swarm up` bootstrap targets, and only those with
         // `git`; `artisan test`, `up --no-deps` and the other commands read
         // them where they are.
         return match git {
             Some(git) => anyhow::anyhow!(
-                "swarm target '{name}' has no checkout at {at}; run `berth up` or `berth swarm \
-                 up` to clone it from {}, or clone it there yourself",
+                "swarm target '{name}' has no checkout at {at}; run {} (or `berth swarm up` \
+                 in the workspace) to clone it from {}, or clone it there yourself",
+                crate::followup::command("up"),
                 git.repo
             ),
             None => anyhow::anyhow!(
@@ -64,9 +73,14 @@ fn missing_target_config(name: &str, root: &Path, git: Option<&SwarmGit>) -> any
         // berth cannot tell which branch an existing checkout is on, so the
         // pin is only a suspect.
         Some(branch) => anyhow::anyhow!(
-            "{what}; check out the branch the workspace pins, '{branch}' (`git.branch`), and if \
-             that branch has no .berth.yaml either, point `git.branch` at one that does (berth \
-             never switches or pulls an existing checkout)"
+            "{what}; check out the branch the workspace pins, '{branch}' (`git.branch`). A \
+             checkout berth cloned tracks only one branch, so run `git -C {dir} remote \
+             set-branches --add origin {pin}`, `git -C {dir} fetch origin` and `git -C {dir} \
+             checkout {pin}` (if it is a clone berth made and holds none of your work, \
+             deleting it so `berth up` clones it again also works); if that branch has no \
+             .berth.yaml either, point `git.branch` at one that does (berth never \
+             switches or pulls an existing checkout)",
+            pin = crate::followup::quote(branch)
         ),
         None => anyhow::anyhow!(
             "{what}; check out a branch that has one (usually its default branch); berth clones \
@@ -162,6 +176,37 @@ mod tests {
         );
         assert!(!message.contains("which has none"), "{message}");
         std::fs::remove_dir_all(&root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_pinned_branch_hint_covers_a_single_branch_clone() {
+        let root = root("pinned-clone");
+        std::fs::create_dir_all(&root).expect("root");
+        let message = format!(
+            "{:#}",
+            missing_target_config("bill", &root, Some(&git(Some("develop"))))
+        );
+        assert!(message.contains("git -C"), "{message}");
+        assert!(
+            message.contains("remote set-branches --add origin develop"),
+            "{message}"
+        );
+        assert!(message.contains("holds none of your work"), "{message}");
+        std::fs::remove_dir_all(&root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_root_that_is_a_file_is_named_as_such() {
+        let root = root("file");
+        std::fs::create_dir_all(root.parent().expect("parent")).expect("parent");
+        std::fs::write(&root, "").expect("file");
+        let message = format!(
+            "{:#}",
+            missing_target_config("bill", &root, Some(&git(None)))
+        );
+        assert!(message.contains("is a file, not a directory"), "{message}");
+        assert!(!message.contains("swarm up"), "{message}");
+        std::fs::remove_file(&root).expect("cleanup");
     }
 
     #[test]

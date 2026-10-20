@@ -102,8 +102,11 @@ pub(crate) fn ensure_gateway(
         None => {}
     }
 
-    for port in [ports.https, ports.http] {
-        ensure_port_free(port)?;
+    for (port, variable) in [
+        (ports.https, "BERTH_GATEWAY_HTTPS_PORT"),
+        (ports.http, "BERTH_GATEWAY_HTTP_PORT"),
+    ] {
+        ensure_port_free(port, variable)?;
     }
     // As the owner of the state directories, mapped like app containers:
     // rootless Docker needs no `--user` (its root is that owner), Podman
@@ -216,7 +219,7 @@ fn inspect(name: &str) -> Result<Option<(bool, String)>> {
 
 /// Fails, naming the listener when it can be identified, if `port` is taken.
 /// Berth never falls back to another port (8.x FI-14).
-fn ensure_port_free(port: u16) -> Result<()> {
+fn ensure_port_free(port: u16, variable: &str) -> Result<()> {
     // `.localhost` clients may try `::1` first, so a listener there would
     // intercept berth's routes even though the gateway binds IPv4 (8.x FI-40).
     for address in ["127.0.0.1", "::1"] {
@@ -232,16 +235,9 @@ fn ensure_port_free(port: u16) -> Result<()> {
             } else {
                 format!("{address}:{port}")
             };
-            match owner {
-                Some(owner) => anyhow::bail!(
-                    "gateway port {shown} is in use by '{owner}'; free it or set \
-                     BERTH_GATEWAY_HTTPS_PORT / BERTH_GATEWAY_HTTP_PORT"
-                ),
-                None => anyhow::bail!(
-                    "gateway port {shown} is in use; free it or set \
-                     BERTH_GATEWAY_HTTPS_PORT / BERTH_GATEWAY_HTTP_PORT"
-                ),
-            }
+            let holder = owner.map_or_else(String::new, |owner| format!(" by '{owner}'"));
+            let fix = super::ports::port_change_advice(variable)?;
+            anyhow::bail!("gateway port {shown} is in use{holder}; stop that program, {fix}");
         }
     }
     Ok(())

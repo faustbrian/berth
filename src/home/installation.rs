@@ -77,12 +77,26 @@ fn stage_id(staged: &Path, id: &str) -> Result<()> {
 }
 
 fn read_id(path: &Path) -> Result<String> {
-    let id = std::fs::read_to_string(path)
+    let raw = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read {}", path.display()))?;
+    // A hand-restored ID often ends in a newline; the ID itself never does.
+    let id = raw.trim().to_owned();
     if id.len() != 32 || !id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        // A fresh ID would make every object labelled with the old one
+        // another installation's, which berth then refuses to touch.
+        let docker = crate::docker::docker_command();
+        let label = crate::docker::label_template("dev.berth.installation");
         anyhow::bail!(
-            "{} does not contain a valid installation ID; delete it to create a new one",
-            path.display()
+            "{} does not contain a valid installation ID (32 hex characters). Do not delete it: \
+             every container, volume and network berth created carries that ID, and a new one \
+             orphans them. Recover it from a label: `{docker} ps -a --filter \
+             label=dev.berth.installation --format '{label} {{{{.Names}}}}'` lists each container \
+             with its ID; pick the one whose containers belong to this berth home (their names \
+             are berth_<project>_<instance>_<service>, matching {}), and write it back with \
+             `printf %s <id> > {}`",
+            path.display(),
+            path.with_file_name("instances").display(),
+            crate::followup::quote(&path.display().to_string())
         );
     }
     Ok(id)
@@ -96,6 +110,29 @@ fn random_id() -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_corrupt_id_names_recovery_commands_for_the_active_engine() {
+        let home = crate::test_support::temp_root()
+            .join(format!("berth-installation-corrupt-{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&home));
+        std::fs::create_dir_all(&home).expect("home");
+        let path = home.join(super::FILE_NAME);
+        std::fs::write(&path, "not an id").expect("corrupt");
+        let message =
+            crate::docker::with_container_engine(crate::config::ContainerEngine::Podman, || {
+                format!("{:#}", super::read_id(&path).expect_err("corrupt"))
+            });
+        assert!(message.contains("Do not delete it"), "{message}");
+        assert!(
+            message.contains("{{index .Labels \"dev.berth.installation\"}}"),
+            "Podman has no `.Label`: {message}"
+        );
+        // A restored ID with a trailing newline is accepted.
+        std::fs::write(&path, format!("{}\n", "a".repeat(32))).expect("restored");
+        assert_eq!(super::read_id(&path).expect("id"), "a".repeat(32));
+        std::fs::remove_dir_all(&home).expect("cleanup");
+    }
+
     #[test]
     fn concurrent_first_runs_agree_on_one_installation_id() {
         let home = crate::test_support::temp_root()

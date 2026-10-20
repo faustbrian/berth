@@ -87,7 +87,7 @@ pub(crate) fn assign_shared_target(
     let fingerprint = super::naming::fingerprint(engine, &service.image, Some(&command));
     let server = super::naming::server_name(engine, &installation, &fingerprint);
     let tenant = super::naming::tenant_name(project, instance, &service.name, env);
-    let password = tenant_password(project, instance, &tenant)?;
+    let password = tenant_password(service, project, instance, &tenant)?;
     if let Some(root) = service.runtime.root.as_deref() {
         crate::instance::record_root(project, instance, root)?;
     }
@@ -122,7 +122,12 @@ pub(crate) fn assign_shared_target(
 
 /// The tenant's password, created once and kept with the instance's berth
 /// state until `down --purge`.
-fn tenant_password(project: &str, instance: &str, tenant: &str) -> Result<String> {
+fn tenant_password(
+    service: &ServiceConfig,
+    project: &str,
+    instance: &str,
+    tenant: &str,
+) -> Result<String> {
     if crate::docker::is_dry_run() {
         return Ok(DRY_RUN_PASSWORD.to_owned());
     }
@@ -138,4 +143,15 @@ fn tenant_password(project: &str, instance: &str, tenant: &str) -> Result<String
         crate::home::random_hex_secret,
         crate::home::is_hex_secret,
     )
+    .map_err(|error| {
+        // Provisioning sets the tenant's password on every `up` of its own
+        // project (the service may be another project's swarm source).
+        crate::home::advise_on_invalid(error, || {
+            format!(
+                "the file is a tenant password, which `berth up` sets on the shared server each \
+                 time: delete it and run {}",
+                crate::followup::for_service(service, "up")
+            )
+        })
+    })
 }

@@ -21,7 +21,8 @@ pub(super) fn resolve_swarm_targets(
 ) -> Result<Vec<ResolvedSwarmTarget>> {
     if config.swarm.is_empty() {
         anyhow::bail!(
-            "no swarm targets configured. Add `swarm` entries to .berth.yaml in {}",
+            "{}/.berth.yaml lists no `swarm` targets; run `berth swarm` from the workspace that \
+             lists them, or pass `--project-root <workspace>`",
             workspace_root.display()
         );
     }

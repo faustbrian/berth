@@ -9,10 +9,8 @@ use std::path::Path;
 mod mutations;
 mod parse;
 mod update;
-mod write;
 
 pub(crate) use update::update_env;
-pub(crate) use write::write_env_values;
 
 /// Reads env lines from persisted or external state.
 fn read_env_lines(env_path: &Path) -> Result<Vec<String>> {

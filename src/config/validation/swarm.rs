@@ -39,7 +39,11 @@ pub(super) fn validate_swarm_targets(config: &Config) -> Result<()> {
                 anyhow::bail!("swarm target '{normalized}' cannot depend on itself");
             }
             if !names.contains(dep) {
-                anyhow::bail!("swarm target '{normalized}' depends on unknown target '{dep}'");
+                anyhow::bail!(
+                    "swarm target '{normalized}' depends on unknown target '{dep}'; swarm \
+                     targets: {}",
+                    sorted_names(&names)
+                );
             }
         }
 
@@ -60,7 +64,11 @@ pub(super) fn validate_swarm_targets(config: &Config) -> Result<()> {
                 anyhow::bail!("swarm target '{normalized}' has an empty inject_env.from");
             }
             if !names.contains(from) {
-                anyhow::bail!("swarm target '{normalized}' injects from unknown target '{from}'");
+                anyhow::bail!(
+                    "swarm target '{normalized}' injects from unknown target '{from}'; swarm \
+                     targets: {}",
+                    sorted_names(&names)
+                );
             }
             // Injected endpoints name the source's container on its network,
             // which the consumer joins, so the source must be up first.
@@ -86,7 +94,9 @@ pub(super) fn validate_swarm_targets(config: &Config) -> Result<()> {
                 )
             {
                 anyhow::bail!(
-                    "swarm target '{normalized}' inject_env for '{env}' uses unsupported token '{value}'"
+                    "swarm target '{normalized}' inject_env for '{env}' uses unsupported token \
+                     '{value}'; use :url, :base_url, :host, :port, :domain or :scheme, or a \
+                     literal value without a leading `:`"
                 );
             }
         }
@@ -104,4 +114,11 @@ pub(super) fn validate_swarm_targets(config: &Config) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// The swarm target names, sorted, for an error listing what exists.
+fn sorted_names(names: &HashSet<String>) -> String {
+    let mut sorted: Vec<&str> = names.iter().map(String::as_str).collect();
+    sorted.sort_unstable();
+    sorted.join(", ")
 }

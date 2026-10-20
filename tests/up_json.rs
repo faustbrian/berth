@@ -433,7 +433,10 @@ fn a_database_that_stops_while_starting_fails_up_at_once_without_a_cap() {
         .as_str()
         .expect("error")
         .to_owned();
-    assert!(error.contains("is not running"), "{error}");
+    assert!(
+        error.contains("stopped while berth waited for it"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -457,7 +460,7 @@ fn one_services_failure_ends_a_parallel_siblings_wait_and_is_the_error_reported(
         .expect("error")
         .to_owned();
     assert!(
-        error.contains("is not running") && error.contains("_db"),
+        error.contains("stopped while berth waited for it") && error.contains("_db"),
         "{error}"
     );
     assert!(!error.contains("another service failed"), "{error}");
@@ -499,6 +502,19 @@ fn credentials_never_reach_stderr_or_logs_even_when_docker_fails() {
     assert!(
         !text(&failed.stdout).contains("canary-s3cret-value"),
         "the failure document has no credentials"
+    );
+    let document = one_document(&failed.stdout);
+    assert!(
+        document["hint"]
+            .as_str()
+            .is_some_and(|hint| hint.contains("berth up -P")),
+        "a taken port carries the fix: {document}"
+    );
+    let plain = failing.berth(&["up", "--no-wait"], &[("FAKE_DB_RUN", "busy")]);
+    assert!(
+        text(&plain.stderr).contains("Hint: a host port is taken"),
+        "{}",
+        text(&plain.stderr)
     );
 
     let dry = failing.berth(&["--dry-run", "up"], &[]);

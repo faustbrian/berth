@@ -120,7 +120,10 @@ pub(super) fn reap_in_passing(keep: Option<(&str, &str)>) {
         crate::output::event(
             "reap",
             crate::output::LogLevel::Warn,
-            &format!("{error:#}; `berth gc` retries and reports it"),
+            &format!(
+                "{error:#}; {} retries and reports it",
+                crate::followup::global("gc")
+            ),
             crate::output::Persistence::Persistent,
         );
     }

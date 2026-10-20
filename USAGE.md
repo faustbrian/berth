@@ -695,7 +695,6 @@ Options:
 - `--wait-timeout <WAIT_TIMEOUT>`: Optional cap in seconds on readiness waits. Without it berth waits as long as the service is alive and fails only on a real error (the container stops, the framework hits a fatal error)
 - `-P, --publish-all`: Publish all exposed ports to random host ports after start
 - `--no-deps`: Skip recreating workspace swarm dependencies
-- `--env-output`: Write inferred service vars to local `.env`
 - `--parallel <PARALLEL>`: [default: 4]
 
 ### `berth restart`
@@ -1817,7 +1816,6 @@ Options:
 - `--fail-fast`: Stop after first failure; in parallel mode remaining targets are cancelled
 - `--port-strategy <PORT_STRATEGY>`: Strategy for assigning ports during `swarm up` [default: random] [possible values: random, stable]
 - `--port-seed <PORT_SEED>`: Seed used by `--port-strategy stable`
-- `--env-output`: Write inferred service vars to local `.env` during `swarm up`
 
 ### `berth completions`
 
@@ -1851,7 +1849,6 @@ Options:
 - `--profile <PROFILE>`: Select a service profile (full, infra, data, app, web, api)
 - `--recreate`: Recreate the app container before starting serve
 - `--detached`: Run foreground serve process in detached container mode
-- `--env-output`: Write inferred service vars to local `.env`
 - `--trust-container-ca`: Trust the inner serve container CA in system trust store
 
 ### `berth open`

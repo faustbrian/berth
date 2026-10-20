@@ -116,10 +116,17 @@ fn resolve_single_app_service(
         .filter(|svc| svc.kind == config::Kind::App)
         .collect::<Vec<_>>();
     if selected.is_empty() {
-        anyhow::bail!("no app services matched the requested selector")
+        return Err(cli::support::nothing_matched(
+            config, service, kind, profile, true,
+        ));
     }
     if selected.len() > 1 {
-        anyhow::bail!("selector matched multiple app services; use --service to choose one")
+        return Err(cli::support::several_matched(
+            service,
+            kind,
+            profile,
+            selected.iter().map(|svc| &**svc),
+        ));
     }
     Ok(selected.pop().map(|svc| svc.name.clone()))
 }

@@ -2,6 +2,51 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Errors say what is wrong and what to do about it. A missing engine CLI is
+  named with the other engine as the way out, before berth runs it; an
+  unreachable engine, a taken host port and a denied image pull get a
+  `Hint:` line (and a `hint` field in `up --json` failures); `berth health`
+  prints each failing service with its cause instead of only "health checks
+  failed"; errors past the YAML parser name the project file; a `depends_on`
+  entry naming no service fails at load; and `--service`/`--kind`/`--profile`
+  selections that match nothing or several services list what exists.
+- A command a hint tells you to run targets what failed: it carries the
+  failing run's `--engine`, `--config` or `--project-root`, `--instance`,
+  `--env` and `--dry-run` (or the service's own project), so pasting it
+  never acts on another instance or engine; after an `--instance` purge,
+  the retry no longer purges the checkout's default instance. A failed
+  swarm target's rerun also keeps `--no-deps`, `--force` and the port
+  flags.
+- `berth preset list`, `berth preset show` and `berth profile list` work in
+  a project whose file does not load, so the hints that name them can be
+  followed there. `berth health` on an instance that was never started
+  says so instead of blaming a concurrent `berth down`.
+- Hints that pointed at commands or flags berth does not have now name real
+  ones: `berth logs --service <name>`, `berth preset show <name>`, the YAML
+  `javascript:` keys, and a gateway port fix that works once its ports are
+  recorded; `berth config migrate` names the legacy key to change (for
+  example `container_prefix`). A corrupt berth-home file is named first
+  and never reported as an invalid project file. The advice to delete a
+  corrupt installation ID or secret file,
+  which orphans every instance or locks out its servers, is replaced by
+  recovery steps.
+- `--env-output` on `recreate`, `serve` and `swarm` is hidden like on `up`
+  and fails up front naming `berth env` (`recreate` ignored it without
+  `-P`). A share whose public URL was never verified is
+  stopped and says so, and an unverified Tailscale funnel is turned off.
+- A swarm source's missing-checkout error names its single-branch clone fix,
+  and a root that is a file is named as such.
+
+### Fixed
+
+- `restore --migrate` and `--schema-dump` under `--env` (or `--config`)
+  run artisan in that environment's app, not the default one, so they
+  migrate the database that was restored.
+
 ## [10.1.3] - 2026-10-19
 
 ### Changed

@@ -19,7 +19,9 @@ pub(super) fn find_project_root(start: &Path) -> Result<PathBuf> {
             return Ok(current.to_path_buf());
         }
 
-        current = current.parent().ok_or_else(missing_config_error)?;
+        current = current
+            .parent()
+            .ok_or_else(|| missing_config_error(start))?;
     }
 }
 
@@ -56,12 +58,18 @@ fn find_config_in_path_internal(
             return Ok(config_path);
         }
 
-        current = current.parent().ok_or_else(missing_config_error)?;
+        current = current
+            .parent()
+            .ok_or_else(|| missing_config_error(start_path))?;
     }
 }
 
-fn missing_config_error() -> anyhow::Error {
-    anyhow!("no berth project file (.berth.yaml) found in the current directory or any parent")
+fn missing_config_error(start: &Path) -> anyhow::Error {
+    anyhow!(
+        "no .berth.yaml in {} or any parent directory; run `berth init` in the project to \
+         create one, or point berth at it with `--project-root <DIR>` or `--config <FILE>`",
+        start.display()
+    )
 }
 
 /// Resolves `{base_name}.yaml` in `dir`.

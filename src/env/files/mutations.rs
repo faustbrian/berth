@@ -1,7 +1,6 @@
 //! Line mutation helpers for env file operations.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use super::parse::env_key;
 
@@ -43,17 +42,4 @@ pub(super) fn append_missing_values<F>(
             updated.push(key.clone());
         }
     }
-}
-
-pub(super) fn purge_missing_managed_keys(
-    lines: &mut Vec<String>,
-    managed_keys: &HashSet<String>,
-    values: &HashMap<String, String>,
-) {
-    lines.retain(|line| {
-        let Some(key) = env_key(line) else {
-            return true;
-        };
-        !managed_keys.contains(key) || values.contains_key(key)
-    });
 }

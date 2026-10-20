@@ -120,6 +120,21 @@ fn converts_v7_toml_service_lists() -> anyhow::Result<()> {
 }
 
 #[test]
+fn a_v8_service_name_berth_rejects_names_the_legacy_file() {
+    let dir = temp_dir("v8-name");
+    let legacy = dir.join(".stackctl.yaml");
+    let error = convert_legacy_config(
+        "schema_version: 8\nproject: bill\nservices:\n  queue_worker:\n    preset: redis\n",
+        &legacy,
+    )
+    .expect_err("an invalid service name");
+    let message = format!("{error:#}");
+    assert!(message.contains(&legacy.display().to_string()), "{message}");
+    assert!(!message.contains(".berth.yaml"), "{message}");
+    assert!(message.contains("'queue-worker'"), "{message}");
+}
+
+#[test]
 fn converts_v8_yaml_and_rejects_unconvertible_fields() -> anyhow::Result<()> {
     let dir = temp_dir("v8");
     let converted = convert_legacy_config(

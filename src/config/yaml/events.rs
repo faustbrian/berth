@@ -98,7 +98,7 @@ pub(crate) fn parse_text_tree(content: &str) -> Result<Value> {
         attach(&mut stack, &mut root, value, line)?;
     }
 
-    root.ok_or_else(|| anyhow::anyhow!("the YAML document is empty"))
+    root.ok_or_else(|| anyhow::anyhow!("the file is empty"))
 }
 
 fn reject_anchor_and_tag(line: usize, anchor: usize, tagged: bool) -> Result<()> {

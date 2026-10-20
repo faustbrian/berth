@@ -40,11 +40,14 @@ pub(super) fn ensure_target_configs_exist(
     targets: &[ResolvedSwarmTarget],
 ) -> Result<()> {
     for target in targets {
-        let git = config
-            .swarm
-            .iter()
-            .find(|item| item.name == target.name)
-            .and_then(|item| item.git.as_ref());
+        let Some(configured) = config.swarm.iter().find(|item| item.name == target.name) else {
+            // Targets are resolved from this same config.
+            anyhow::bail!(
+                "internal error: swarm target '{}' is not in the workspace config",
+                target.name
+            );
+        };
+        let git = configured.git.as_ref();
         crate::swarm::target_config_path(&target.name, &target.root, git)?;
     }
 
@@ -58,6 +61,29 @@ mod tests {
     use anyhow::Context;
     use std::path::Path;
     use std::process::Command;
+
+    #[test]
+    fn a_target_missing_from_the_workspace_config_fails_instead_of_losing_its_git() {
+        let config = Config {
+            schema_version: 1,
+            project_type: crate::config::ProjectType::Project,
+            container_prefix: None,
+            domain_strategy: None,
+            service: Vec::new(),
+            swarm: Vec::new(),
+        };
+        let targets = vec![ResolvedSwarmTarget {
+            name: "rate".to_owned(),
+            root: crate::test_support::temp_root().join("berth-swarm-unknown-target"),
+        }];
+        let message = format!(
+            "{:#}",
+            ensure_target_configs_exist(&config, &targets).expect_err("unknown target")
+        );
+        assert!(message.contains("swarm target 'rate'"), "{message}");
+        assert!(message.contains("not in the workspace config"), "{message}");
+        assert!(message.contains("internal error"), "{message}");
+    }
 
     #[test]
     fn a_missing_root_is_reported_with_the_targets_own_git_repo() {

@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::Duration;
 
 use crate::config::{SharedEngine, SharedTarget};
@@ -99,6 +99,45 @@ pub(super) fn admin_secret(target: &SharedTarget) -> Result<String> {
         crate::home::random_hex_secret,
         crate::home::is_hex_secret,
     )
+    .map_err(|error| {
+        // A new secret no longer matches the server's data directory, so
+        // the way out is the engine's lost-secret recovery, never a purge.
+        crate::home::advise_on_invalid(error, || {
+            let path = match crate::home::home_path(
+                &Path::new("shared").join(&target.server).join("admin"),
+            ) {
+                Ok(path) => path,
+                Err(path_error) => return format!("{path_error:#}"),
+            };
+            let recovery = engine::lost_secret_recovery(target.engine, &target.server, &path);
+            // PostgreSQL trusts its local socket, so a new secret can be set
+            // on the server; the other engines need the original back.
+            let file = crate::followup::quote(&path.display().to_string());
+            let fresh = match target.engine {
+                SharedEngine::Postgres => format!(
+                    "first write a new secret with `(umask 077; openssl rand -hex 32 | tr -d \
+                     '\\n' > {file})`, then "
+                ),
+                _ => String::new(),
+            };
+            // berth never replaces an invalid secret file, so once the server
+            // is gone the file itself must go before a new one is written.
+            let after = match target.engine {
+                SharedEngine::Postgres => String::new(),
+                _ => format!(
+                    "; after removing the server (or if it is already gone), delete the file \
+                     (`rm {file}`) so berth writes a new secret, and run the same berth command \
+                     again"
+                ),
+            };
+            format!(
+                "the file is shared server {}'s admin secret, and every instance's shared data \
+                 depends on it: {fresh}{recovery}{after}. Purging (`down --purge`) does not fix \
+                 this",
+                target.server
+            )
+        })
+    })
 }
 
 /// Ensures the server runs and accepts connections. Must hold [`lock`].
@@ -217,7 +256,7 @@ fn create(target: &SharedTarget, installation: &str) -> Result<()> {
     }
     run.push(target.image.clone());
     run.extend(target.command.iter().cloned());
-    let mut command = Command::new(crate::docker::docker_command());
+    let mut command = crate::docker::engine_command()?;
     command.args(&run);
     if let Some(name) = password_env {
         command.env(name, &secret);
@@ -301,7 +340,7 @@ fn seed_acl_file(
         "-c".to_owned(),
         super::acl_seed_script::acl_seed_script(super::redis::ACL_FILE),
     ]);
-    let mut child = Command::new(crate::docker::docker_command())
+    let mut child = crate::docker::engine_command()?
         .args(&args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -374,29 +413,41 @@ fn wait_ready(target: &SharedTarget) -> Result<()> {
     let deadline = crate::wait::Deadline::start();
     loop {
         crate::parallel::ensure_no_sibling_failed()?;
-        deadline.ensure(&format!("shared server {}", target.server))?;
+        deadline.ensure(
+            &format!("shared server {}", target.server),
+            &format!("{} logs {}", crate::docker::docker_command(), target.server),
+        )?;
         match inspect(&target.server)? {
             Some(state) if state.running => {}
             _ => anyhow::bail!(
-                "shared server {} stopped while starting; see `docker logs {}`",
+                "shared server {} stopped while starting; see why with `{} logs {}`, fix it and run \
+                 the same berth command again",
                 target.server,
+                crate::docker::docker_command(),
                 target.server
             ),
         }
         match admin_sql(target, engine::ping(target.engine)) {
             Ok(_) => return Ok(()),
+            // A corrupt admin secret file carries its own recovery; the
+            // server never saw a password, so nothing below applies.
+            Err(error) if crate::home::is_invalid_secret(&error) => return Err(error),
             // The data directory keeps the password it was created with; a
             // new admin secret never matches it, so waiting cannot help.
             // Removing the server would delete every instance's shared data,
             // so the recovery keeps it.
             Err(error) if engine::is_auth_failure(target.engine, &format!("{error:#}")) => {
+                let secret = crate::home::home_path(
+                    &Path::new("shared").join(&target.server).join("admin"),
+                )?;
                 anyhow::bail!(
-                    "shared server {server} rejects berth's admin password \
-                     (~/.berth/shared/{server}/admin was replaced or lost). To keep the data, \
-                     {recovery}, then run `berth up` again. Do not remove the server or its \
-                     volume: it holds every instance's shared databases",
+                    "shared server {server} rejects berth's admin password ({secret} was \
+                     replaced or lost). To keep the data, {recovery}, then run the same berth command again. \
+                     Do not remove the server or its volume: it holds every instance's shared \
+                     databases",
                     server = target.server,
-                    recovery = engine::lost_secret_recovery(target.engine, &target.server)
+                    secret = secret.display(),
+                    recovery = engine::lost_secret_recovery(target.engine, &target.server, &secret)
                 );
             }
             // Reaping in passing never waits for a server still starting.
@@ -414,7 +465,11 @@ fn wait_ready(target: &SharedTarget) -> Result<()> {
             Err(error) => {
                 if inspect(&target.server)?.is_some_and(|state| state.running) {
                     return Err(error.context(format!(
-                        "shared server {} does not accept berth's admin connection",
+                        "shared server {} does not accept berth's admin connection; see `{} logs \
+                         {}` and run the same berth command again (do not remove the server: it \
+                         holds every instance's data)",
+                        target.server,
+                        crate::docker::docker_command(),
                         target.server
                     )));
                 }
@@ -456,7 +511,10 @@ pub(super) fn admin_sql(target: &SharedTarget, sql: &str) -> Result<String> {
         // Reaping in passing never waits for a server still starting.
         if handing_off && !super::best_effort::is_best_effort() {
             crate::parallel::ensure_no_sibling_failed()?;
-            deadline.ensure(&format!("shared server {}", target.server))?;
+            deadline.ensure(
+                &format!("shared server {}", target.server),
+                &format!("{} logs {}", crate::docker::docker_command(), target.server),
+            )?;
         } else {
             anyhow::bail!(
                 "{} on {}: {}",
@@ -548,7 +606,7 @@ fn exec_stdin(
 ) -> Result<(Option<i32>, String, String)> {
     // The password reaches the client by name from docker's environment,
     // never as an argument.
-    let mut child = Command::new(crate::docker::docker_command())
+    let mut child = crate::docker::engine_command()?
         .args(["exec", "-i", "-e", password_env, container])
         .args(command)
         .env(password_env, password)

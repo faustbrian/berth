@@ -574,7 +574,7 @@ fn up_json_prints_its_failure_document_when_the_lease_is_invalid() {
     let a = host.checkout("a");
     for (flag, value, cause) in [
         ("--ttl", "2", "needs a unit"),
-        ("--owner-pid", "4000000000", "not running"),
+        ("--owner-pid", "4000000000", "is not a running process"),
     ] {
         let up = host.berth(&a, &["up", "--json", "--no-wait", flag, value]);
         assert_eq!(up.status.code(), Some(125), "{flag}");

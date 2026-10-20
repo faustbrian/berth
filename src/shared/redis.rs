@@ -96,8 +96,8 @@ pub(crate) fn ensure_supported_version(info: &str) -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("unexpected redis_version '{version}'"))?;
     if major < 7 {
         anyhow::bail!(
-            "shared Redis servers need Redis 7 or later (found {version}); use \
-             `isolation: dedicated` for this image"
+            "shared Redis servers need Redis 7 or later (this image runs {version}); use a newer \
+             `image:` tag, or set `isolation: dedicated` on the service"
         );
     }
     Ok(())

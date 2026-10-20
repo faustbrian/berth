@@ -22,6 +22,11 @@ pub(super) fn order_target_names(
             };
             Ok(target.depends_on.clone())
         },
-        |path| format!("circular swarm dependency: {path}"),
+        |path| {
+            format!(
+                "circular swarm dependency: {path}; remove one of these from a `depends_on` list \
+                 in the workspace .berth.yaml"
+            )
+        },
     )
 }

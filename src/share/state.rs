@@ -100,7 +100,7 @@ pub(super) fn start_session(
         anyhow::bail!(
             "cannot share '{}': it is {}",
             target.name,
-            crate::network::PUBLISH_HINT
+            crate::network::publish_hint()
         );
     }
 
@@ -145,7 +145,7 @@ pub(super) fn start_session(
         };
         if let Err(err) = verify_public_session(&mut session, verify_timeout) {
             stop_pid(pid)?;
-            return Err(err);
+            return Err(err.context("berth stopped the share"));
         }
         upsert_session(&paths.state_path, session.clone())?;
         session.to_status(true)
@@ -349,7 +349,8 @@ fn ensure_provider_available(provider: ShareProvider) -> Result<()> {
         Ok(_) => Ok(()),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
             anyhow::bail!(
-                "required provider binary '{}' was not found on PATH",
+                "`{}` was not found on PATH; install it, or share through another provider \
+                 (`--cloudflare`, `--expose` or `--tailscale`)",
                 provider_binary(provider)
             )
         }
@@ -404,7 +405,16 @@ fn start_tailscale_bg_session(
         command: command_for_state(provider, command_args),
         started_at_unix,
     };
-    verify_public_session(&mut session, verify_timeout)?;
+    // An unverified funnel would stay public with no session to stop it by.
+    if let Err(error) = verify_public_session(&mut session, verify_timeout) {
+        if let Err(stop_error) = stop_tailscale_funnel() {
+            return Err(anyhow::anyhow!(
+                "{error:#}; berth could not turn the funnel off ({stop_error:#}), so it is still \
+                 public: run `tailscale funnel --https=443 off`"
+            ));
+        }
+        return Err(error.context("berth turned the funnel off"));
+    }
     upsert_session(state_path, session.clone())?;
     Ok(ShareStartResult {
         session: session.to_status(session_running_for(&session)),
@@ -588,16 +598,19 @@ fn verify_public_session(session: &mut ShareSession, timeout: Duration) -> Resul
     }
     let Some(public_url) = session.public_url.as_deref() else {
         anyhow::bail!(
-            "share started but public URL was not discovered yet; check {}",
+            "{} printed no public URL in time; see why in {}, or retry with a longer \
+             `--timeout`",
+            provider_binary(session.provider),
             session.log_path
         );
     };
 
     if !wait_for_public_response(public_url, timeout) {
         anyhow::bail!(
-            "public tunnel URL did not respond within {}s: {}",
-            timeout.as_secs(),
-            public_url
+            "public tunnel URL {} did not respond within {}s; retry with a longer `--timeout` \
+             (the tunnel provider may need a moment to route it)",
+            public_url,
+            timeout.as_secs()
         );
     }
     Ok(())
@@ -1011,7 +1024,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("required provider binary '/does-not-exist'")
+                .contains("`/does-not-exist` was not found on PATH")
         );
     }
 
@@ -1085,11 +1098,7 @@ mod tests {
         session.public_url = None;
         let error = verify_public_session(&mut session, std::time::Duration::from_millis(10))
             .expect_err("expected missing public_url error");
-        assert!(
-            error
-                .to_string()
-                .contains("public URL was not discovered yet")
-        );
+        assert!(error.to_string().contains("printed no public URL in time"));
     }
 
     #[test]
@@ -1164,11 +1173,9 @@ mod tests {
             Ok(_) => panic!("expected detached start error"),
             Err(error) => error,
         };
-        assert!(
-            error
-                .to_string()
-                .contains("share started but public URL was not discovered yet")
-        );
+        let error = format!("{error:#}");
+        assert!(error.starts_with("berth stopped the share"), "{error}");
+        assert!(error.contains("printed no public URL in time"), "{error}");
     }
 
     #[test]
@@ -1187,6 +1194,39 @@ mod tests {
         };
         assert!(error.to_string().contains("tailscale funnel failed"));
         assert!(error.to_string().contains("funnel failed"));
+    }
+
+    #[test]
+    fn an_unverified_tailscale_funnel_is_turned_off_and_a_failed_off_is_reported() {
+        for (label, off_exit, stays_public) in [("ok", 0, false), ("fails", 1, true)] {
+            let home = reset_share_test_context(&share_home_path(&format!("funnel-{label}")));
+            let calls = home.join("calls");
+            let script = format!(
+                "#!/usr/bin/env sh\necho \"$*\" >> {calls}\nif [ \"$3\" = \"off\" ]; then\n  echo \"off refused\" >&2\n  exit {off_exit}\nfi\nexit 0\n",
+                calls = calls.display()
+            );
+            let binary = mock_binary(&home, &format!("tailscale-{label}"), &script);
+            set_test_provider_binary(ShareProvider::Tailscale, &binary);
+
+            let error = match start_session(&test_service(), ShareProvider::Tailscale, true, 1) {
+                Ok(_) => panic!("expected an unverified funnel to fail"),
+                Err(error) => format!("{error:#}"),
+            };
+            let recorded = fs::read_to_string(&calls).expect("calls");
+            assert!(
+                recorded.contains("funnel --https=443 off"),
+                "{label}: {recorded}"
+            );
+            assert!(
+                error.contains("printed no public URL in time"),
+                "{label}: {error}"
+            );
+            assert_eq!(
+                error.contains("still public"),
+                stays_public,
+                "{label}: {error}"
+            );
+        }
     }
 
     #[test]

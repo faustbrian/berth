@@ -51,7 +51,11 @@ pub(crate) fn run_doctor(config: &config::Config, options: RunDoctorOptions<'_>)
     }
 
     if has_error {
-        anyhow::bail!("doctor found issues")
+        anyhow::bail!(
+            "doctor found the issues listed above; fix them and run the same command again ({} \
+             repairs what it can)",
+            crate::followup::command("doctor --fix")
+        )
     }
 
     report::success("Doctor checks passed");

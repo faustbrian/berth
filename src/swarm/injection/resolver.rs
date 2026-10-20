@@ -66,8 +66,10 @@ pub(super) fn resolve_injected_env_from_swarm_context(
             crate::config::resolve_app_service(dependency_config, inject.service.as_deref())
                 .with_context(|| {
                     format!(
-                        "failed resolving app service for inject env '{}' from target '{}'",
-                        inject.env, target_name
+                        "cannot pick the app service of swarm target '{}' that `inject_env` {} \
+                         reads from; set `service: <name>` on that `inject_env` entry in the \
+                         workspace .berth.yaml",
+                        target_name, inject.env
                     )
                 })?;
         let source_service = super::source_in_runtime_env(source_service, runtime_env)?;

@@ -1806,7 +1806,7 @@ fn the_tenant_client_needs_the_instance_attached() {
     let client = host.berth(&a, &["exec", "--no-tty", "--service", "db"]);
     assert_eq!(client.status.code(), Some(125), "{}", text(&client.stderr));
     assert!(
-        text(&client.stderr).contains("berth up"),
+        text(&client.stderr).contains(" up` first"),
         "{}",
         text(&client.stderr)
     );
@@ -1832,7 +1832,7 @@ fn the_tenant_client_needs_a_running_server() {
     let client = host.berth(&a, &["exec", "--no-tty", "--service", "db"]);
     assert_eq!(client.status.code(), Some(125), "{}", text(&client.stderr));
     assert!(
-        text(&client.stderr).contains("berth up"),
+        text(&client.stderr).contains(" up` first"),
         "{}",
         text(&client.stderr)
     );
@@ -2259,4 +2259,96 @@ fn bounded_output(command: &mut Command) -> Output {
         stdout: stdout.join().expect("stdout"),
         stderr: stderr.join().expect("stderr"),
     }
+}
+
+#[test]
+fn a_corrupt_admin_secret_on_a_running_server_names_its_recovery_and_file() {
+    let host = Host::new("corrupt-admin");
+    let checkout = host.checkout("a", PROJECT);
+    host.ok(&checkout, &["up", "--no-wait"]);
+    let shared = host.base.join("home/shared");
+    let server = std::fs::read_dir(&shared)
+        .expect("shared")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| path.join("admin").is_file())
+        .expect("a server's admin secret");
+    std::fs::write(server.join("admin"), "not a secret").expect("corrupt");
+
+    let up = host.berth(&checkout, &["up", "--no-wait"]);
+    assert!(!up.status.success(), "{}", text(&up.stderr));
+    let stderr = text(&up.stderr);
+    // The server never saw a password: no connection, logs or rerun advice.
+    assert!(
+        !stderr.contains("does not accept berth's admin connection"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("invalid project file"), "{stderr}");
+    assert!(stderr.contains("admin secret"), "{stderr}");
+    assert!(stderr.contains("openssl rand -hex 32"), "{stderr}");
+    assert!(
+        stderr.contains(&format!("{}: ", server.join("admin").display())),
+        "the advice names the corrupt file first: {stderr}"
+    );
+}
+
+#[test]
+fn a_corrupt_tenant_password_is_a_home_file_error_not_a_project_file_one() {
+    let host = Host::new("corrupt-tenant");
+    let checkout = host.checkout("a", PROJECT);
+    host.ok(&checkout, &["up", "--no-wait"]);
+    let mut stack = vec![host.base.join("home/instances")];
+    let mut password = None;
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).expect("dir").filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path
+                .parent()
+                .is_some_and(|parent| parent.ends_with("credentials"))
+            {
+                password = Some(path);
+            }
+        }
+    }
+    let password = password.expect("a tenant password");
+    std::fs::write(&password, "not a secret").expect("corrupt");
+
+    let output = host.berth(&checkout, &["ps"]);
+    assert!(!output.status.success(), "{}", text(&output.stdout));
+    let stderr = text(&output.stderr);
+    assert!(!stderr.contains("invalid project file"), "{stderr}");
+    assert!(
+        stderr.contains(&format!(
+            "{}: the file is a tenant password",
+            password.display()
+        )),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_corrupt_mysql_admin_secret_says_to_delete_the_file_after_removing_the_server() {
+    let host = Host::new("corrupt-mysql-admin");
+    let project = PROJECT.replace("preset: postgres", "preset: mysql");
+    let checkout = host.checkout("a", &project);
+    host.ok(&checkout, &["up", "--no-wait"]);
+    let admin = std::fs::read_dir(host.base.join("home/shared"))
+        .expect("shared")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path().join("admin"))
+        .find(|path| path.is_file())
+        .expect("a server's admin secret");
+    std::fs::write(&admin, "not a secret").expect("corrupt");
+
+    let up = host.berth(&checkout, &["up", "--no-wait"]);
+    assert!(!up.status.success(), "{}", text(&up.stderr));
+    let stderr = text(&up.stderr);
+    // berth never replaces an invalid file, so the loop only ends with it.
+    assert!(
+        stderr.contains(&format!("delete the file (`rm {}`)", admin.display())),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("openssl rand"), "{stderr}");
 }

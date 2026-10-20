@@ -102,6 +102,30 @@ impl GatewayPorts {
     }
 }
 
+/// How to move the gateway off a taken port. The first gateway records its
+/// ports and every later process uses them, so once recorded the variable
+/// no longer helps (it fails against the record instead).
+///
+/// # Errors
+///
+/// Returns an error when the berth home cannot be resolved or read.
+pub(crate) fn port_change_advice(variable: &str) -> Result<String> {
+    let path = crate::home::home_path(&std::path::Path::new("gateway").join(PORTS_FILE))?;
+    if read_recorded(&path)?.is_some() {
+        return Ok(format!(
+            "or move this installation's gateway: its ports are fixed in {}, so bring every \
+             instance down ({} lists them), remove the gateway container ({}) and that file, \
+             then set {variable}",
+            path.display(),
+            crate::followup::global("ls"),
+            crate::followup::global("gc")
+        ));
+    }
+    Ok(format!(
+        "or set {variable} to a free port and run the command again"
+    ))
+}
+
 /// Returns the `https://` origin for a host on `port`, omitting 443.
 #[must_use]
 pub(crate) fn https_origin(host: &str, port: u16) -> String {

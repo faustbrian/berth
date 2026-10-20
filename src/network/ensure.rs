@@ -51,8 +51,9 @@ pub(crate) fn ensure_service_network(service: &ServiceConfig) -> Result<()> {
     match network_installation_label(network)? {
         Some(owner) if owner == installation => {}
         Some(_) | None if network_exists(network)? => anyhow::bail!(
-            "Docker network {network} exists but was not created by this berth installation; \
-             remove it or choose another --instance"
+            "network {network} exists but was not created by this berth installation; if nothing \
+             uses it, remove it with `{} network rm {network}`, or use another `--instance`",
+            crate::docker::docker_command()
         ),
         _ => create_network(service, network, &installation)?,
     }
@@ -145,7 +146,11 @@ fn create_network(service: &ServiceConfig, network: &str, installation: &str) ->
         }
     }
     anyhow::bail!(
-        "no free subnet for {network} after {MAX_SUBNET_ATTEMPTS} attempts in 10.128.0.0/9: {last_error}"
+        "no free subnet for {network} after {MAX_SUBNET_ATTEMPTS} attempts in 10.128.0.0/9 \
+         ({last_error}); too many networks exist: run {} to reap orphaned instances, and check \
+         `{} network ls` for leftovers",
+        crate::followup::global("gc"),
+        crate::docker::docker_command()
     )
 }
 

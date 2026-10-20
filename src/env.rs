@@ -32,15 +32,6 @@ pub fn inferred_app_env(config: &Config) -> HashMap<String, String> {
     infer::inferred_app_env(config)
 }
 
-/// Writes env values to persisted or external state.
-pub fn write_env_values(
-    env_path: &Path,
-    values: &HashMap<String, String>,
-    create_missing: bool,
-) -> Result<()> {
-    files::write_env_values(env_path, values, create_missing)
-}
-
 /// Merges environment values while preventing HTTPS URL downgrades for app URLs.
 ///
 /// Incoming values still override by default, except when `APP_URL` or

@@ -11,10 +11,11 @@ use crate::instance::{InstanceRecord, list_instances, now_secs};
 /// Returns an error when the format is unknown or instances cannot be
 /// listed.
 pub(crate) fn handle_list_instances(format: &str, json: bool) -> Result<()> {
-    let json = match (json, format) {
+    // clap accepts `--format` in any case.
+    let json = match (json, format.to_ascii_lowercase().as_str()) {
         (true, _) | (false, "json") => true,
         (false, "table") => false,
-        (false, other) => anyhow::bail!("unknown format '{other}'; use table or json"),
+        (false, _) => anyhow::bail!("unknown --format '{format}'; use table or json"),
     };
     let instances = list_instances()?;
     let now = now_secs();

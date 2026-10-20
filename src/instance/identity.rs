@@ -82,11 +82,15 @@ pub(crate) fn validate_instance_id(id: &str) -> Result<()> {
     let valid_edges = bytes.first().is_some_and(u8::is_ascii_alphanumeric)
         && bytes.last().is_some_and(u8::is_ascii_alphanumeric);
     if !valid_chars || !valid_edges {
-        anyhow::bail!("instance '{id}' must be lowercase letters, digits and inner hyphens");
+        anyhow::bail!(
+            "instance '{id}' (from --instance or BERTH_INSTANCE) must be lowercase letters, \
+             digits and inner hyphens, at most {MAX_INSTANCE_ID_LEN} bytes"
+        );
     }
     if id.len() > MAX_INSTANCE_ID_LEN {
         anyhow::bail!(
-            "instance '{id}' is {} bytes; the maximum is {MAX_INSTANCE_ID_LEN}",
+            "instance '{id}' (from --instance or BERTH_INSTANCE) is {} bytes; the maximum is \
+             {MAX_INSTANCE_ID_LEN}",
             id.len()
         );
     }

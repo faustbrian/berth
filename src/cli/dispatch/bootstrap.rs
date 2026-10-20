@@ -1,14 +1,14 @@
 //! Bootstrap helpers used before regular command dispatch.
 //!
 //! These helpers handle commands that must run without reading project config
-//! (init, config migrate and shell completions), then build the effective
+//! (init, config migrate, presets and shell completions), then build the effective
 //! `Config` for all other commands.
 
 use anyhow::Result;
 use clap::CommandFactory;
 use clap_complete::generate;
 
-use crate::cli::args::{Cli, Commands, ConfigCommands};
+use crate::cli::args::{Cli, Commands, ConfigCommands, PresetCommands, ProfileCommands};
 use crate::cli::handlers;
 use crate::config::{self, Config};
 use crate::output::{self, LogLevel, Persistence};
@@ -50,6 +50,22 @@ pub(super) fn handle_setup_commands(
     if let Commands::Completions(args) = &cli.command {
         let mut cmd = Cli::command();
         generate(args.shell, &mut cmd, "berth", &mut std::io::stdout());
+        return Ok(true);
+    }
+
+    // Presets and the profile list are built in: they answer the hints of a
+    // project file that does not load, so they must not need one.
+    if let Commands::Preset(args) = &cli.command {
+        match &args.command {
+            PresetCommands::List => handlers::handle_preset_list(),
+            PresetCommands::Show { name, format } => handlers::handle_preset_show(name, format)?,
+        }
+        return Ok(true);
+    }
+    if let Commands::Profile(args) = &cli.command
+        && matches!(args.command, ProfileCommands::List)
+    {
+        handlers::handle_profile_list();
         return Ok(true);
     }
 

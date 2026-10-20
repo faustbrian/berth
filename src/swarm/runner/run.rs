@@ -89,7 +89,20 @@ pub(crate) fn run_swarm(options: RunSwarmOptions<'_>) -> Result<()> {
         run_target: run_swarm_target,
     })?;
 
-    summary::summarize_results(&results, cancelled, output_mode)
+    summary::summarize_results(
+        &results,
+        cancelled,
+        output_mode,
+        &summary::Rerun {
+            workspace_root: &workspace_root,
+            runtime_env: options.runtime_env,
+            include_deps: options.include_deps,
+            force_down_deps: options.force_down_deps,
+            port_strategy: options.port_strategy,
+            port_seed: options.port_seed,
+            command: options.command,
+        },
+    )
 }
 
 fn output_mode_for_subcommand(subcommand: &str) -> OutputMode {

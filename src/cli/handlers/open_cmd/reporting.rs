@@ -62,13 +62,13 @@ pub(super) fn render_open_text(
                 "{}: {} ({})",
                 svc.name,
                 service_container_status(svc),
-                crate::network::PUBLISH_HINT
+                crate::network::publish_hint()
             ));
             if database {
                 anyhow::bail!(
                     "cannot open '{}' in a host client: it is {}",
                     svc.name,
-                    crate::network::PUBLISH_HINT
+                    crate::network::publish_hint()
                 );
             }
             continue;

@@ -2,7 +2,7 @@
 //!
 //! Contains config expansion service logic used by Berth command workflows.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use super::super::{RawServiceConfig, ServiceConfig, presets};
 use conflict::validate_preset_conflicts;
@@ -17,13 +17,16 @@ mod selection;
 
 pub(super) fn expand_raw_service(raw: RawServiceConfig) -> Result<ServiceConfig> {
     let preset = raw.preset.as_deref();
+    let service = || format!("service '{}'", raw.name.as_deref().unwrap_or("?"));
     let defaults = match raw.preset.as_deref() {
-        Some(preset) => Some(presets::preset_defaults(preset)?),
+        Some(preset) => Some(presets::preset_defaults(preset).with_context(service)?),
         None => None,
     };
 
-    let kind = value_or_default(raw.kind, defaults.as_ref().map(|d| d.kind), "kind")?;
-    let driver = value_or_default(raw.driver, defaults.as_ref().map(|d| d.driver), "driver")?;
+    let kind = value_or_default(raw.kind, defaults.as_ref().map(|d| d.kind), "kind")
+        .with_context(service)?;
+    let driver = value_or_default(raw.driver, defaults.as_ref().map(|d| d.driver), "driver")
+        .with_context(service)?;
 
     validate_preset_conflicts(
         &raw,

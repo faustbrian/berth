@@ -197,7 +197,10 @@ pub(super) fn piped_client_args(service: &ServiceConfig) -> Result<Vec<String>> 
         | Driver::Mailhog
         | Driver::Rabbitmq
         | Driver::Soketi => {
-            anyhow::bail!("piped exec is supported for SQL services only")
+            anyhow::bail!(
+                "`berth restore` loads SQL into PostgreSQL, MySQL or MariaDB services only; pass \
+                 `--service` with one of those"
+            )
         }
     }
 }

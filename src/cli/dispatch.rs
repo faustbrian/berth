@@ -36,6 +36,23 @@ pub(crate) fn run(mut cli: Cli) -> Result<()> {
     output::init(cli.quiet);
     docker::set_dry_run(cli.dry_run);
     let dispatch_context = context::CliDispatchContext::from_cli(&cli);
+    crate::followup::record(crate::followup::Invocation {
+        config: cli.config.clone(),
+        project_root: cli.project_root.clone(),
+        instance: cli.instance.clone(),
+        env: cli.env.clone(),
+        engine: cli.engine,
+        dry_run: cli.dry_run,
+        repro: cli.repro,
+        global: matches!(&cli.command, Commands::Ls(args) if !args.services)
+            || matches!(&cli.command, Commands::Gc(_)),
+        limit: match &cli.command {
+            Commands::Health(_) => crate::followup::Limit::HealthTimeout,
+            Commands::Setup(_) => crate::followup::Limit::SetupTimeout,
+            Commands::Doctor(_) => crate::followup::Limit::Fixed,
+            _ => crate::followup::Limit::WaitTimeout,
+        },
+    });
 
     if bootstrap::handle_setup_commands(&cli, &dispatch_context)? {
         return Ok(());

@@ -13,7 +13,8 @@ pub(crate) fn ensure_sql_service(service: &config::ServiceConfig, command: &str)
     }
 
     anyhow::bail!(
-        "'{}' supports SQL database services only. '{}' uses driver '{}'.",
+        "`berth {}` needs a PostgreSQL, MySQL or MariaDB service, but '{}' uses driver {}; pass \
+         `--service` with one of those",
         command,
         service.name,
         super::driver_name(service.driver)
@@ -83,8 +84,19 @@ mod tests {
             .expect_err("unsupported");
         assert!(
             err.to_string()
-                .contains("supports SQL database services only")
+                .contains("needs a PostgreSQL, MySQL or MariaDB service")
         );
         assert!(err.to_string().contains("redis"));
+    }
+
+    #[test]
+    fn sql_server_is_refused_without_being_suggested() {
+        let err = ensure_sql_service(&db_service("mssql", Driver::Sqlserver), "dump")
+            .expect_err("unsupported");
+        assert!(
+            err.to_string().contains("'mssql' uses driver sqlserver"),
+            "{err}"
+        );
+        assert!(!err.to_string().contains("SQL Server"), "{err}");
     }
 }

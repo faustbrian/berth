@@ -9,7 +9,7 @@ pub(super) struct ExecutionFlags {
 
 pub(super) fn validate_repro_flags(env_output: bool) -> Result<()> {
     if env_output {
-        anyhow::bail!("--repro cannot be combined with --env-output");
+        anyhow::bail!("{}", crate::cli::support::env_write_removed());
     }
     Ok(())
 }

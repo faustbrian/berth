@@ -187,8 +187,9 @@ fn prepare_gateway(service: &ServiceConfig) -> Result<(String, String)> {
     if !known && INSPECT_ONLY.load(std::sync::atomic::Ordering::Relaxed) {
         if !super::publish::is_attached(&network)? {
             anyhow::bail!(
-                "the berth gateway is not attached to {network}; its health is unknown until \
-                 `berth up` starts the instance"
+                "the berth gateway is not attached to {network}; its health is unknown until {} \
+                 starts the instance",
+                crate::followup::command("up")
             );
         }
     } else if !known {

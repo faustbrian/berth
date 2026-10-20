@@ -11,13 +11,21 @@ pub(super) fn expand_hooks(raw_hooks: Vec<RawServiceHook>) -> Result<Vec<Service
         .map(|raw| {
             let name = raw
                 .name
-                .ok_or_else(|| anyhow!("service hook is missing required field 'name'"))?;
+                .ok_or_else(|| anyhow!("a service hook has no `name`; give each hook a `name`"))?;
             let phase = raw.phase.ok_or_else(|| {
-                anyhow!("service hook '{name}' is missing required field 'phase'")
+                anyhow!(
+                    "service hook '{name}' has no `phase`; set `phase:` to post_up, pre_down or \
+                     post_down"
+                )
             })?;
             let run = raw
                 .run
-                .ok_or_else(|| anyhow!("service hook '{name}' is missing required field 'run'"))
+                .ok_or_else(|| {
+                    anyhow!(
+                        "service hook '{name}' has no `run`; set `run:` to `{{type: exec, argv: \
+                         [...]}}` or `{{type: script, path: <file>}}`"
+                    )
+                })
                 .map(expand_hook_run)?;
 
             Ok(ServiceHook {

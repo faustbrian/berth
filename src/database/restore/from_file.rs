@@ -21,10 +21,19 @@ pub(super) fn restore_from_file(
     file_path: &Path,
     gzip: bool,
 ) -> Result<()> {
-    let metadata = std::fs::metadata(file_path).context("SQL dump file not found")?;
+    let metadata = std::fs::metadata(file_path).with_context(|| {
+        format!(
+            "no SQL dump at {}; check the `--file` path",
+            file_path.display()
+        )
+    })?;
 
     if metadata.len() == 0 {
-        anyhow::bail!("SQL dump file is empty");
+        anyhow::bail!(
+            "{} is empty (0 bytes); dump the database again ({})",
+            file_path.display(),
+            crate::followup::command("dump --file <path>")
+        );
     }
 
     output::event(
@@ -36,7 +45,8 @@ pub(super) fn restore_from_file(
 
     let mut restore = start_restore_process(service)?;
 
-    let file = File::open(file_path).context("Failed to open SQL dump file")?;
+    let file =
+        File::open(file_path).with_context(|| format!("failed to open {}", file_path.display()))?;
     let use_gzip = gzip || is_gzip_path(file_path);
 
     let mut reader: Box<dyn Read> = if use_gzip {
@@ -52,9 +62,13 @@ pub(super) fn restore_from_file(
     let stdin = &mut restore.stdin;
     let streamed = (|| -> Result<()> {
         loop {
-            let bytes_read = reader
-                .read(&mut buffer)
-                .context("Failed to read from SQL dump file")?;
+            let bytes_read = reader.read(&mut buffer).with_context(|| {
+                format!(
+                    "failed to read {}; if it is not gzip-compressed, drop `--gzip` (or the \
+                         .gz name)",
+                    file_path.display()
+                )
+            })?;
 
             if bytes_read == 0 {
                 break;

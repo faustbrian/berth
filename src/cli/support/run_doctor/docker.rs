@@ -24,7 +24,7 @@ fn run_runtime_check(check: &crate::docker::RuntimeDiagnosticCheck) -> bool {
             true
         }
         Err(err) => {
-            report::error(&format!("{}: {err}", check.failed_exec_prefix));
+            report::error(&format!("{}: {err:#}", check.failed_exec_prefix));
             true
         }
     }

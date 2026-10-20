@@ -28,10 +28,21 @@ pub(crate) fn handle_exec(config: &config::Config, options: HandleExecOptions<'_
             options.profile,
         )?;
         if selected.is_empty() {
-            anyhow::bail!("no services matched the requested selector")
+            return Err(cli::support::nothing_matched(
+                config,
+                options.service,
+                options.kind,
+                options.profile,
+                false,
+            ));
         }
         if selected.len() > 1 {
-            anyhow::bail!("selector matched multiple services; use --service to choose one")
+            return Err(cli::support::several_matched(
+                options.service,
+                options.kind,
+                options.profile,
+                selected.iter().map(|svc| &**svc),
+            ));
         }
         selected.remove(0)
     } else if let Ok(app) = config::resolve_app_service(config, None) {

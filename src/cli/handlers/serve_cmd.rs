@@ -5,7 +5,7 @@
 use anyhow::Result;
 use std::path::Path;
 
-use crate::{cli, config, env, serve};
+use crate::{cli, config, serve};
 
 pub(crate) struct HandleServeOptions<'a> {
     pub(crate) service: Option<&'a str>,
@@ -15,12 +15,14 @@ pub(crate) struct HandleServeOptions<'a> {
     pub(crate) detached: bool,
     pub(crate) env_output: bool,
     pub(crate) trust_container_ca: bool,
-    pub(crate) runtime_env: Option<&'a str>,
     pub(crate) config_path: Option<&'a Path>,
     pub(crate) project_root: Option<&'a Path>,
 }
 
 pub(crate) fn handle_serve(config: &config::Config, options: HandleServeOptions<'_>) -> Result<()> {
+    if options.env_output {
+        anyhow::bail!("{}", cli::support::env_write_removed());
+    }
     let selected_service =
         resolve_single_app_service(config, options.service, options.kind, options.profile)?;
     let runtime = cli::support::resolve_app_runtime_context(
@@ -29,14 +31,6 @@ pub(crate) fn handle_serve(config: &config::Config, options: HandleServeOptions<
         options.config_path,
         options.project_root,
     )?;
-    if let Some(serve_env_path) = cli::support::env_output_path(
-        options.env_output,
-        options.config_path,
-        options.project_root,
-        options.runtime_env,
-    )? {
-        env::write_env_values(&serve_env_path, &runtime.app_env, true)?;
-    }
     let effective_trust_container_ca =
         options.trust_container_ca || runtime.target.trust_container_ca;
     serve::run(serve::RunServeOptions {
@@ -65,10 +59,17 @@ fn resolve_single_app_service(
             .filter(|svc| svc.kind == config::Kind::App)
             .collect::<Vec<_>>();
     if selected.is_empty() {
-        anyhow::bail!("no app services matched the requested selector")
+        return Err(cli::support::nothing_matched(
+            config, service, kind, profile, true,
+        ));
     }
     if selected.len() > 1 {
-        anyhow::bail!("selector matched multiple app services; use --service to choose one")
+        return Err(cli::support::several_matched(
+            service,
+            kind,
+            profile,
+            selected.iter().map(|svc| &**svc),
+        ));
     }
     Ok(selected.pop().map(|svc| svc.name.clone()))
 }

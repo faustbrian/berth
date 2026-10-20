@@ -37,8 +37,9 @@ pub(crate) fn ensure_supported_version(version_num: &str) -> anyhow::Result<()> 
         .map_err(|_| anyhow::anyhow!("unexpected PostgreSQL server_version_num '{version_num}'"))?;
     if version < MIN_VERSION_NUM {
         anyhow::bail!(
-            "shared PostgreSQL servers need PostgreSQL 13 or later (found {version}); \
-             use `isolation: dedicated` for this image"
+            "shared PostgreSQL servers need PostgreSQL 13 or later (this image runs {}); use a \
+             newer `image:` tag, or set `isolation: dedicated` on the service",
+            postgres_version_text(version)
         );
     }
     Ok(())
@@ -123,8 +124,29 @@ pub(crate) fn drop_sql(databases: &[String], roles: &[String]) -> String {
     sql
 }
 
+/// `server_version_num` as people write it: `MMmmpp` before PostgreSQL 10
+/// (90624 is 9.6.24), `MM00mm` from 10 on (160002 is 16.2).
+fn postgres_version_text(version: u32) -> String {
+    if version < 100_000 {
+        format!(
+            "{}.{}.{}",
+            version / 10_000,
+            version / 100 % 100,
+            version % 100
+        )
+    } else {
+        format!("{}.{}", version / 10_000, version % 10_000)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn versions_print_as_released() {
+        assert_eq!(super::postgres_version_text(90_624), "9.6.24");
+        assert_eq!(super::postgres_version_text(120_017), "12.17");
+    }
+
     use super::{drop_sql, ensure_supported_version, provision_tenant_sql};
 
     #[test]

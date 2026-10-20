@@ -28,11 +28,14 @@ pub(crate) struct HandleSwarmOptions<'a> {
 }
 
 pub(crate) fn handle_swarm(config: &config::Config, options: HandleSwarmOptions<'_>) -> Result<()> {
+    // Refused once here instead of by every child `berth up`.
+    if options.env_output {
+        anyhow::bail!("{}", crate::cli::support::env_write_removed());
+    }
     verify_repro_constraints(
         config,
         options.command,
         options.repro,
-        options.env_output,
         options.config_path,
         options.project_root,
     )?;
@@ -61,7 +64,6 @@ fn verify_repro_constraints(
     config: &config::Config,
     command: &[String],
     repro: bool,
-    env_output: bool,
     config_path: Option<&Path>,
     project_root: Option<&Path>,
 ) -> Result<()> {
@@ -69,9 +71,6 @@ fn verify_repro_constraints(
         return Ok(());
     }
 
-    if env_output {
-        anyhow::bail!("--repro cannot be combined with --env-output");
-    }
     config::verify_lockfile_with(
         config,
         config::ProjectRootPathOptions::new(config_path, project_root),

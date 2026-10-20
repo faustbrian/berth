@@ -27,8 +27,9 @@ pub(super) fn run_docker_output(args: &[String], context_message: &str) -> Resul
 
     if !output.status.success() {
         anyhow::bail!(
-            "runtime command failed: {}",
-            crate::docker::runtime_command_text(args)
+            "`{}` failed: {}",
+            crate::docker::runtime_command_text(args),
+            String::from_utf8_lossy(&output.stderr).trim()
         );
     }
 
@@ -243,10 +244,13 @@ mod tests {
     #[test]
     fn run_docker_output_returns_error_for_failure() {
         docker::with_dry_run_state(false, || {
-            with_fake_docker("exit 1", || {
+            with_fake_docker("echo 'Error: No such container: x' >&2; exit 1", || {
                 let output = run_docker_output(&["fail".to_owned()], "fail").expect_err("failure");
-                assert!(output.to_string().contains("fail"));
-                assert!(output.to_string().contains("runtime command failed"));
+                assert!(output.to_string().contains("` failed"), "{output}");
+                assert!(
+                    output.to_string().contains("No such container: x"),
+                    "the engine's own error reaches the user: {output}"
+                );
             });
         });
     }

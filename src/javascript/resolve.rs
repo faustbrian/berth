@@ -54,7 +54,7 @@ pub(crate) fn resolve_javascript_runtime(
 
     if runtime == JavaScriptRuntime::Node && options.require_package_manager {
         package_manager.context(
-            "could not infer Node package manager; pass --package-manager <npm|pnpm|yarn> or set [service.javascript].package_manager",
+            "could not infer the Node package manager (no package-lock.json, pnpm-lock.yaml or yarn.lock and no `packageManager` in package.json); pass --package-manager <npm|pnpm|yarn>, or set `javascript: {package_manager: npm}` on the app service in .berth.yaml",
         )?;
     }
 
@@ -63,20 +63,22 @@ pub(crate) fn resolve_javascript_runtime(
         && node_version.is_none()
     {
         anyhow::bail!(
-            "node version manager '{}' requires a Node version; pass --node-version or set [service.javascript].version",
+            "node version manager '{}' needs a Node version and found no .nvmrc, .node-version or package.json `engines.node`; set `javascript: {{version: \"22\"}}` on the app service in .berth.yaml (or add a .nvmrc)",
             version_manager.as_str()
         );
     }
 
     if runtime == JavaScriptRuntime::Deno && options.require_package_manager {
         anyhow::bail!(
-            "configured JavaScript runtime is deno; use `berth deno` instead of Node package-manager workflows"
+            "configured JavaScript runtime is deno; use {} instead of Node package-manager workflows",
+            crate::followup::command("deno")
         );
     }
 
     if runtime == JavaScriptRuntime::Bun && options.require_package_manager {
         anyhow::bail!(
-            "configured JavaScript runtime is bun; use `berth bun` instead of Node package-manager workflows"
+            "configured JavaScript runtime is bun; use {} instead of Node package-manager workflows",
+            crate::followup::command("bun")
         );
     }
 
@@ -156,7 +158,7 @@ mod tests {
         })
         .expect_err("missing version should fail");
 
-        assert!(error.to_string().contains("requires a Node version"));
+        assert!(error.to_string().contains("needs a Node version"));
         fs::remove_dir_all(root).expect("cleanup");
     }
 

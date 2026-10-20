@@ -70,15 +70,20 @@ mod tests {
 
     #[test]
     fn remove_container_propagates_docker_command_failures() {
-        crate::docker::with_dry_run_state(false, || {
-            let mut service = service("app");
-            service.container_name = Some("bad\0name".to_owned());
+        // An installed engine CLI, so the failure is the NUL argument's.
+        crate::docker::with_docker_command("/bin/sh", || {
+            crate::docker::with_dry_run_state(false, || {
+                let mut service = service("app");
+                service.container_name = Some("bad\0name".to_owned());
 
-            let error = remove_container(&service).expect_err("expected docker stop/rm failure");
-            assert!(
-                error.to_string().contains("Failed")
-                    || error.to_string().to_ascii_lowercase().contains("nul")
-            );
+                let error =
+                    remove_container(&service).expect_err("expected docker stop/rm failure");
+                assert!(
+                    error.to_string().contains("Failed")
+                        || error.to_string().to_ascii_lowercase().contains("nul"),
+                    "{error:#}"
+                );
+            });
         });
     }
 

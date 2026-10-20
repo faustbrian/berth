@@ -23,11 +23,21 @@ pub(crate) fn run_laravel_post_restore(options: PostRestoreOptions<'_>) -> Resul
         ))?;
 
     if options.run_migrate {
-        run_artisan_command(&project_root, options.restored_service, "migrate")?;
+        run_artisan_command(
+            &project_root,
+            options.config_path,
+            options.restored_service,
+            "migrate",
+        )?;
     }
 
     if options.run_schema_dump {
-        run_artisan_command(&project_root, options.restored_service, "schema:dump")?;
+        run_artisan_command(
+            &project_root,
+            options.config_path,
+            options.restored_service,
+            "schema:dump",
+        )?;
     }
 
     Ok(())
@@ -36,6 +46,7 @@ pub(crate) fn run_laravel_post_restore(options: PostRestoreOptions<'_>) -> Resul
 /// Runs a single artisan command via `berth artisan`.
 fn run_artisan_command(
     project_root: &Path,
+    config_path: Option<&Path>,
     restored_service: &crate::config::ServiceConfig,
     artisan_command: &str,
 ) -> Result<()> {
@@ -66,19 +77,54 @@ fn run_artisan_command(
         return Ok(());
     }
 
-    let config = crate::config::load_config_with(crate::config::LoadConfigPathOptions::new(
-        None,
-        Some(project_root),
-    ))
+    // The app of the environment the restore went into: the run's config
+    // file and runtime environment, as the command itself loaded them (the
+    // instance is bound for the whole process).
+    let runtime_env = restored_service.runtime.env.as_deref();
+    let mut config = crate::config::load_config_with(
+        crate::config::LoadConfigPathOptions::new(
+            config_path,
+            config_path.is_none().then_some(project_root),
+        )
+        .with_runtime_env(runtime_env),
+    )
     .context("failed to load berth config for artisan post-restore hook")?;
-    let app_service = crate::config::resolve_app_service(&config, None)
-        .context("failed to resolve app service for artisan post-restore hook")?;
+    if let Some(runtime_env) = runtime_env {
+        crate::config::apply_runtime_env(&mut config, runtime_env)?;
+    }
+    let app_service = crate::config::resolve_app_service(&config, None).with_context(|| {
+        format!(
+            "the restore into '{}' succeeded, but berth cannot pick the app service to run \
+             `artisan {artisan_command}` in; run it yourself with {}",
+            restored_service.name,
+            crate::followup::for_service(
+                restored_service,
+                &format!(
+                    "artisan --service <app> {artisan_command} --database={}",
+                    connection.name
+                )
+            )
+        )
+    })?;
     let args = vec![
         artisan_command.to_owned(),
         format!("--database={}", connection.name),
     ];
-    crate::serve::exec_artisan(app_service, &args, false)
-        .context("Failed to execute berth artisan command")?;
+    crate::serve::exec_artisan(app_service, &args, false).with_context(|| {
+        format!(
+            "the restore into '{}' succeeded, but `artisan {artisan_command} --database={}` \
+             failed; fix the error above and rerun it alone, without restoring again: {}",
+            restored_service.name,
+            connection.name,
+            crate::followup::for_service(
+                app_service,
+                &format!(
+                    "artisan --service {} {artisan_command} --database={}",
+                    app_service.name, connection.name
+                )
+            )
+        )
+    })?;
 
     output::event(
         "database",
@@ -312,6 +358,33 @@ return [
             fs::remove_file(&capture).ok();
             assert!(recorded.contains("php artisan migrate --database=shipit_invoicing"));
             assert!(recorded.contains("php artisan schema:dump --database=shipit_invoicing"));
+        });
+    }
+
+    #[test]
+    fn a_failed_post_restore_under_env_runs_and_reruns_in_that_env() {
+        with_temp_project(database_php(), |project_root| {
+            let capture = capture_path();
+            let script = format!("{}\nexit 1", capture_script(&capture));
+            let error = with_fake_docker_command(&script, || {
+                let mut service = billing_service();
+                service.runtime.env = Some("staging".to_owned());
+                run_laravel_post_restore(PostRestoreOptions::new(
+                    true,
+                    false,
+                    &service,
+                    Some(project_root),
+                    None,
+                ))
+                .expect_err("artisan fails")
+            });
+            let recorded = fs::read_to_string(&capture).unwrap_or_default();
+            fs::remove_file(&capture).ok();
+            let message = format!("{error:#}");
+            // The migrate ran in the staging app, and its rerun stays there.
+            assert!(recorded.contains("staging"), "{recorded}");
+            assert!(message.contains("--env staging"), "{message}");
+            assert!(message.contains("without restoring again"), "{message}");
         });
     }
 

@@ -145,8 +145,8 @@ pub(crate) struct RecreateArgs {
     /// Skip recreating workspace swarm dependencies
     #[arg(long, default_value_t = false)]
     pub(crate) no_deps: bool,
-    /// Write inferred service vars to local `.env`
-    #[arg(long, default_value_t = false)]
+    /// Removed (fails naming `berth env`); kept hidden.
+    #[arg(long, hide = true, default_value_t = false)]
     pub(crate) env_output: bool,
     #[arg(long, default_value_t = default_parallelism())]
     pub(crate) parallel: usize,

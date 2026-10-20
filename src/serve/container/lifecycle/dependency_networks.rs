@@ -31,8 +31,9 @@ pub(super) fn prepare_dependency_endpoints(
         let container = source.container_name()?;
         if crate::docker::inspect_status(&container).as_deref() != Some("running") {
             anyhow::bail!(
-                "swarm source app {container} is not running; bring the source up first \
-                 (`berth swarm up`, or `berth up` in its checkout)"
+                "swarm source app {container} is not running; bring the source up first ({}, or \
+                 `berth swarm up` in the workspace)",
+                crate::followup::for_service(&source, "up")
             );
         }
         let mut endpoint = source.clone();

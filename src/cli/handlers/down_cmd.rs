@@ -128,8 +128,50 @@ fn purge_instance(config: &config::Config) -> Result<()> {
     }
     // Each step runs even when an earlier one fails, so one stubborn object
     // never leaves the rest behind; the first failure is reported.
-    let tenants = crate::shared::drop_instance_tenants(project, instance);
+    // The instance's berth state goes even when its tenants stay, so only
+    // this checkout's next purge (they are matched by name) can drop them.
+    let tenants = crate::shared::drop_instance_tenants(project, instance).map_err(purge_retry);
     let objects = docker::purge_instance_objects(project, instance);
     let state = crate::home::remove_instance_state(project, instance);
     tenants.and(objects).and(state)
+}
+/// Tells how to drop tenants a purge left behind, unless the cause is a
+/// corrupt admin secret: that carries its own recovery, and purging again
+/// cannot fix it.
+fn purge_retry(error: anyhow::Error) -> anyhow::Error {
+    if crate::home::is_invalid_secret(&error) {
+        return error;
+    }
+    anyhow::anyhow!(
+        "{error:#}; those tenants stay on the shared server: fix the cause and run {} again",
+        crate::followup::command("down --purge")
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::purge_retry;
+
+    #[test]
+    fn a_purge_retry_names_the_instance_but_not_for_a_corrupt_secret() {
+        crate::followup::record(crate::followup::Invocation {
+            instance: Some("agent-2".to_owned()),
+            ..crate::followup::Invocation::default()
+        });
+        let stopped = purge_retry(anyhow::anyhow!("server stopped"));
+        assert!(
+            stopped
+                .to_string()
+                .contains("run `berth --instance agent-2 down --purge` again"),
+            "{stopped}"
+        );
+        let corrupt = anyhow::Error::new(crate::home::InvalidSecret {
+            path: "/home/admin".into(),
+        })
+        .context("purging (`down --purge`) does not fix this")
+        .context("failed to drop tenants of agent-2");
+        let message = format!("{:#}", purge_retry(corrupt));
+        assert!(!message.contains("again"), "{message}");
+        crate::followup::record(crate::followup::Invocation::default());
+    }
 }

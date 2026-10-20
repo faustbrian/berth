@@ -73,7 +73,11 @@ pub(super) fn resolve_config_path(
 ) -> Result<PathBuf> {
     if let Some(path) = config_path {
         if !path.exists() {
-            anyhow::bail!("config file not found at {}", path.display());
+            anyhow::bail!(
+                "--config {} does not exist; pass an existing .berth.yaml, or leave --config out \
+                 to search upward from the current directory",
+                path.display()
+            );
         }
         return Ok(path.to_path_buf());
     }
@@ -323,7 +327,7 @@ mod tests {
     fn project_root_with_errors_when_no_config_is_found() {
         let root = temp_root();
         let error = project_root_with(None, Some(&root)).unwrap_err();
-        assert!(error.to_string().contains("no berth project file"));
+        assert!(error.to_string().contains("no .berth.yaml in"));
     }
 
     fn resolve_config_path_with_options(

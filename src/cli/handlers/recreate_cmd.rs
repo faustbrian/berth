@@ -31,6 +31,10 @@ pub(crate) fn handle_recreate(
     config: &mut config::Config,
     options: HandleRecreateOptions<'_>,
 ) -> Result<()> {
+    // Refused before anything is recreated, `-P` or not.
+    if options.env_output {
+        anyhow::bail!("{}", cli::support::env_write_removed());
+    }
     let runtime = cli::support::resolve_project_runtime_context(
         config,
         options.config_path,

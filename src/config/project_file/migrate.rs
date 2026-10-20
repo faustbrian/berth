@@ -405,7 +405,11 @@ fn convert_v7(
         }
     };
     validate_project_name(&project).with_context(|| {
-        format!("`container_prefix` '{project}' cannot become the berth project name")
+        format!(
+            "`container_prefix` '{project}' cannot become the berth project name; change \
+             `container_prefix` in {} (or remove it to use the directory name) and migrate again",
+            legacy_path.display()
+        )
     })?;
 
     match root.remove("domain_strategy") {
@@ -440,6 +444,13 @@ fn convert_v7(
                 Some(other) => anyhow::bail!("service `name` must be a string, found {other}"),
                 None => default_service_name(&service)?,
             };
+            super::schema::validate_service_name(&name).with_context(|| {
+                format!(
+                    "service '{name}' cannot become a berth service name; change its `name` in {} \
+                     (and every `depends_on` naming it) and migrate again",
+                    legacy_path.display()
+                )
+            })?;
             if services.contains_key(&name) {
                 anyhow::bail!("service '{name}' is declared more than once");
             }
@@ -503,8 +514,13 @@ fn convert_v8(
             derived
         }
     };
-    validate_project_name(&project)
-        .with_context(|| format!("8.x project '{project}' cannot become the berth project name"))?;
+    validate_project_name(&project).with_context(|| {
+        format!(
+            "8.x project '{project}' cannot become the berth project name; change `project` \
+                 in {} (or remove it to use the directory name) and migrate again",
+            legacy_path.display()
+        )
+    })?;
 
     if root.contains_key("workflows") {
         anyhow::bail!(
@@ -521,6 +537,13 @@ fn convert_v8(
             let Value::Object(entry) = entry else {
                 anyhow::bail!("8.x service '{name}' must be a mapping");
             };
+            super::schema::validate_service_name(&name).with_context(|| {
+                format!(
+                    "8.x service '{name}' cannot become a berth service name; rename its \
+                     `services` key in {} (and every `depends_on` naming it) and migrate again",
+                    legacy_path.display()
+                )
+            })?;
             let mut converted = convert_v8_service(&name, entry)?;
             if drop_v8_shared_database_name(&mut converted) {
                 notes.push(format!(
@@ -719,7 +742,13 @@ fn derive_project_name(legacy_path: &Path) -> Result<String> {
     slug.truncate(MAX_PROJECT_NAME_LEN);
     let slug = slug.trim_end_matches('-').to_owned();
     if slug.is_empty() {
-        anyhow::bail!("directory name '{dir_name}' does not yield a project name; set `project`");
+        anyhow::bail!(
+            "directory name '{dir_name}' does not yield a project name; name the project in {} \
+             (`container_prefix` in a helm or stackctl 7 file, `project` in a stackctl 8 file) \
+             and rerun {}",
+            legacy_path.display(),
+            crate::followup::command("config migrate")
+        );
     }
     Ok(slug)
 }

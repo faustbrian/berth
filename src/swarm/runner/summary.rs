@@ -14,6 +14,7 @@ pub(super) fn summarize_results(
     results: &[SwarmRunResult],
     cancelled: usize,
     output_mode: OutputMode,
+    rerun: &Rerun<'_>,
 ) -> Result<()> {
     let failures: Vec<&SwarmRunResult> = results
         .iter()
@@ -44,7 +45,10 @@ pub(super) fn summarize_results(
         return Err(anyhow::Error::new(
             crate::docker::ChildExitError::from_code(
                 code,
-                format!("swarm command failed for: {names}"),
+                format!(
+                    "swarm command failed for: {names}; rerun just those with `{}`",
+                    rerun.command(&names.replace(", ", ","))
+                ),
             ),
         ));
     }
@@ -78,8 +82,64 @@ fn emit_failure(output_mode: OutputMode, failure: &SwarmRunResult) {
     super::output::emit_swarm(output_mode, LogLevel::Error, &message);
 }
 
+/// What a rerun of the failed targets needs to do what the run did: the
+/// workspace (the run may start from a member project), its runtime
+/// environment, every swarm flag that changes the outcome, and the command.
+pub(super) struct Rerun<'a> {
+    pub(super) workspace_root: &'a std::path::Path,
+    pub(super) runtime_env: Option<&'a str>,
+    pub(super) include_deps: bool,
+    pub(super) force_down_deps: bool,
+    pub(super) port_strategy: crate::cli::args::PortStrategyArg,
+    pub(super) port_seed: Option<&'a str>,
+    pub(super) command: &'a [String],
+}
+
+impl Rerun<'_> {
+    fn command(&self, only: &str) -> String {
+        use crate::followup::quote;
+        let mut words = vec!["berth".to_owned()];
+        words.extend(crate::followup::context_flags(self.workspace_root));
+        if let Some(env) = self.runtime_env {
+            words.extend(["--env".to_owned(), quote(env)]);
+        }
+        words.push("swarm".to_owned());
+        // `--only` turns on the guard against stopping dependencies other
+        // targets share, which a whole-workspace `down` never meets; its
+        // dependencies were stopped already, so the rerun leaves them be.
+        let down = self.command.first().is_some_and(|sub| sub == "down");
+        if !self.include_deps || (down && !self.force_down_deps) {
+            words.push("--no-deps".to_owned());
+        }
+        if self.force_down_deps {
+            words.push("--force".to_owned());
+        }
+        if self.port_strategy == crate::cli::args::PortStrategyArg::Stable {
+            words.extend(["--port-strategy".to_owned(), "stable".to_owned()]);
+        }
+        if let Some(seed) = self.port_seed {
+            words.extend(["--port-seed".to_owned(), quote(seed)]);
+        }
+        words.extend(["--only".to_owned(), quote(only)]);
+        words.extend(self.command.iter().map(|word| quote(word)));
+        words.join(" ")
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    fn rerun() -> super::Rerun<'static> {
+        super::Rerun {
+            workspace_root: std::path::Path::new("/my ws"),
+            runtime_env: Some("staging"),
+            include_deps: false,
+            force_down_deps: false,
+            port_strategy: crate::cli::args::PortStrategyArg::Stable,
+            port_seed: Some("s1"),
+            command: &[],
+        }
+    }
+
     use super::summarize_results;
     use crate::swarm::target_exec::{OutputMode, SwarmRunResult};
     use std::path::PathBuf;
@@ -95,9 +155,36 @@ mod tests {
     }
 
     #[test]
+    fn a_down_rerun_does_not_trip_the_shared_dependency_guard() {
+        let command = ["down".to_owned()];
+        let rerun = super::Rerun {
+            workspace_root: std::path::Path::new("/ws"),
+            runtime_env: None,
+            include_deps: true,
+            force_down_deps: false,
+            port_strategy: crate::cli::args::PortStrategyArg::Random,
+            port_seed: None,
+            command: &command,
+        };
+        assert_eq!(
+            rerun.command("api"),
+            "berth --project-root /ws swarm --no-deps --only api down"
+        );
+        let forced = super::Rerun {
+            force_down_deps: true,
+            ..rerun
+        };
+        // clap rejects `--force` with `--no-deps`.
+        assert_eq!(
+            forced.command("api"),
+            "berth --project-root /ws swarm --force --only api down"
+        );
+    }
+
+    #[test]
     fn summarize_results_returns_ok_for_successful_targets() {
         let results = vec![result("alpha", true, false), result("beta", true, false)];
-        assert!(summarize_results(&results, 0, OutputMode::Logged).is_ok());
+        assert!(summarize_results(&results, 0, OutputMode::Logged, &rerun()).is_ok());
     }
 
     #[test]
@@ -107,22 +194,30 @@ mod tests {
             result("beta", true, false),
             result("gamma", false, false),
         ];
-        assert!(summarize_results(&results, 1, OutputMode::Passthrough).is_err());
+        assert!(summarize_results(&results, 1, OutputMode::Passthrough, &rerun()).is_err());
     }
 
     #[test]
     fn summarize_results_fails_when_any_target_fails() {
         let results = vec![result("alpha", false, false)];
-        assert!(summarize_results(&results, 0, OutputMode::Logged).is_err());
+        assert!(summarize_results(&results, 0, OutputMode::Logged, &rerun()).is_err());
     }
     #[test]
     fn a_failing_target_passes_its_exit_code_through() {
         let results = vec![result("alpha", true, false), result("beta", false, false)];
-        let error = summarize_results(&results, 0, OutputMode::Logged).expect_err("failure");
+        let error =
+            summarize_results(&results, 0, OutputMode::Logged, &rerun()).expect_err("failure");
         let code = error
             .downcast_ref::<crate::docker::ChildExitError>()
             .map(crate::docker::ChildExitError::code);
         assert_eq!(code, Some(3));
         assert!(error.to_string().contains("beta"), "{error}");
+        assert!(
+            error.to_string().contains(
+                "berth --project-root '/my ws' --env staging swarm --no-deps \
+                     --port-strategy stable --port-seed s1 --only beta"
+            ),
+            "{error}"
+        );
     }
 }

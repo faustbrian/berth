@@ -43,7 +43,12 @@ where
                         emit_hook_warn_continue(&service.name, &hook.name, &error.to_string());
                         continue;
                     }
-                    return Err(error);
+                    // Only a hook that stops the command gets this advice; a
+                    // `warn` hook already keeps going.
+                    return Err(error.context(format!(
+                        "fix hook '{}', or set `on_error: warn` on it to keep going past a failure",
+                        hook.name
+                    )));
                 }
             }
         }

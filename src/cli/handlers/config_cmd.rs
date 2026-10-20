@@ -14,8 +14,8 @@ pub(crate) fn handle_config(config: &config::Config, format: &str) -> Result<()>
 }
 
 /// Handles `config validate`. Loading the configuration applied the schema,
-/// name, preset and policy checks; `depends_on` (unknown targets, cycles) is
-/// resolved here exactly as `up` resolves it. Nothing touches Docker.
+/// name, preset, policy and unknown-`depends_on` checks; `depends_on` cycles
+/// are found here exactly as `up` resolves them. Nothing touches Docker.
 pub(crate) fn handle_config_validate(config: &config::Config, json: bool) -> Result<()> {
     crate::cli::support::resolve_up_services(config, None, None, None)?;
     let runtime = config.service.first().map(|service| &service.runtime);

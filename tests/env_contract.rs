@@ -301,6 +301,9 @@ fn the_7_0_dotenv_writers_fail_precisely_and_touch_nothing() {
     let fixture = Fixture::new("writers", Some(dotenv));
     for args in [
         &["up", "--no-wait", "--env-output"][..],
+        &["recreate", "--env-output"][..],
+        &["swarm", "--env-output", "up"][..],
+        &["serve", "--env-output"][..],
         &["env", "--sync"][..],
         &["env", "--purge"][..],
         &["env", "--kind", "app"][..],

@@ -25,7 +25,10 @@ pub(crate) struct OwnerProcess {
 pub(crate) fn owner_process(pid: u32) -> Result<OwnerProcess> {
     match probe(pid) {
         Probe::Running(started) => Ok(OwnerProcess { pid, started }),
-        Probe::Gone => anyhow::bail!("owner process {pid} is not running"),
+        Probe::Gone => anyhow::bail!(
+            "--owner-pid / BERTH_OWNER_PID {pid} is not a running process; pass the PID of a \
+             process that lives as long as the instance should (your shell's `$$`, say)"
+        ),
         Probe::Unknown(why) => anyhow::bail!("cannot read the start time of process {pid}: {why}"),
     }
 }

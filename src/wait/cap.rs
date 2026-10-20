@@ -49,15 +49,20 @@ impl Deadline {
     /// # Errors
     ///
     /// Returns an error after the deadline.
-    pub(crate) fn ensure(self, waiting_for: &str) -> Result<()> {
-        self.check(Instant::now(), waiting_for)
+    /// `inspect` is the command that shows what `waiting_for` is doing.
+    pub(crate) fn ensure(self, waiting_for: &str, inspect: &str) -> Result<()> {
+        self.check(Instant::now(), waiting_for, inspect)
     }
 
-    fn check(self, now: Instant, waiting_for: &str) -> Result<()> {
+    fn check(self, now: Instant, waiting_for: &str, inspect: &str) -> Result<()> {
         if let Some((deadline, secs)) = self.at
             && now >= deadline
         {
-            anyhow::bail!("{waiting_for} was not ready within the --wait-timeout of {secs}s");
+            anyhow::bail!(
+                "{waiting_for} was not ready within the {secs}s limit; see what it is doing with \
+                 `{inspect}`; if it is only slow, {}",
+                crate::followup::raise_limit()
+            );
         }
         Ok(())
     }
@@ -71,19 +76,46 @@ mod tests {
     fn no_cap_never_fails_and_a_passed_cap_names_the_wait() {
         let now = Instant::now();
         Deadline::from_secs(None, now)
-            .check(now + Duration::from_secs(3600), "the gateway")
+            .check(
+                now + Duration::from_secs(3600),
+                "the gateway",
+                "docker logs gw",
+            )
             .expect("no cap, no deadline");
         let wait = Deadline::from_secs(Some(5), now);
-        wait.check(now + Duration::from_secs(4), "the gateway")
-            .expect("before the deadline");
+        wait.check(
+            now + Duration::from_secs(4),
+            "the gateway",
+            "docker logs gw",
+        )
+        .expect("before the deadline");
         let error = wait
-            .check(now + Duration::from_secs(5), "the gateway")
+            .check(
+                now + Duration::from_secs(5),
+                "the gateway",
+                "docker logs gw",
+            )
             .expect_err("cap passed");
         assert!(error.to_string().contains("the gateway"), "{error}");
+        assert!(error.to_string().contains("5s limit"), "{error}");
+        crate::followup::record(crate::followup::Invocation {
+            limit: crate::followup::Limit::SetupTimeout,
+            ..crate::followup::Invocation::default()
+        });
+        let setup = wait
+            .check(
+                now + Duration::from_secs(5),
+                "the gateway",
+                "docker logs gw",
+            )
+            .expect_err("cap passed")
+            .to_string();
+        // `setup` has no `--wait-timeout`.
         assert!(
-            error.to_string().contains("--wait-timeout of 5s"),
-            "{error}"
+            setup.contains("raise `--timeout`") && !setup.contains("--wait-timeout"),
+            "{setup}"
         );
+        crate::followup::record(crate::followup::Invocation::default());
     }
 
     #[test]
@@ -91,7 +123,11 @@ mod tests {
         let first = Instant::now();
         let later = first + Duration::from_secs(60);
         Deadline::from_secs(Some(30), later)
-            .check(later + Duration::from_secs(29), "a shared server")
+            .check(
+                later + Duration::from_secs(29),
+                "a shared server",
+                "docker logs srv",
+            )
             .expect("a wait that starts after a long lock wait still has its whole cap");
     }
 }

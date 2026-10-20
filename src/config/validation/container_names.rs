@@ -48,9 +48,9 @@ pub(super) fn validate_and_resolve_container_names(config: &mut Config) -> Resul
     }
 
     if !missing.is_empty() {
+        // `project` is required, so every loaded config has a prefix.
         anyhow::bail!(
-            "missing container naming strategy: set `container_prefix` or \
-             `container_name` on each service (missing: {})",
+            "internal error: no container name for services {}",
             missing.join(", ")
         );
     }

@@ -311,10 +311,12 @@ fn minio_preset_is_refused_with_its_replacements() {
         "#;
 
     let raw: RawConfig = toml::from_str(toml).expect("raw config parse");
-    let error = expansion::expand_raw_config(raw)
-        .expect_err("minio is no longer a preset")
-        .to_string();
+    let error = format!(
+        "{:#}",
+        expansion::expand_raw_config(raw).expect_err("minio is no longer a preset")
+    );
 
+    assert!(error.contains("service 'storage'"), "{error}");
     assert!(error.contains("preset 'minio' was removed"), "{error}");
     assert!(error.contains("'rustfs' or 'garage'"), "{error}");
 }

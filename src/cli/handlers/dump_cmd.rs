@@ -23,7 +23,10 @@ pub(crate) fn handle_dump(config: &config::Config, options: HandleDumpOptions<'_
     } else if let Some(path) = options.file {
         database::dump(svc, path, options.gzip)?;
     } else {
-        anyhow::bail!("specify --file or --stdout");
+        anyhow::bail!(
+            "`berth dump` needs a destination: `--file <path>` (add `--gzip` to compress) or \
+             `--stdout`"
+        );
     }
 
     Ok(())
@@ -208,7 +211,8 @@ mod tests {
             assert!(result.is_err());
             assert_eq!(
                 result.unwrap_err().to_string(),
-                "specify --file or --stdout"
+                "`berth dump` needs a destination: `--file <path>` (add `--gzip` to compress) or \
+                 `--stdout`"
             );
         });
         Ok(())
@@ -240,7 +244,7 @@ mod tests {
         assert!(
             result.is_err_and(|error| error
                 .to_string()
-                .contains("supports SQL database services only")),
+                .contains("needs a PostgreSQL, MySQL or MariaDB service")),
             "expected sql service validation failure"
         );
         Ok(())

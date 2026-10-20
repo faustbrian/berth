@@ -59,7 +59,7 @@ pub(crate) fn handle_health(
             Err(err) => HealthStatus {
                 name: service.name.clone(),
                 ok: false,
-                error: Some(err.to_string()),
+                error: Some(format!("{err:#}")),
             },
         };
         let mut guard = statuses_shared
@@ -77,8 +77,24 @@ pub(crate) fn handle_health(
         serialize::print_json_pretty(&statuses)?;
     }
 
-    if statuses.iter().any(|status| !status.ok) {
-        anyhow::bail!("health checks failed")
+    let failures: Vec<String> = statuses
+        .iter()
+        .filter(|status| !status.ok)
+        .map(|status| {
+            format!(
+                "'{}': {}",
+                status.name,
+                status.error.as_deref().unwrap_or("not healthy")
+            )
+        })
+        .collect();
+    if !failures.is_empty() {
+        anyhow::bail!(
+            "{} of {} health checks failed: {}",
+            failures.len(),
+            statuses.len(),
+            failures.join("; ")
+        )
     }
 
     Ok(())

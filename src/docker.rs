@@ -254,6 +254,8 @@ pub(crate) fn docker_command() -> String {
     active_engine_adapter().command_binary().to_owned()
 }
 
+mod engine_command;
+pub(crate) use engine_command::{engine_command, ensure_engine_installed};
 mod engine_exec_failure;
 mod instance_purge;
 pub(crate) use instance_purge::purge_instance_objects;

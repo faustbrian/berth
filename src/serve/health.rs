@@ -82,13 +82,17 @@ pub(crate) fn wait_until_http_healthy(
             crate::docker::ContainerState::Running | crate::docker::ContainerState::Unknown => {}
             crate::docker::ContainerState::NotRunning(status) => anyhow::bail!(
                 "app service '{}' stopped while starting (container {container} is {status}); \
-                 see `berth logs {}`",
+                 see why with {}, fix it and run {} again",
                 target.name,
-                target.name
+                crate::followup::logs(target),
+                crate::followup::for_service(target, "up")
             ),
-            crate::docker::ContainerState::Missing => {
-                anyhow::bail!("app service '{}' has no container {container}", target.name)
-            }
+            crate::docker::ContainerState::Missing => anyhow::bail!(
+                "app service '{}' has no container {container}: it was removed while berth \
+                 waited for it (another `berth down`?); run {} again",
+                target.name,
+                crate::followup::for_service(target, "up")
+            ),
         }
         let result = if in_network {
             crate::gateway::http_probe_output(target, &probe_path)
@@ -121,10 +125,18 @@ pub(crate) fn wait_until_http_healthy(
             .status()
             .is_some_and(|status| is_definitive_failure(status, &accepted_statuses))
         {
+            let status = observation.status().unwrap_or_default();
+            let fix = if status >= 500 {
+                format!("see the error with {}", crate::followup::logs(target))
+            } else {
+                format!(
+                    "point `health_path` at a route that answers 2xx, or add {status} to \
+                     `health_statuses`"
+                )
+            };
             anyhow::bail!(
-                "app service '{}' answered {} at {health_url} ({})",
+                "app service '{}' answered {status} at {health_url} ({}); {fix}",
                 target.name,
-                observation.status().unwrap_or_default(),
                 observation.describe_for_target(target)
             );
         }
@@ -139,11 +151,13 @@ pub(crate) fn wait_until_http_healthy(
     };
 
     anyhow::bail!(
-        "app service '{}' did not become healthy at {} within {}s ({})",
+        "app service '{}' did not become healthy at {} within {}s ({}); see what it is doing \
+         with {}, give it longer, or point `health_path` at a faster route",
         target.name,
         health_url,
         timeout_details.0,
-        timeout_details.1
+        timeout_details.1,
+        crate::followup::logs(target)
     );
 }
 

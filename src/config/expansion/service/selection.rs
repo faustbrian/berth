@@ -19,7 +19,10 @@ pub(super) fn resolve_name_and_image(
         format!("{driver:?}").to_lowercase(),
     );
     let image = pick_with_default(raw.image.clone(), defaults.map(|d| d.image), || {
-        anyhow!("service '{name}' is missing image")
+        anyhow!(
+            "service '{name}' has no `preset` to supply an image; set `image:` (for example \
+             `image: postgres:18`) or a `preset`"
+        )
     })?;
 
     Ok((name, image))

@@ -192,7 +192,9 @@ mod tests {
         )
         .expect_err("fail hook should stop command");
 
-        assert!(error.to_string().contains("hook 'fail-hook' failed"));
+        let message = format!("{error:#}");
+        assert!(message.contains("hook 'fail-hook' failed"), "{message}");
+        assert!(message.contains("set `on_error: warn` on it"), "{message}");
         assert_eq!(executed, vec!["fail-hook".to_owned()]);
     }
 

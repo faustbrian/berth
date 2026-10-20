@@ -20,7 +20,7 @@ case "$*" in *"caddy reload"*) cat > /dev/null ;; esac
 # Reports every container as running and runs `exec` according to FAKE_MODE.
 case "$1" in
   inspect)
-    [ "$FAKE_STATUS" = missing ] && exit 1
+    [ "$FAKE_STATUS" = missing ] && { echo "Error: No such object: $3" >&2; exit 1; }
     case "$*" in *dev.berth.installation*) cat "$BERTH_HOME/installation-id"; exit 0 ;; esac
     printf '%s' "${FAKE_STATUS:-running}"; exit 0 ;;
   exec)
@@ -161,7 +161,7 @@ fn berths_own_failures_exit_125_on_stderr_only() {
         output.stdout.is_empty(),
         "errors must not pollute stdout: {output:?}"
     );
-    assert!(String::from_utf8_lossy(&output.stderr).contains("no berth project file"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("no .berth.yaml in"));
     drop(std::fs::remove_dir_all(&base));
 }
 
@@ -211,10 +211,47 @@ fn exec_against_a_stopped_or_missing_instance_is_a_berth_failure() {
             "status {status:?}: {output:?}"
         );
         assert!(
-            String::from_utf8_lossy(&output.stderr).contains("berth up"),
+            String::from_utf8_lossy(&output.stderr).contains(" up` first"),
             "{output:?}"
         );
     }
+}
+
+#[test]
+fn a_stopped_instance_hint_targets_the_requested_instance() {
+    let fixture = Fixture::new("stopped-instance");
+    let path = format!(
+        "{}:{}",
+        fixture.bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_berth"))
+        .current_dir(&fixture.root)
+        .args([
+            "--non-interactive",
+            "--instance",
+            "agent-2",
+            "exec",
+            "--no-tty",
+            "--",
+            "true",
+        ])
+        .env("PATH", &path)
+        .env("FAKE_STATUS", "exited")
+        .env("FAKE_MODE", "exit")
+        .env("FAKE_CODE", "1")
+        .env(
+            "BERTH_HOME",
+            fixture.root.parent().expect("base").join("home"),
+        )
+        .env_remove("BERTH_INSTANCE")
+        .env_remove("BERTH_ENGINE")
+        .output()
+        .expect("run berth");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // A bare `berth up` would start the checkout's default instance instead.
+    assert!(stderr.contains("--instance agent-2"), "{output:?}");
+    assert!(stderr.contains(" up`"), "{output:?}");
 }
 
 #[test]
@@ -320,4 +357,70 @@ fn without_a_terminal_commands_run_without_a_tty_by_default() {
         "{calls}"
     );
     assert!(!calls.contains("-it"), "{calls}");
+}
+
+#[test]
+fn preset_commands_work_where_the_project_file_does_not_load() {
+    let dir = std::env::temp_dir().join(format!("berth-preset-broken-{}", std::process::id()));
+    drop(std::fs::remove_dir_all(&dir));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(
+        dir.join(".berth.yaml"),
+        "schema_version: 9\nproject: shop\nproject_type: project\nservices:\n  db:\n    preset: no-such-preset\n",
+    )
+    .expect("project");
+    for args in [&["preset", "list"][..], &["preset", "show", "postgres"][..]] {
+        let output = Command::new(env!("CARGO_BIN_EXE_berth"))
+            .current_dir(&dir)
+            .args(args)
+            .env("BERTH_HOME", dir.join("home"))
+            .output()
+            .expect("run berth");
+        assert!(output.status.success(), "{args:?}: {output:?}");
+    }
+    let broken = Command::new(env!("CARGO_BIN_EXE_berth"))
+        .current_dir(&dir)
+        .arg("ps")
+        .env("BERTH_HOME", dir.join("home"))
+        .output()
+        .expect("run berth");
+    assert!(
+        String::from_utf8_lossy(&broken.stderr).contains("berth preset"),
+        "{broken:?}"
+    );
+    std::fs::remove_dir_all(&dir).expect("cleanup");
+}
+
+#[test]
+fn health_on_an_instance_never_started_says_so() {
+    let fixture = Fixture::new("health-unstarted");
+    std::fs::write(
+        fixture.root.join(".berth.yaml"),
+        "schema_version: 9\nproject: api\nproject_type: project\nservices:\n  cache:\n    preset: redis\n    isolation: dedicated\n",
+    )
+    .expect("project file");
+    let path = format!(
+        "{}:{}",
+        fixture.bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_berth"))
+        .current_dir(&fixture.root)
+        .args(["--non-interactive", "health", "--service", "cache"])
+        .env("PATH", &path)
+        .env("FAKE_STATUS", "missing")
+        .env("FAKE_MODE", "exit")
+        .env("FAKE_CODE", "1")
+        .env(
+            "BERTH_HOME",
+            fixture.root.parent().expect("base").join("home"),
+        )
+        .env_remove("BERTH_INSTANCE")
+        .env_remove("BERTH_ENGINE")
+        .output()
+        .expect("run berth");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(stderr.contains("not started yet"), "{stderr}");
+    assert!(!stderr.contains("while berth waited"), "{stderr}");
 }

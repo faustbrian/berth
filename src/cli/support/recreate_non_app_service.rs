@@ -37,7 +37,7 @@ fn emit_connection_string(service: &config::ServiceConfig) {
         &format!(
             "Connection string: {}",
             crate::network::host_url(service)
-                .unwrap_or_else(|| format!("({})", crate::network::PUBLISH_HINT))
+                .unwrap_or_else(|| format!("({})", crate::network::publish_hint()))
         ),
         Persistence::Persistent,
     );

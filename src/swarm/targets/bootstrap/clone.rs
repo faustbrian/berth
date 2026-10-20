@@ -33,7 +33,8 @@ pub(super) fn clone_missing_root(
     }
 
     anyhow::bail!(
-        "failed to clone '{}' into '{}' (exit status: {})",
+        "failed to clone '{}' into '{}' ({}); check your access to the repo (git's error \
+         is above), or clone it there yourself and run the command again",
         git.repo,
         target_root.display(),
         status

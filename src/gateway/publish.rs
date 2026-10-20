@@ -155,9 +155,11 @@ pub(crate) fn publish_routes(mode: PublishMode<'_>) -> Result<()> {
     for (host, claimants) in &plan.conflicts {
         if own_hosts.contains(host) {
             anyhow::bail!(
-                "route {host} is claimed by {}; use another --instance or bring the other \
-                 down",
-                claimants.join(" and ")
+                "route {host} is claimed by {}; {} shows the checkout and instance that run \
+                 each: stop the other with {} in its checkout, or use another `--instance` here",
+                claimants.join(" and "),
+                crate::followup::global("ls"),
+                crate::followup::global("--instance <its instance> down")
             );
         }
         crate::output::event(
@@ -200,8 +202,10 @@ pub(crate) fn ensure_route_unclaimed(own_container: &str, own_hosts: &[String]) 
     let entries = discover_routes(&installation)?;
     if let Some((host, owner)) = instance_route_clash(own_container, own_hosts, &entries)? {
         anyhow::bail!(
-            "route {host} is already served by {owner}; use another --instance or bring \
-             {owner} down first"
+            "route {host} is already served by {owner}; {} shows its checkout and instance: \
+             stop it with {} in that checkout, or use another `--instance` here",
+            crate::followup::global("ls"),
+            crate::followup::global("--instance <its instance> down")
         );
     }
     Ok(())
@@ -643,12 +647,16 @@ fn wait_until_admin_ready(gateway: &str) -> Result<()> {
         if output.status.success() {
             return Ok(());
         }
-        deadline.ensure("the berth gateway")?;
+        deadline.ensure(
+            "the berth gateway",
+            &format!("{} logs {gateway}", crate::docker::docker_command()),
+        )?;
         match crate::docker::container_state(gateway) {
             crate::docker::ContainerState::Running | crate::docker::ContainerState::Unknown => {}
             crate::docker::ContainerState::NotRunning(status) => anyhow::bail!(
-                "the berth gateway stopped while starting (it is {status}); see `docker logs \
-                 {gateway}`"
+                "the berth gateway stopped while starting (it is {status}); see why with `{} logs \
+                 {gateway}`, then run the command again",
+                crate::docker::docker_command()
             ),
             crate::docker::ContainerState::Missing => {
                 anyhow::bail!("the berth gateway container {gateway} does not exist")

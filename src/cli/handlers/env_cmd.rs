@@ -24,7 +24,7 @@ pub(crate) struct HandleEnvOptions<'a> {
 
 pub(crate) fn handle_env(config: &mut config::Config, options: HandleEnvOptions<'_>) -> Result<()> {
     if options.writes_dotenv {
-        anyhow::bail!("{}", cli::support::ENV_WRITE_REMOVED);
+        anyhow::bail!("{}", cli::support::env_write_removed());
     }
     let views = env_views(
         config,

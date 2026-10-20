@@ -15,4 +15,8 @@ pub(crate) use installation::{existing_installation_id, installation_id};
 pub(crate) use lock::HostLock;
 pub(crate) use paths::{home_path, private_dir, remove_instance_state};
 pub(crate) use same_file::same_file;
+mod invalid_secret;
+#[cfg(test)]
+pub(crate) use invalid_secret::InvalidSecret;
+pub(crate) use invalid_secret::{advise_on_invalid, is_invalid_secret};
 pub(crate) use secret_file::{is_hex_secret, random_hex_secret, read_or_create};

@@ -88,7 +88,11 @@ fn report_app<'a>(config: &'a config::Config, service: Option<&'a str>) -> Optio
 pub(crate) fn failed_report(config: &config::Config, error: &anyhow::Error) -> serde_json::Value {
     let mut document = identity(config);
     document["status"] = "failed".into();
-    document["error"] = crate::docker::redact_known_secrets(&format!("{error:#}")).into();
+    let message = crate::docker::redact_known_secrets(&format!("{error:#}"));
+    if let Some(hint) = crate::error_hint::hint(&message) {
+        document["hint"] = hint.into();
+    }
+    document["error"] = message.into();
     document
 }
 

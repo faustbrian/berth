@@ -63,7 +63,7 @@ fn down_guard_blocks_transitive_shared_dependencies() -> Result<()> {
     assert!(
         error
             .to_string()
-            .contains("refusing to down shared dependencies")
+            .contains("run the same command again with `--force`")
     );
 
     Ok(())

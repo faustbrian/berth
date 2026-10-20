@@ -93,8 +93,10 @@ says so on stderr.
 - `environment` is what app containers receive; `host_environment` holds
   endpoints a host tool can reach (only published services have any).
 - On failure `up --json` still prints one document and exits 125:
-  `{"schema":1,"project":…,"instance":…,"root":…,"status":"failed","error":"…"}`.
-  Known secrets in the error are redacted. Three failures come before there
+  `{"schema":1,"project":…,"instance":…,"root":…,"status":"failed","error":"…"}`,
+  plus `"hint":"…"` when berth recognises the cause (the engine is not
+  running, a host port is taken, an image cannot be pulled) and knows the
+  fix. Known secrets in the error are redacted. Three failures come before there
   is a project to describe and print nothing on stdout (exit 125, the error
   on stderr): a project file that cannot be loaded, an instance that cannot
   be marked in use (an unwritable berth home), and `--dry-run` (refused).

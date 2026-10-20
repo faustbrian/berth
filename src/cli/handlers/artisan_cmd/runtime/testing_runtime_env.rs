@@ -201,7 +201,8 @@ fn adaptive_pool_size_from_signals(
 }
 
 fn docker_resource_hint() -> Option<ResourceHint> {
-    let output = Command::new(crate::docker::docker_command())
+    let output = crate::docker::engine_command()
+        .ok()?
         .args(["info", "--format", "{{.MemTotal}} {{.NCPU}}"])
         .output()
         .ok()?;

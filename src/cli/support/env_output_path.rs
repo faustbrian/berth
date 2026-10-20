@@ -12,12 +12,18 @@ pub(crate) fn env_output_path(
     if !env_output {
         return Ok(None);
     }
-    anyhow::bail!("{ENV_WRITE_REMOVED}")
+    anyhow::bail!("{}", env_write_removed())
 }
 
 /// Why berth refuses to write `.env`: the environment is injected into every
 /// container, so a written copy only drifts (and leaks credentials into a
 /// file agents commit by mistake).
-pub(crate) const ENV_WRITE_REMOVED: &str = "berth never writes .env: the environment is \
-    injected into every container. Print it with `berth env` (or `berth env --json`), or \
-    write a new file with `berth env generate --output <file>`";
+pub(crate) fn env_write_removed() -> String {
+    format!(
+        "berth never writes .env: the environment is injected into every container. Print it \
+         with {} (or {}), or write a new file with {}",
+        crate::followup::command("env"),
+        crate::followup::command("env --json"),
+        crate::followup::command("env generate --output <file>")
+    )
+}

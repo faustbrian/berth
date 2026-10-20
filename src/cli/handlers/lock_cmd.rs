@@ -48,7 +48,10 @@ pub(crate) fn handle_lock(
             }
 
             print_diff(&diff);
-            anyhow::bail!("lockfile is out of sync; run `berth lock images`")
+            anyhow::bail!(
+                "lockfile is out of sync; run {}",
+                crate::followup::command("lock images")
+            )
         }
         LockCommands::Diff => {
             let expected = config::build_image_lock(config_data)?;

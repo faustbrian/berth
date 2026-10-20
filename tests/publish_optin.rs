@@ -282,6 +282,11 @@ fn health_never_starts_the_gateway() {
     fixture.clear_log();
     let health = fixture.berth(&["health", "--timeout", "2"], false);
     assert!(!health.status.success(), "unknown health is not healthy");
+    let stderr = text(&health.stderr);
+    assert!(
+        stderr.contains("'cache'") && !stderr.trim_end().ends_with("health checks failed"),
+        "the failing service and its cause are printed: {stderr}"
+    );
     assert!(
         !fixture
             .calls()

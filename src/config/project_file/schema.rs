@@ -36,19 +36,42 @@ struct ProjectFile {
 /// Returns an error for malformed YAML, unknown fields, an unsupported schema
 /// version, an invalid project name, or a service entry that sets `name`.
 pub(crate) fn parse_project_file(content: &str, path: &Path) -> Result<RawConfig> {
+    if content.lines().all(|line| {
+        let line = line.trim();
+        line.is_empty() || line.starts_with('#')
+    }) {
+        anyhow::bail!(
+            "{} is empty; a project file needs at least `schema_version: {PROJECT_SCHEMA_VERSION}` \
+             and `project: <name>` (for a starter file, delete it and run `berth init` in {})",
+            path.display(),
+            path.parent().unwrap_or_else(|| Path::new(".")).display()
+        );
+    }
     let file: ProjectFile = crate::config::yaml::from_str(content)
         .with_context(|| format!("invalid berth project file {}", path.display()))?;
 
     if file.schema_version != PROJECT_SCHEMA_VERSION {
+        let fix = if file.schema_version > PROJECT_SCHEMA_VERSION {
+            "it needs a newer berth (see INSTALLATION.md to update)".to_owned()
+        } else {
+            format!(
+                "set `schema_version: {PROJECT_SCHEMA_VERSION}` (helm, stackctl and .berth.toml \
+                 files are converted with `berth config migrate`)"
+            )
+        };
         anyhow::bail!(
-            "{} declares schema_version {}; this berth build reads schema_version {}",
+            "{} declares schema_version {}; this berth reads schema_version {}: {fix}",
             path.display(),
             file.schema_version,
             PROJECT_SCHEMA_VERSION
         );
     }
-    validate_project_name(&file.project)
-        .with_context(|| format!("invalid `project` in {}", path.display()))?;
+    validate_project_name(&file.project).with_context(|| {
+        format!(
+            "invalid `project` in {}; set it to a valid name",
+            path.display()
+        )
+    })?;
 
     let project_root = path.parent().unwrap_or_else(|| Path::new("."));
     let mut services = Vec::with_capacity(file.services.len());
@@ -59,8 +82,13 @@ pub(crate) fn parse_project_file(content: &str, path: &Path) -> Result<RawConfig
                 path.display()
             );
         }
-        validate_service_name(&name)
-            .with_context(|| format!("invalid service name in {}", path.display()))?;
+        validate_service_name(&name).with_context(|| {
+            format!(
+                "invalid service name in {}; rename its `services` key and update any \
+                     `depends_on` that names it",
+                path.display()
+            )
+        })?;
         if service.container_name.is_some() {
             anyhow::bail!(
                 "service '{name}' in {} sets `container_name`; berth names containers \
@@ -104,7 +132,9 @@ pub(crate) fn parse_project_file(content: &str, path: &Path) -> Result<RawConfig
 pub(crate) fn validate_service_name(name: &str) -> Result<()> {
     if !is_dns_label(name) || name.len() > 63 {
         anyhow::bail!(
-            "service name '{name}' must be lowercase letters, digits and inner hyphens (at most 63 bytes)"
+            "service name '{name}' must be lowercase letters, digits and inner hyphens (at most 63 \
+             bytes; `_` is not allowed because berth uses it as a separator), for example '{}'",
+            suggest_label(name, 63)
         );
     }
     Ok(())
@@ -132,13 +162,39 @@ pub(crate) fn validate_project_name(name: &str) -> Result<()> {
     let valid_edges = bytes.first().is_some_and(u8::is_ascii_alphanumeric)
         && bytes.last().is_some_and(u8::is_ascii_alphanumeric);
     if !valid_chars || !valid_edges {
-        anyhow::bail!("project name '{name}' must be lowercase letters, digits and inner hyphens");
+        anyhow::bail!(
+            "project name '{name}' must be lowercase letters, digits and inner hyphens, for \
+             example '{}'",
+            suggest_label(name, MAX_PROJECT_NAME_LEN)
+        );
     }
     if name.len() > MAX_PROJECT_NAME_LEN {
         anyhow::bail!(
-            "project name '{name}' is {} bytes; the maximum is {MAX_PROJECT_NAME_LEN}",
-            name.len()
+            "project name '{name}' is {} bytes; the maximum is {MAX_PROJECT_NAME_LEN}, for \
+             example '{}'",
+            name.len(),
+            suggest_label(name, MAX_PROJECT_NAME_LEN)
         );
     }
     Ok(())
+}
+
+/// A valid DNS label close to `name`, for a suggestion: lowercase, runs of
+/// other characters turned into one `-`, edges trimmed, at most `max` bytes.
+fn suggest_label(name: &str, max: usize) -> String {
+    let mut label = String::with_capacity(name.len());
+    for character in name.chars() {
+        if character.is_ascii_alphanumeric() {
+            label.push(character.to_ascii_lowercase());
+        } else if !label.is_empty() && !label.ends_with('-') {
+            label.push('-');
+        }
+    }
+    label.truncate(max);
+    let label = label.trim_end_matches('-');
+    if label.is_empty() {
+        "app".to_owned()
+    } else {
+        label.to_owned()
+    }
 }

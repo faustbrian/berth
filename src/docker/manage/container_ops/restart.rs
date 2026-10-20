@@ -7,7 +7,7 @@ use anyhow::Result;
 use crate::config::ServiceConfig;
 use crate::output::{self, LogLevel, Persistence};
 
-use super::super::super::{inspect_status, is_dry_run, print_docker_command};
+use super::super::super::{is_dry_run, print_docker_command};
 use super::docker_cmd::docker_output;
 
 /// Restarts restart as part of the docker manage container ops restart workflow.
@@ -19,8 +19,17 @@ pub(super) fn restart(service: &ServiceConfig) -> Result<()> {
         return Ok(());
     }
 
-    if inspect_status(&container_name).is_none() {
-        anyhow::bail!("Container {container_name} does not exist");
+    match crate::docker::container_state(&container_name) {
+        crate::docker::ContainerState::Missing => anyhow::bail!(
+            "service '{}' has no container {container_name} to restart; start it with {}",
+            service.name,
+            crate::followup::for_service(service, &format!("up --service {}", service.name))
+        ),
+        crate::docker::ContainerState::Unknown => anyhow::bail!(
+            "could not inspect {container_name}; is the container engine running? {} checks it",
+            crate::followup::for_service(service, "doctor")
+        ),
+        crate::docker::ContainerState::Running | crate::docker::ContainerState::NotRunning(_) => {}
     }
     crate::docker::ensure_own_container(&container_name)?;
 

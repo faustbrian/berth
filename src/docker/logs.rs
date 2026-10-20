@@ -44,7 +44,13 @@ pub fn logs(service: &ServiceConfig, options: LogsOptions) -> Result<()> {
     let status = run_docker_status(&args, &super::runtime_command_error_context("logs"))?;
 
     if !status.success() {
-        anyhow::bail!("Failed to get logs for container '{container_name}'");
+        anyhow::bail!(
+            "could not read the logs of service '{}' (container {container_name}); if it has no \
+             container yet, start it with {} ({} shows what runs)",
+            service.name,
+            crate::followup::for_service(service, &format!("up --service {}", service.name)),
+            crate::followup::for_service(service, "ps")
+        );
     }
 
     Ok(())

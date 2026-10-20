@@ -393,3 +393,22 @@ fn a_route_label_may_fill_but_not_exceed_the_dns_label_limit() {
     assert!(format!("{error:#}").contains("63"), "{error:#}");
     std::fs::remove_dir_all(&base).expect("cleanup");
 }
+
+#[test]
+fn a_depends_on_typo_fails_at_load_naming_the_service_and_what_exists() {
+    let base = base("depends-on");
+    let root = routed_worktree(
+        &base,
+        "checkout",
+        "schema_version: 9\nproject: shipit-api\nproject_type: project\nservices:\n  db:\n    preset: postgres\n  app:\n    preset: laravel\n    depends_on: [postgress]\n",
+    );
+    let error = load_config_with(LoadConfigPathOptions::new(None, Some(&root)))
+        .expect_err("unknown dependency");
+    let message = format!("{error:#}");
+    assert!(
+        message.contains("service 'app' lists 'postgress' in `depends_on`")
+            && message.contains("services: db, app"),
+        "{message}"
+    );
+    std::fs::remove_dir_all(&base).expect("cleanup");
+}

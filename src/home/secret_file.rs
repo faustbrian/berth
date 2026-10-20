@@ -90,10 +90,12 @@ fn read(path: &Path, valid: &impl Fn(&str) -> bool) -> Result<String> {
         .with_context(|| format!("failed to read {}", path.display()))?;
     let secret = raw.trim().to_owned();
     if !valid(&secret) {
-        anyhow::bail!(
-            "{} does not hold a valid secret; delete it to create a new one",
-            path.display()
-        );
+        // Callers add what replacing this secret costs: it differs for an
+        // app key, a tenant password and a shared server's admin secret.
+        return Err(super::invalid_secret::InvalidSecret {
+            path: path.to_path_buf(),
+        }
+        .into());
     }
     Ok(secret)
 }
@@ -139,7 +141,29 @@ mod tests {
         std::fs::write(dir.join("admin"), "not hex").expect("corrupt");
         let error = read_or_create_in(&dir, "admin", random_hex_secret, is_hex_secret)
             .expect_err("corrupt secret");
-        assert!(error.to_string().contains("delete it"), "{error}");
+        assert!(
+            error.to_string().contains("does not hold a valid secret"),
+            "{error}"
+        );
+        let advised = crate::home::advise_on_invalid(error, || "ADVICE".to_owned());
+        assert!(
+            format!("{advised:#}").starts_with(&format!("{}: ADVICE", dir.join("admin").display())),
+            "the advice names the corrupt file first: {advised:#}"
+        );
+
+        // An unreadable but valid secret is not corruption: no advice that
+        // could get it deleted.
+        std::fs::write(dir.join("admin"), "0".repeat(64)).expect("valid");
+        std::fs::set_permissions(dir.join("admin"), std::fs::Permissions::from_mode(0o000))
+            .expect("chmod");
+        let unreadable = read_or_create_in(&dir, "admin", random_hex_secret, is_hex_secret);
+        std::fs::set_permissions(dir.join("admin"), std::fs::Permissions::from_mode(0o600))
+            .expect("chmod back");
+        // Root reads any file, so only assert when the read actually failed.
+        if let Err(error) = unreadable {
+            let advised = crate::home::advise_on_invalid(error, || "ADVICE".to_owned());
+            assert!(!format!("{advised:#}").contains("ADVICE"), "{advised:#}");
+        }
         std::fs::remove_dir_all(&dir).expect("cleanup");
     }
 

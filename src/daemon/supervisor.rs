@@ -47,7 +47,7 @@ pub(crate) fn run(project_root: &Path) -> Result<()> {
                     "daemon",
                     LogLevel::Error,
                     &format!(
-                        "Daemon recovery failed for {}: {}. Retrying in {}s",
+                        "Daemon recovery failed for {}: {:#}. Retrying in {}s",
                         project_root.display(),
                         error,
                         backoff
