@@ -14,7 +14,7 @@
 ## Install a release
 
 ```bash
-cargo install --git https://github.com/faustbrian/berth.git --tag 10.2.0 --bin berth --locked
+cargo install --git https://github.com/faustbrian/berth.git --tag 10.3.0 --bin berth --locked
 ```
 
 ## Install the 10.x branch
