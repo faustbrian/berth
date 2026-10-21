@@ -110,14 +110,9 @@ mod tests {
     use std::collections::HashMap;
     use std::fs;
     use std::io::Write;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn unique_suffix() -> String {
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system clock")
-            .as_nanos()
-            .to_string()
+        crate::test_support::unique_stamp().to_string()
     }
 
     fn app_service() -> ServiceConfig {

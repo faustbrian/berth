@@ -110,7 +110,6 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{
         init_config, project_root, project_root_with, resolve_config_path, resolve_lockfile_path,
@@ -125,10 +124,7 @@ mod tests {
         let sequence = TEMP_ROOT_COUNTER.fetch_add(1, Ordering::Relaxed);
         let root = crate::test_support::temp_root().join(format!(
             "berth-config-paths-{}-{sequence}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         drop(fs::remove_dir_all(&root));
         fs::create_dir_all(&root).expect("create temp root");

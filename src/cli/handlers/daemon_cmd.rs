@@ -224,7 +224,6 @@ fn resolve_daemon_project_root(path: &Path) -> Result<PathBuf> {
 mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::cli::args::{
         DaemonArgs, DaemonCommands, DaemonStartArgs, DaemonStatusArgs, DaemonStopArgs,
@@ -234,10 +233,7 @@ mod tests {
     fn temp_project_root(name: &str) -> PathBuf {
         let root = crate::test_support::temp_root().join(format!(
             "berth-daemon-handler-{name}-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         drop(fs::remove_dir_all(&root));
         fs::create_dir_all(&root).expect("create project root");
@@ -252,10 +248,7 @@ mod tests {
     fn temp_home(name: &str) -> PathBuf {
         let home = crate::test_support::temp_root().join(format!(
             "berth-daemon-home-{name}-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         drop(fs::remove_dir_all(&home));
         fs::create_dir_all(&home).expect("create temporary home");

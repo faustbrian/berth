@@ -37,17 +37,6 @@ pub(crate) fn run_docker_status_owned(args: &[String], context: &str) -> Result<
     run_docker_status(&arg_refs, context)
 }
 
-/// Spawns `docker` with stdin/stderr piped.
-pub(crate) fn spawn_docker_stdin_stderr_piped(args: &[&str], context: &str) -> Result<Child> {
-    super::ensure_engine_installed()?;
-    super::secret_env::docker_process(args)?
-        .stdin(Stdio::piped())
-        .stdout(crate::output::child_stdout())
-        .stderr(Stdio::piped())
-        .spawn()
-        .with_context(|| context.to_owned())
-}
-
 /// Spawns `docker` with stdin, stdout and stderr piped.
 pub(crate) fn spawn_docker_stdin_stdout_stderr_piped(
     args: &[&str],
@@ -62,10 +51,13 @@ pub(crate) fn spawn_docker_stdin_stdout_stderr_piped(
         .with_context(|| context.to_owned())
 }
 
-/// Spawns `docker` with stdout/stderr piped.
+/// Spawns `docker` with stdout/stderr piped and no stdin: a `docker run -i`
+/// would otherwise take berth's (a terminal it stops on in the background,
+/// or the rest of a `while read` loop's list).
 pub(crate) fn spawn_docker_stdout_stderr_piped(args: &[&str], context: &str) -> Result<Child> {
     super::ensure_engine_installed()?;
     super::secret_env::docker_process(args)?
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -88,8 +80,6 @@ mod tests {
     use crate::docker;
     use std::fs;
     use std::io::Write;
-    use std::time::SystemTime;
-    use std::time::UNIX_EPOCH;
 
     fn with_fake_docker<F, T>(script: &str, test: F) -> T
     where
@@ -97,10 +87,7 @@ mod tests {
     {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-fake-docker-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         // A clock tick is coarse: two parallel tests could share a name and
         // remove each other's fake binary.
@@ -181,16 +168,6 @@ mod tests {
                 assert_eq!(String::from_utf8_lossy(&output.stderr), "stderr");
             },
         );
-    }
-
-    #[test]
-    fn spawn_docker_stdin_stderr_piped_returns_child() {
-        with_fake_docker("#!/bin/sh\nprintf '%s' stdin-stderr\nexit 0", || {
-            let child =
-                spawn_docker_stdin_stderr_piped(&["echo"], "spawn stdin").expect("spawn command");
-            let output = child.wait_with_output().expect("collect output");
-            assert!(output.status.success());
-        });
     }
 
     #[test]

@@ -91,6 +91,7 @@ pub(crate) fn provision_tenant_sql(tenant: &str, password: &str, base: &str) -> 
          ALTER ROLE {role} {options} PASSWORD {secret};\n\
          END IF;\n\
          END $berth$;\n\
+         ALTER ROLE {role} SET lc_messages = 'C';\n\
          {squatted}\
          SELECT 'CREATE DATABASE ' || quote_ident({name}) || ' OWNER ' || quote_ident({name}) \
          WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = {name})\\gexec\n\
@@ -181,6 +182,8 @@ mod tests {
             "before the tenant's own"
         );
         assert!(sql.contains("REVOKE ALL ON DATABASE \"shop__a-1__db\" FROM PUBLIC"));
+        // A restore judges the server's errors by their English wording.
+        assert!(sql.contains("ALTER ROLE \"shop__a-1__db\" SET lc_messages = 'C';"));
         assert!(!sql.contains("SUPERUSER PASSWORD"), "{sql}");
     }
 

@@ -3,14 +3,13 @@
 //! Contains database restore from file logic used by Berth command workflows.
 
 use anyhow::{Context, Result};
-use flate2::read::GzDecoder;
-use std::fs::File;
-use std::io::{BufReader, Read, Write};
+use std::io::{Read, Write};
 use std::path::Path;
 
 use crate::config::ServiceConfig;
 use crate::output::{self, LogLevel, Persistence};
 
+use super::RestoreOptions;
 use super::process::start_restore_process;
 
 const CHUNK_SIZE: usize = 8192;
@@ -19,23 +18,11 @@ const PROGRESS_PERCENT_STEP: u8 = 1;
 pub(super) fn restore_from_file(
     service: &ServiceConfig,
     file_path: &Path,
-    gzip: bool,
+    total_bytes: Option<u64>,
+    reader: Box<dyn Read>,
+    options: RestoreOptions,
 ) -> Result<()> {
-    let metadata = std::fs::metadata(file_path).with_context(|| {
-        format!(
-            "no SQL dump at {}; check the `--file` path",
-            file_path.display()
-        )
-    })?;
-
-    if metadata.len() == 0 {
-        anyhow::bail!(
-            "{} is empty (0 bytes); dump the database again ({})",
-            file_path.display(),
-            crate::followup::command("dump --file <path>")
-        );
-    }
-
+    let (mut reader, statements) = super::process::tap(service, reader);
     output::event(
         &service.name,
         LogLevel::Info,
@@ -45,17 +32,6 @@ pub(super) fn restore_from_file(
 
     let mut restore = start_restore_process(service)?;
 
-    let file =
-        File::open(file_path).with_context(|| format!("failed to open {}", file_path.display()))?;
-    let use_gzip = gzip || is_gzip_path(file_path);
-
-    let mut reader: Box<dyn Read> = if use_gzip {
-        Box::new(GzDecoder::new(BufReader::new(file)))
-    } else {
-        Box::new(BufReader::new(file))
-    };
-
-    let total_bytes = metadata.len();
     let mut processed_bytes = 0_u64;
     let mut next_progress_log = PROGRESS_PERCENT_STEP;
     let mut buffer = [0_u8; CHUNK_SIZE];
@@ -64,8 +40,7 @@ pub(super) fn restore_from_file(
         loop {
             let bytes_read = reader.read(&mut buffer).with_context(|| {
                 format!(
-                    "failed to read {}; if it is not gzip-compressed, drop `--gzip` (or the \
-                         .gz name)",
+                    "failed to read {} (a damaged or truncated dump?)",
                     file_path.display()
                 )
             })?;
@@ -82,6 +57,9 @@ pub(super) fn restore_from_file(
                 .write_all(chunk)
                 .context("Failed to write to database process")?;
 
+            let Some(total_bytes) = total_bytes else {
+                continue;
+            };
             let chunk_len = u64::try_from(bytes_read).unwrap_or(0);
             processed_bytes = processed_bytes.saturating_add(chunk_len).min(total_bytes);
             let progress = progress_percent(processed_bytes, total_bytes);
@@ -97,8 +75,9 @@ pub(super) fn restore_from_file(
             }
         }
         Ok(())
-    })();
-    super::process::finish_restore(restore.child, restore.stdin, streamed)?;
+    })()
+    .and_then(|()| restore.send_end());
+    super::process::finish_restore(service, options, restore, streamed, &statements)?;
     output::event(
         &service.name,
         LogLevel::Success,
@@ -135,7 +114,7 @@ fn bytes_to_mib(bytes: u64) -> f64 {
 }
 
 /// Returns whether the path has a `.gz` extension.
-fn is_gzip_path(path: &Path) -> bool {
+pub(super) fn is_gzip_path(path: &Path) -> bool {
     path.extension()
         .and_then(std::ffi::OsStr::to_str)
         .is_some_and(|ext| ext.eq_ignore_ascii_case("gz"))

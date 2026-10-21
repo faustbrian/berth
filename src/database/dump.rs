@@ -2,17 +2,18 @@
 //!
 //! Contains database dump logic used by Berth command workflows.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::path::Path;
 
 use crate::config::ServiceConfig;
 use crate::output::{self, LogLevel, Persistence};
 
 use super::setup::ensure_sql_dump_service;
-use super::sql_admin::{ensure_sql_command_success, run_dump_command};
+use super::sql_admin::dump_command_args;
 use io::{is_gzip_path, write_dump_file, write_dump_stdout};
 
 mod io;
+mod stream;
 
 pub(crate) fn dump(service: &ServiceConfig, file_path: &Path, gzip: bool) -> Result<()> {
     ensure_sql_dump_service(service)?;
@@ -29,12 +30,11 @@ pub(crate) fn dump(service: &ServiceConfig, file_path: &Path, gzip: bool) -> Res
         return Ok(());
     }
 
-    let output = run_dump_command_checked(service)?;
-
+    let args = dump_command_args(service)?;
     let use_gzip = gzip || is_gzip_path(file_path);
-    write_dump_file(file_path, &output.stdout, use_gzip)?;
-
-    let size = output.stdout.len();
+    let size = write_dump_file(file_path, use_gzip, |sink| {
+        stream::stream_dump(&args, sink, &dump_failure(service))
+    })?;
     output::event(
         &service.name,
         LogLevel::Success,
@@ -52,9 +52,10 @@ pub(crate) fn dump_stdout(service: &ServiceConfig, gzip: bool) -> Result<()> {
         return Ok(());
     }
 
-    let output = run_dump_command_checked(service)?;
-
-    write_dump_stdout(&output.stdout, gzip).context("Failed to write dump to stdout")
+    let args = dump_command_args(service)?;
+    write_dump_stdout(gzip, |sink| {
+        stream::stream_dump(&args, sink, &dump_failure(service))
+    })
 }
 
 fn dumping_to_file_message(service: &ServiceConfig, file_path: &Path) -> String {
@@ -75,16 +76,11 @@ fn emit_dump_dry_run(service: &ServiceConfig, streaming: bool) {
     );
 }
 
-fn run_dump_command_checked(service: &ServiceConfig) -> Result<std::process::Output> {
-    let output = run_dump_command(service)?;
-    ensure_sql_command_success(
-        &output,
-        &format!("Failed to dump the database of service '{}'", service.name),
-    )?;
-    Ok(output)
+fn dump_failure(service: &ServiceConfig) -> String {
+    format!("Failed to dump the database of service '{}'", service.name)
 }
 
-fn dump_success_message(file_path: &Path, size: usize) -> String {
+fn dump_success_message(file_path: &Path, size: u64) -> String {
     format!("Dumped {} ({} bytes raw)", file_path.display(), size)
 }
 

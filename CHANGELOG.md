@@ -2,6 +2,235 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- `cpus` (`2`, `0.5`; at least `0.01`) and `memory` (`512m`, `2g`; at
+  least `6m`) cap a service's own container (`--cpus`, and `--memory`
+  with no swap beyond it); a shared server's tenant refuses them, naming
+  `isolation: dedicated`. A command run against an app that is not
+  running (in a one-off container) is capped the same.
+
+### Changed
+
+- `berth down --purge` starts and locks only the shared servers the
+  instance has tenants on (berth now records them), so purging an
+  instance of dedicated services never starts, or waits on, another
+  project's shared server; a running one is only read, once and without
+  waiting for it, and one that is stopped or does not answer is skipped
+  with a line naming it. The record starts with the instance's berth
+  state, and a server leaves it once the instance's last tenant there is
+  dropped (`down --purge --service`). A purge that failed before this release removed its instance's
+  state, so retrying it now reaches only running servers: start the
+  instance's shared servers first. An instance made before this release,
+  or one whose purge could not drop every tenant, is still purged from
+  every server; a failed purge's advice says its tenants may remain and
+  that the retry checks every server (or, when that mark could not be
+  written, to start every shared server first).
+- `berth down --purge` with a selection that covers every service of the
+  instance (`--service db` when `db` is its only service) also removes
+  the instance's lease, locks and other berth state, as a whole-instance
+  purge does.
+- A project file whose services include no app (only databases, caches
+  and the like) needs no `project_type` and is a project whatever its
+  `composer.json` says (or without one).
+- `--instance` documents its limits (lowercase letters, digits and inner
+  hyphens, at most 23 bytes), and a longer ID's error says why and how to
+  shorten it.
+- `--repro` reaches every swarm target and workspace dependency: `berth
+  --repro swarm up`, `swarm start` and `swarm apply`, and `berth --repro
+  up`, `apply` or `start` in a workspace member with dependencies, check
+  each target's own `.berth.lock.yaml`. A target without a lockfile now
+  fails until `berth lock images` creates one there, and `swarm start`
+  targets, like `berth --repro start`, also need digest-pinned images.
+  `--engine` reaches them the same way.
+- `berth up --seed` (and `apply`) seeds only a database that holds nothing
+  of its own: no table, sequence, type (a domain over an array included),
+  function, schema, collation,
+  operator, large object or the like (an extension's, such as
+  timescaledb's catalog or PostGIS's, do not count); one that does is
+  skipped with the `berth restore --reset` command that re-seeds it. Re-running a seed used to fail or pile
+  duplicate rows onto it. A missing or unusable `seed_file` is reported
+  before that check.
+- `berth dump` of a PostgreSQL database writes it without owners and
+  grants (`pg_dump --no-owner --no-privileges`), so it restores into any
+  instance, whose tenant is a role of its own.
+- `berth dump` streams the dump to its file instead of holding it in
+  memory, through a private partial file that replaces the target only
+  once the dump succeeded; `--stdout` sends it once complete, so a failed
+  dump never reaches a pipe half written. Two dumps to one path each write
+  their own partial file. Dump files are created readable by their owner
+  only, and a dump no longer takes berth's stdin.
+
+- The agent acceptance (CI on docker, rootless docker and rootless podman)
+  now dumps and restores each agent's database: its own dump round-trips
+  through `--reset`, a dump whose owner and grant lines name a missing
+  role loads with warnings (a GRANT inside a transaction included), and
+  the same dump with one failing statement fails the restore.
+
+### Fixed
+
+- `berth restore` refuses a MariaDB dump cut short, as it does a MySQL or
+  PostgreSQL one (its `-- MariaDB dump` header was not recognized).
+- `berth up --wait` waits for a dedicated PostgreSQL service's real
+  server: on a first start it reported ready while the image's temporary
+  init server (socket only) answered, and the next dump, restore or seed
+  failed with "the database system is shutting down".
+- `berth restore --reset` recreates a dedicated service's database that no
+  longer exists, instead of refusing because the client cannot connect to
+  it, also when the server reports it in another language.
+- A dump's last line counts when it has no trailing newline (its end line,
+  or a grant on it).
+- A restore reads psql's own errors in English whatever the image's
+  locale (`LC_ALL` included), so a missing `\copy` or `\i` file fails it;
+  an error line psql prints without a level it knows right after its line
+  number (psql 11's own, or a server answering in another language) fails
+  it too. An owner, grant or setting error is a warning only when the
+  statement psql reports as failed (it now echoes each one) is exactly
+  the dump's line holding that one statement: an error in a file the dump
+  includes, on a line holding two statements, or in a statement that only
+  ends on that line (an `UPDATE … SET`, a function's `SET` clause, a
+  quoted literal or function body that holds a grant line) fails the
+  restore, as does an owner change carrying another subcommand
+  (`ADD COLUMN …, OWNER TO …`, `RENAME COLUMN owner TO …`) or a
+  `setval`/`set_config` call that is not pg_dump's own. pg_dump
+  `--use-set-session-authorization`'s `SET SESSION AUTHORIZATION` for a
+  missing role is a warning too. A dump that
+  switches database (`\connect`, which `pg_dump --create` writes) is
+  refused before anything is changed, as is one with a NUL byte anywhere
+  (psql would merge two of its lines; a MySQL dump too), and so is a
+  MySQL dump that switches to another database than the service's (`USE`,
+  which `mysqldump --databases` writes at a line's start). A hand-written
+  MySQL dump that switches later on a line and back before its end, or
+  writes into another database by qualified names, is not detected: only
+  the database's privileges stop that (a shared tenant's do).
+  For PostgreSQL, commands berth runs before and after the dump prove it
+  all ran on the connection it began on: a switch berth could not see in
+  the dump (even a quiet one), a transaction left open (which the client
+  rolls back as it exits), `ON_ERROR_ROLLBACK` turned off, an early `\q`
+  (which ends only psql's reading of the dump), or a dump ending inside an
+  unfinished statement, string or `\if` fails the restore. A dump that
+  sets `ON_ERROR_ROLLBACK` itself is refused, wherever on a line the
+  command stands. Past a point where psql may read the dump otherwise
+  than berth follows it (a plain string ending in a backslash, which
+  `standard_conforming_strings` off reads as an escaped quote, or the
+  dump-chosen `:LAST_ERROR_MESSAGE`), no error is excused any more. These
+  checks need PostgreSQL 10.7, 11.2 or later. A MySQL restore must read
+  the dump to its end and finish in the service's database; a
+  transaction a MySQL dump leaves open is not detected. A dump on stdin
+  is first kept in a private, already-deleted temporary file and checked
+  in full, as a `--file` one is, so a refused or damaged stream never
+  reaches the database cut short; it needs room for the whole dump in the
+  temporary directory (`TMPDIR`). Every `COPY … FROM stdin` spelling
+  starts data, one inside a function body does not, and a wide table's
+  `COPY` header longer than 64 KiB still starts its data. A PostgreSQL
+  dump's end line inside a literal, or the first of two concatenated
+  dumps' end lines, no longer counts as its end, and a failure to read
+  psql's errors fails the restore.
+- A restore through a psql without the CVE-2026-6464 fix (before 18.6,
+  17.11, 16.15, 15.19 and 14.24) accepts the stray `\.` it reports after a
+  skipped empty extension `COPY`; when that psql runs a refused COPY's rows
+  as commands, the restore fails and says to pull a current image (also
+  when it fails for hypertables in a shared tenant).
+- `berth prune` fails when the engine does not answer an inspect (or is
+  stopped, its socket missing), instead of reporting the container as not
+  found or its labels as unavailable.
+- `berth dump --file` into a pipe or device (`/dev/null`,
+  `>(gzip > x.gz)`) streams into it, as before this release.
+  A directory given as `--file` is refused before anything is dumped.
+- A shared tenant's restore of its own dump on the default TimescaleDB
+  image succeeds: the extension's per-installation `metadata` rows, which
+  the tenant may not write, are skipped with a warning, even when the
+  application has a table of the same name (with a current image: see the
+  CVE-2026-6464 entry).
+- `berth restore --reset` into a shared tenant first checks that the
+  tenant can log in, so a refused login drops nothing.
+- `berth restore --file` with a pipe (`<(gunzip -c …)`) says to send the
+  stream on stdin; a file is read twice, checked in full first.
+- `berth up --seed` works for a PostgreSQL database whose name holds a
+  `/`. Its lock belongs to the instance, so a purge removes it.
+- A production dump's `ALTER DEFAULT PRIVILEGES FOR ROLE …` grants for a
+  role the server lacks are skipped with a warning, like its other grants
+  (PostgreSQL 16 and later report them as "permission denied to change
+  default privileges").
+- A dedicated PostgreSQL service whose `username` is not a superuser is
+  told why a restore cannot run (it asks for English error messages, which
+  only a superuser may set).
+- A seed that fails partway names the re-seed command
+  (`berth restore --service <db> --reset --file <seed>`): what it made
+  makes a later `up --seed` skip the database. When that cannot be
+  counted, it says so and names the command too.
+- `berth gc` keeps a shared server's admin secret when the engine fails to
+  remove the server or its volume (a stopped engine's "no such file or
+  directory" counted as already gone); `berth down --purge` likewise no
+  longer counts that error as a network already gone.
+- A PostgreSQL restore whose dump holds more than 10,000 owner, grant or
+  setting statements for roles or settings the server lacks still reports
+  them as warnings; past 10,000 they used to fail the restore.
+- `berth dump --file` no longer deletes another user's dump in progress to
+  the same path (a process it may not signal counted as dead).
+- `berth dump --stdout` keeps no temporary copy of the database on disk,
+  even when it is killed.
+- A shared PostgreSQL server whose image cannot be started (a damaged
+  image store, say) reports the engine's error; berth used to claim the
+  image does not declare `PGDATA` and suggest `isolation: dedicated`.
+- `berth down`, `berth stop` and `berth rm` fail when the engine fails to
+  stop or remove a container, instead of reporting it as already gone (or
+  not running); only a container that no longer exists is skipped. `berth rm`'s "still running" hint
+  names the instance's own `berth stop` command.
+- A PostgreSQL service without a `username` is reached as `postgres`, the
+  image's superuser, by dumps, resets and seeds as by restores (they used
+  `root`, which does not exist there).
+- `berth restore --dry-run` and `up --seed --dry-run` no longer print the
+  whole dump to stdout.
+- A PostgreSQL restore fails when a statement in the dump fails, naming
+  the failed statements by line: `psql` exits 0 whatever failed, so berth
+  reported "Database restored successfully" over a partial restore. Errors
+  that leave the data whole are warnings instead, judged by the statement
+  on that line: owner, grant and extension-comment statements naming roles
+  this server lacks (a dump from production or another instance), settings
+  an older server lacks, and row-less writes to an extension's own catalog
+  (timescaledb's, which a shared tenant may not write). A policy or
+  constraint naming a missing role, or catalog rows that could not be
+  written, still fail it. A dump with TimescaleDB hypertables restored
+  into a shared tenant fails naming `isolation: dedicated`, which restores
+  it. A restore that prints an error per row no longer hangs on a full
+  pipe, its errors are read in English whatever the server's locale, and
+  its advice no longer suggests `--reset` after one.
+- `berth restore --reset` checks that the database can be reached before
+  it drops anything: after `berth down` it fails naming `berth up`, with
+  the shared tenant's data intact, instead of dropping it and then failing
+  to restore.
+- `berth restore --reset` checks its input before it drops the database.
+  These now fail with nothing changed: a missing, empty or unreadable
+  `--file`, a directory, gzip read as plain SQL or the reverse, a gzip
+  file damaged or cut short anywhere in it, a pg_dump archive (custom or
+  tar format, for `pg_restore`), zstd, bzip2 or xz compression, and a dump
+  with no SQL in it (empty stdin, or a gzip of nothing, as when the
+  command that made it failed). Empty input used to wipe the database and
+  report success. Their messages name the fix for the dump's source:
+  `--file` and `--gzip`, or the service's `seed_file`. A gzip stream that
+  breaks mid-restore from stdin is reported as such, not as an SQL error.
+  Concatenated gzip members are read whole.
+- Swarm targets run with the swarm's own `--engine`, `--repro`,
+  `--non-interactive` and Docker or test-pool limits; the children got
+  none of them, so a non-interactive `swarm start` opened browsers.
+- A swarm run stopped by `--fail-fast` counts the targets it stopped or
+  never started as skipped, names them, and puts them in the rerun
+  command with the failed ones; a target that finished just before the
+  stop is reported as finished.
+- A swarm failure's rerun command keeps `--parallel`, so a run at 1 is
+  rerun in order.
+- When a workspace member's dependencies fail, the error says to run the
+  member's command again (which brings them up, or down, first) instead
+  of offering a `berth swarm` rerun, which under `--repro` also checked a
+  workspace lockfile the member's run never needed.
+- An empty dump file's hint says to make the dump again from its source
+  database instead of the restore target, and an empty project file next
+  to a `.berth.yaml` (an `--env` file, or one named by `--config`) is no
+  longer told to run `berth init`, which refuses there.
+
 ## [10.2.0] - 2026-10-20
 
 ### Changed

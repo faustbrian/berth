@@ -3,8 +3,11 @@
 use anyhow::{Context, Result};
 use std::collections::BTreeSet;
 
-/// Deletes `locks/instance_{project}_{instance}.lock` and
-/// `locks/lease_{project}_{instance}.lock` for every instance not in
+/// Deletes `locks/instance_{project}_{instance}.lock`,
+/// `locks/lease_{project}_{instance}.lock`,
+/// `locks/tenants_{project}_{instance}.lock`,
+/// `locks/seed_{project}_{instance}.lock` and
+/// `locks/aliases_{project}_{instance}.lock` for every instance not in
 /// `known` (those with state or containers), while holding each one
 /// exclusively, and returns how many went. Every berth command in a project
 /// marks its instance in use before loading it, so a checkout where only
@@ -67,13 +70,17 @@ pub(super) fn remove_orphan_instance_locks(known: &BTreeSet<(String, String)>) -
     Ok(removed)
 }
 
-/// The project and instance of an `instance_` or `lease_` lock file name;
+/// The project and instance of an `instance_`, `lease_`, `tenants_`,
+/// `seed_` or `aliases_` lock file name;
 /// `_` occurs in neither part.
 fn instance_of(name: &str) -> Option<(String, String)> {
     let stem = name.strip_suffix(".lock")?;
     let rest = stem
         .strip_prefix("instance_")
-        .or_else(|| stem.strip_prefix("lease_"))?;
+        .or_else(|| stem.strip_prefix("lease_"))
+        .or_else(|| stem.strip_prefix("tenants_"))
+        .or_else(|| stem.strip_prefix("seed_"))
+        .or_else(|| stem.strip_prefix("aliases_"))?;
     let (project, instance) = rest.split_once('_')?;
     (!project.is_empty() && !instance.is_empty() && !instance.contains('_'))
         .then(|| (project.to_owned(), instance.to_owned()))
@@ -84,15 +91,18 @@ mod tests {
     use super::instance_of;
 
     #[test]
-    fn only_instance_and_lease_locks_name_an_instance() {
+    fn only_an_instance_s_own_locks_name_it() {
         assert_eq!(
             instance_of("instance_shop_a-1b2c3d.lock"),
             Some(("shop".to_owned(), "a-1b2c3d".to_owned()))
         );
-        assert_eq!(
-            instance_of("lease_shop_a-1b2c3d.lock"),
-            Some(("shop".to_owned(), "a-1b2c3d".to_owned()))
-        );
+        for kind in ["lease", "tenants", "seed", "aliases"] {
+            assert_eq!(
+                instance_of(&format!("{kind}_shop_a-1b2c3d.lock")),
+                Some(("shop".to_owned(), "a-1b2c3d".to_owned())),
+                "{kind}"
+            );
+        }
         for other in [
             "reap.lock",
             "gateway.lock",

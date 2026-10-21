@@ -33,6 +33,9 @@ pub(crate) struct RunSwarmOptions<'a> {
     pub(crate) runtime_env: Option<&'a str>,
     pub(crate) config_path: Option<&'a Path>,
     pub(crate) project_root: Option<&'a Path>,
+    /// Whether this run brings up a workspace member's dependencies (from
+    /// its own `up` or `down`), not a `berth swarm` command.
+    pub(crate) dependency_run: bool,
 }
 
 /// Executes a swarm command across resolved targets.
@@ -90,6 +93,7 @@ pub(crate) fn run_swarm(options: RunSwarmOptions<'_>) -> Result<()> {
     })?;
 
     summary::summarize_results(
+        &targets,
         &results,
         cancelled,
         output_mode,
@@ -100,7 +104,10 @@ pub(crate) fn run_swarm(options: RunSwarmOptions<'_>) -> Result<()> {
             force_down_deps: options.force_down_deps,
             port_strategy: options.port_strategy,
             port_seed: options.port_seed,
+            parallel: options.parallel,
+            fail_fast: options.fail_fast,
             command: options.command,
+            dependency_run: options.dependency_run,
         },
     )
 }

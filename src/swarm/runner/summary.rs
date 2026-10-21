@@ -11,6 +11,7 @@ use super::super::target_exec::{OutputMode, SwarmRunResult};
 /// Any non-skipped failure causes this function to return an error after
 /// printing/logging per-target failure entries.
 pub(super) fn summarize_results(
+    targets: &[crate::swarm::targets::ResolvedSwarmTarget],
     results: &[SwarmRunResult],
     cancelled: usize,
     output_mode: OutputMode,
@@ -20,11 +21,17 @@ pub(super) fn summarize_results(
         .iter()
         .filter(|result| !result.success && !result.skipped)
         .collect();
-    let skipped = results.iter().filter(|result| result.skipped).count() + cancelled;
     let succeeded = results
         .iter()
         .filter(|result| result.success && !result.skipped)
         .count();
+    // Every target that neither succeeded nor failed: skipped, stopped by
+    // `--fail-fast`, or never started (the sequential runner reports no
+    // `cancelled` for those).
+    let skipped = targets
+        .len()
+        .saturating_sub(succeeded + failures.len())
+        .max(results.iter().filter(|result| result.skipped).count() + cancelled);
     emit_summary(output_mode, succeeded, failures.len(), skipped);
 
     if !failures.is_empty() {
@@ -39,17 +46,59 @@ pub(super) fn summarize_results(
             .map(|failure| failure.name.as_str())
             .collect::<Vec<_>>()
             .join(", ");
-        for failure in failures {
+        for failure in failures.iter().copied() {
             emit_failure(output_mode, failure);
         }
-        return Err(anyhow::Error::new(
-            crate::docker::ChildExitError::from_code(
-                code,
+        // `--fail-fast` stops the rest: a target it killed is a skipped
+        // result, one it never started has none. Both still have to run.
+        let unfinished: Vec<&str> = targets
+            .iter()
+            .map(|target| target.name.as_str())
+            .filter(|name| {
+                results
+                    .iter()
+                    .find(|result| result.name == *name)
+                    .is_none_or(|result| result.skipped)
+            })
+            .collect();
+        let failed: Vec<&str> = failures
+            .iter()
+            .map(|failure| failure.name.as_str())
+            .collect();
+        let rerun_names: Vec<&str> = targets
+            .iter()
+            .map(|target| target.name.as_str())
+            .filter(|name| failed.contains(name) || unfinished.contains(name))
+            .collect();
+        let (also, which) = if unfinished.is_empty() {
+            (String::new(), "just those")
+        } else {
+            (
                 format!(
-                    "swarm command failed for: {names}; rerun just those with `{}`",
-                    rerun.command(&names.replace(", ", ","))
+                    " ({} stopped or never started after the failure)",
+                    unfinished.join(", ")
                 ),
-            ),
+                "the unfinished targets",
+            )
+        };
+        let message = if rerun.dependency_run {
+            let way = if rerun.command.first().is_some_and(|sub| sub == "down") {
+                "down"
+            } else {
+                "up"
+            };
+            format!(
+                "workspace dependencies failed: {names}{also}; fix them and run the same command \
+                 again, which brings its dependencies {way} first"
+            )
+        } else {
+            format!(
+                "swarm command failed for: {names}{also}; rerun {which} with `{}`",
+                rerun.command(&rerun_names.join(","))
+            )
+        };
+        return Err(anyhow::Error::new(
+            crate::docker::ChildExitError::from_code(code, message),
         ));
     }
 
@@ -92,7 +141,15 @@ pub(super) struct Rerun<'a> {
     pub(super) force_down_deps: bool,
     pub(super) port_strategy: crate::cli::args::PortStrategyArg,
     pub(super) port_seed: Option<&'a str>,
+    /// `--parallel`: its default depends on the machine, and a run at 1
+    /// keeps targets in order.
+    pub(super) parallel: usize,
+    pub(super) fail_fast: bool,
     pub(super) command: &'a [String],
+    /// A member's dependency run: the member's own command reruns them
+    /// (and then the member), without the workspace-level checks a `berth
+    /// swarm` command adds (its `--repro` lockfile).
+    pub(super) dependency_run: bool,
 }
 
 impl Rerun<'_> {
@@ -120,6 +177,10 @@ impl Rerun<'_> {
         if let Some(seed) = self.port_seed {
             words.extend(["--port-seed".to_owned(), quote(seed)]);
         }
+        words.extend(["--parallel".to_owned(), self.parallel.to_string()]);
+        if self.fail_fast {
+            words.push("--fail-fast".to_owned());
+        }
         words.extend(["--only".to_owned(), quote(only)]);
         words.extend(self.command.iter().map(|word| quote(word)));
         words.join(" ")
@@ -128,6 +189,16 @@ impl Rerun<'_> {
 
 #[cfg(test)]
 mod tests {
+    fn targets(results: &[SwarmRunResult]) -> Vec<crate::swarm::targets::ResolvedSwarmTarget> {
+        results
+            .iter()
+            .map(|result| crate::swarm::targets::ResolvedSwarmTarget {
+                name: result.name.clone(),
+                root: result.root.clone(),
+            })
+            .collect()
+    }
+
     fn rerun() -> super::Rerun<'static> {
         super::Rerun {
             workspace_root: std::path::Path::new("/my ws"),
@@ -136,7 +207,10 @@ mod tests {
             force_down_deps: false,
             port_strategy: crate::cli::args::PortStrategyArg::Stable,
             port_seed: Some("s1"),
+            parallel: 1,
+            fail_fast: true,
             command: &[],
+            dependency_run: false,
         }
     }
 
@@ -155,6 +229,47 @@ mod tests {
     }
 
     #[test]
+    fn a_fail_fast_rerun_includes_the_targets_it_stopped() {
+        let results = vec![
+            result("alpha", true, false),
+            result("beta", false, false),
+            result("gamma", false, true),
+        ];
+        let mut all = targets(&results);
+        all.push(crate::swarm::targets::ResolvedSwarmTarget {
+            name: "delta".to_owned(),
+            root: PathBuf::from("/tmp/delta"),
+        });
+        let error = summarize_results(&all, &results, 1, OutputMode::Logged, &rerun())
+            .expect_err("failure")
+            .to_string();
+        assert!(
+            error.contains("gamma, delta stopped or never started after the failure"),
+            "{error}"
+        );
+        assert!(error.contains("--only beta,gamma,delta"), "{error}");
+    }
+
+    #[test]
+    fn a_dependency_run_failure_reruns_the_members_own_command() {
+        let results = vec![result("db", false, false)];
+        let rerun = super::Rerun {
+            dependency_run: true,
+            ..rerun()
+        };
+        let error = summarize_results(&targets(&results), &results, 0, OutputMode::Logged, &rerun)
+            .expect_err("failure")
+            .to_string();
+        assert!(
+            error.contains("workspace dependencies failed: db"),
+            "{error}"
+        );
+        assert!(error.contains("run the same command again"), "{error}");
+        // A `berth swarm` rerun would add the workspace lockfile check.
+        assert!(!error.contains("swarm --only"), "{error}");
+    }
+
+    #[test]
     fn a_down_rerun_does_not_trip_the_shared_dependency_guard() {
         let command = ["down".to_owned()];
         let rerun = super::Rerun {
@@ -164,11 +279,14 @@ mod tests {
             force_down_deps: false,
             port_strategy: crate::cli::args::PortStrategyArg::Random,
             port_seed: None,
+            parallel: 2,
+            fail_fast: false,
             command: &command,
+            dependency_run: false,
         };
         assert_eq!(
             rerun.command("api"),
-            "berth --project-root /ws swarm --no-deps --only api down"
+            "berth --project-root /ws swarm --no-deps --parallel 2 --only api down"
         );
         let forced = super::Rerun {
             force_down_deps: true,
@@ -177,14 +295,23 @@ mod tests {
         // clap rejects `--force` with `--no-deps`.
         assert_eq!(
             forced.command("api"),
-            "berth --project-root /ws swarm --force --only api down"
+            "berth --project-root /ws swarm --force --parallel 2 --only api down"
         );
     }
 
     #[test]
     fn summarize_results_returns_ok_for_successful_targets() {
         let results = vec![result("alpha", true, false), result("beta", true, false)];
-        assert!(summarize_results(&results, 0, OutputMode::Logged, &rerun()).is_ok());
+        assert!(
+            summarize_results(
+                &targets(&results),
+                &results,
+                0,
+                OutputMode::Logged,
+                &rerun()
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -194,19 +321,43 @@ mod tests {
             result("beta", true, false),
             result("gamma", false, false),
         ];
-        assert!(summarize_results(&results, 1, OutputMode::Passthrough, &rerun()).is_err());
+        assert!(
+            summarize_results(
+                &targets(&results),
+                &results,
+                1,
+                OutputMode::Passthrough,
+                &rerun()
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn summarize_results_fails_when_any_target_fails() {
         let results = vec![result("alpha", false, false)];
-        assert!(summarize_results(&results, 0, OutputMode::Logged, &rerun()).is_err());
+        assert!(
+            summarize_results(
+                &targets(&results),
+                &results,
+                0,
+                OutputMode::Logged,
+                &rerun()
+            )
+            .is_err()
+        );
     }
     #[test]
     fn a_failing_target_passes_its_exit_code_through() {
         let results = vec![result("alpha", true, false), result("beta", false, false)];
-        let error =
-            summarize_results(&results, 0, OutputMode::Logged, &rerun()).expect_err("failure");
+        let error = summarize_results(
+            &targets(&results),
+            &results,
+            0,
+            OutputMode::Logged,
+            &rerun(),
+        )
+        .expect_err("failure");
         let code = error
             .downcast_ref::<crate::docker::ChildExitError>()
             .map(crate::docker::ChildExitError::code);
@@ -215,7 +366,7 @@ mod tests {
         assert!(
             error.to_string().contains(
                 "berth --project-root '/my ws' --env staging swarm --no-deps \
-                     --port-strategy stable --port-seed s1 --only beta"
+                     --port-strategy stable --port-seed s1 --parallel 1 --fail-fast --only beta"
             ),
             "{error}"
         );

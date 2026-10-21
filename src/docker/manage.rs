@@ -62,8 +62,6 @@ mod tests {
     use crate::docker::{self, with_docker_command};
     use std::fs;
     use std::io::Write;
-    use std::time::SystemTime;
-    use std::time::UNIX_EPOCH;
 
     fn service(name: &str, kind: Kind, driver: Driver) -> ServiceConfig {
         ServiceConfig {
@@ -117,10 +115,7 @@ mod tests {
     {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-manage-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&bin_dir).expect("fake docker dir");
         let binary = bin_dir.join("docker");
@@ -169,6 +164,54 @@ mod tests {
                 super::rm(&service, false).expect("rm");
             },
         );
+    }
+
+    /// A fake engine whose `stop` and `rm` print `$2` to stderr and exit 1;
+    /// everything else (the ownership inspect) succeeds.
+    fn failing_engine(stop: &str, rm: &str) -> String {
+        format!(
+            "case \"$1\" in stop) {stop};; rm) {rm};; *) exit 0;; esac",
+            stop = stop,
+            rm = rm
+        )
+    }
+
+    const MISSING: &str = "echo 'Error response from daemon: No such container: db' >&2; exit 1";
+    const BROKEN: &str =
+        "echo 'Error response from daemon: driver failed removing container' >&2; exit 1";
+
+    #[test]
+    fn a_missing_container_counts_as_gone_for_down_stop_and_rm() {
+        let service = service("db", Kind::Database, Driver::Postgres);
+        with_fake_docker(&failing_engine(MISSING, MISSING), || {
+            super::down(&service, 30).expect("down of a missing container");
+            super::stop(&service, 30).expect("stop of a missing container");
+            super::rm(&service, true).expect("rm of a missing container");
+        });
+        // Stopped by `--rm` already: `down`'s removal finds it gone.
+        with_fake_docker(&failing_engine("exit 0", MISSING), || {
+            super::down(&service, 30).expect("down of a self-removing container");
+        });
+    }
+
+    #[test]
+    fn any_other_engine_failure_fails_down_stop_and_rm_with_its_message() {
+        let service = service("db", Kind::Database, Driver::Postgres);
+        let assert_reports = |error: anyhow::Error| {
+            let message = format!("{error:#}");
+            assert!(
+                message.contains("driver failed removing container"),
+                "{message}"
+            );
+        };
+        with_fake_docker(&failing_engine(BROKEN, "exit 0"), || {
+            assert_reports(super::down(&service, 30).expect_err("down's stop failed"));
+            assert_reports(super::stop(&service, 30).expect_err("stop failed"));
+        });
+        with_fake_docker(&failing_engine("exit 0", BROKEN), || {
+            assert_reports(super::down(&service, 30).expect_err("down's rm failed"));
+            assert_reports(super::rm(&service, true).expect_err("rm failed"));
+        });
     }
 
     #[test]

@@ -19,8 +19,14 @@ pub fn setup(service: &ServiceConfig, timeout: Option<u64>) -> Result<()> {
     setup::setup(service, timeout)
 }
 
-pub fn restore(service: &ServiceConfig, file_path: &Path, reset: bool, gzip: bool) -> Result<()> {
-    restore::restore(service, file_path, reset, gzip)
+pub(crate) use restore::{DumpOrigin, RestoreOptions};
+
+pub(crate) fn restore(
+    service: &ServiceConfig,
+    file_path: &Path,
+    options: RestoreOptions,
+) -> Result<()> {
+    restore::restore(service, file_path, options)
 }
 
 pub fn dump(service: &ServiceConfig, file_path: &Path, gzip: bool) -> Result<()> {
@@ -31,8 +37,20 @@ pub fn dump_stdout(service: &ServiceConfig, gzip: bool) -> Result<()> {
     dump::dump_stdout(service, gzip)
 }
 
-pub fn restore_stdin(service: &ServiceConfig, reset: bool, gzip: bool) -> Result<()> {
-    restore::restore_stdin(service, reset, gzip)
+pub(crate) fn check_dump(
+    service: &ServiceConfig,
+    file_path: &Path,
+    options: RestoreOptions,
+) -> Result<()> {
+    restore::check_dump(service, file_path, options)
+}
+
+pub(crate) fn has_tables(service: &ServiceConfig) -> Result<bool> {
+    restore::has_tables(service)
+}
+
+pub(crate) fn restore_stdin(service: &ServiceConfig, options: RestoreOptions) -> Result<()> {
+    restore::restore_stdin(service, options)
 }
 
 /// Runs optional post-restore app hooks (`migrate` and/or `schema:dump`).

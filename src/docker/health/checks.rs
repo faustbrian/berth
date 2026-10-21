@@ -23,13 +23,21 @@ pub(super) fn check_service_health(service: &ServiceConfig, container_name: &str
             ],
             "mongodb health check command failed",
         ),
-        Driver::Postgres => docker_exec_succeeds(
+        // Over TCP to the container's own loopback: the image's first start
+        // runs a temporary init server on the socket only
+        // (`listen_addresses=''` in its `docker-entrypoint.sh`) and then
+        // stops it, so a socket ping reports a server about to shut down.
+        Driver::Postgres => docker_exec_succeeds_owned(
             &[
-                "exec",
-                container_name,
-                "pg_isready",
-                "-U",
-                service.username.as_deref().unwrap_or("postgres"),
+                "exec".to_owned(),
+                container_name.to_owned(),
+                "pg_isready".to_owned(),
+                "-h".to_owned(),
+                "127.0.0.1".to_owned(),
+                "-p".to_owned(),
+                service.default_port().to_string(),
+                "-U".to_owned(),
+                service.username.as_deref().unwrap_or("postgres").to_owned(),
             ],
             "postgres health check command failed",
         ),
@@ -225,10 +233,7 @@ mod tests {
     {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-fake-health-docker-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         // A clock tick is coarse: two parallel tests could share a name and
         // remove each other's fake binary.
@@ -313,6 +318,31 @@ mod tests {
                 assert!(check_service_health(&service, "app-container").expect("health check"));
             }
         });
+    }
+
+    #[test]
+    fn postgres_is_not_ready_while_only_its_init_server_answers() {
+        // The image's first start runs a temporary server on the socket
+        // only, then stops it: ready means answering over TCP.
+        with_fake_docker(
+            "case \"$*\" in *'-h 127.0.0.1 -p 5432 '*) exit 2;; *) exit 0;; esac",
+            || {
+                let service = service(Driver::Postgres, 54320);
+                assert!(!check_service_health(&service, "app-container").expect("health check"));
+            },
+        );
+    }
+
+    #[test]
+    fn postgres_readiness_asks_the_containers_own_port() {
+        with_fake_docker(
+            "case \"$*\" in *'-h 127.0.0.1 -p 6543 '*) exit 0;; *) exit 2;; esac",
+            || {
+                let mut service = service(Driver::Postgres, 54320);
+                service.container_port = Some(6543);
+                assert!(check_service_health(&service, "app-container").expect("health check"));
+            },
+        );
     }
 
     #[test]

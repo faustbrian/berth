@@ -36,23 +36,7 @@ pub(crate) fn run(mut cli: Cli) -> Result<()> {
     output::init(cli.quiet);
     docker::set_dry_run(cli.dry_run);
     let dispatch_context = context::CliDispatchContext::from_cli(&cli);
-    crate::followup::record(crate::followup::Invocation {
-        config: cli.config.clone(),
-        project_root: cli.project_root.clone(),
-        instance: cli.instance.clone(),
-        env: cli.env.clone(),
-        engine: cli.engine,
-        dry_run: cli.dry_run,
-        repro: cli.repro,
-        global: matches!(&cli.command, Commands::Ls(args) if !args.services)
-            || matches!(&cli.command, Commands::Gc(_)),
-        limit: match &cli.command {
-            Commands::Health(_) => crate::followup::Limit::HealthTimeout,
-            Commands::Setup(_) => crate::followup::Limit::SetupTimeout,
-            Commands::Doctor(_) => crate::followup::Limit::Fixed,
-            _ => crate::followup::Limit::WaitTimeout,
-        },
-    });
+    crate::followup::record(invocation(&cli));
 
     if bootstrap::handle_setup_commands(&cli, &dispatch_context)? {
         return Ok(());
@@ -157,20 +141,97 @@ fn apply_runtime_policy_overrides(cli: &Cli) {
     handlers::set_testing_runtime_pool_size_override(cli.test_runtime_pool_size);
 }
 
+/// What follow-up commands and swarm children repeat of this run.
+fn invocation(cli: &Cli) -> crate::followup::Invocation {
+    crate::followup::Invocation {
+        config: cli.config.clone(),
+        project_root: cli.project_root.clone(),
+        instance: cli.instance.clone(),
+        env: cli.env.clone(),
+        engine: cli.engine,
+        dry_run: cli.dry_run,
+        repro: cli.repro,
+        global: matches!(&cli.command, Commands::Ls(args) if !args.services)
+            || matches!(&cli.command, Commands::Gc(_)),
+        limit: match &cli.command {
+            Commands::Health(_) => crate::followup::Limit::HealthTimeout,
+            Commands::Setup(_) => crate::followup::Limit::SetupTimeout,
+            Commands::Doctor(_) => crate::followup::Limit::Fixed,
+            _ => crate::followup::Limit::WaitTimeout,
+        },
+        settings: [
+            ("--non-interactive", cli.non_interactive.then_some(None)),
+            (
+                "--docker-max-heavy-ops",
+                cli.docker_max_heavy_ops.map(|n| Some(n.to_string())),
+            ),
+            (
+                "--docker-max-build-ops",
+                cli.docker_max_build_ops.map(|n| Some(n.to_string())),
+            ),
+            (
+                "--docker-retry-budget",
+                cli.docker_retry_budget.map(|n| Some(n.to_string())),
+            ),
+            (
+                "--test-runtime-pool-size",
+                cli.test_runtime_pool_size.map(|n| Some(n.to_string())),
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(flag, value)| value.map(|value| (flag, value)))
+        .collect(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
     use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::cli::args::Cli;
     use clap::Parser;
 
+    #[test]
+    fn the_invocation_keeps_what_follow_ups_and_swarm_children_repeat() {
+        let cli = Cli::try_parse_from([
+            "berth",
+            "--engine",
+            "podman",
+            "--repro",
+            "--non-interactive",
+            "--docker-max-heavy-ops",
+            "3",
+            "--test-runtime-pool-size",
+            "2",
+            "health",
+        ])
+        .expect("parse");
+        let invocation = super::invocation(&cli);
+        assert_eq!(
+            invocation.engine,
+            Some(crate::config::ContainerEngine::Podman)
+        );
+        assert!(invocation.repro);
+        assert!(!invocation.global);
+        assert_eq!(invocation.limit, crate::followup::Limit::HealthTimeout);
+        assert_eq!(
+            invocation.settings,
+            vec![
+                ("--non-interactive", None),
+                ("--docker-max-heavy-ops", Some("3".to_owned())),
+                ("--test-runtime-pool-size", Some("2".to_owned())),
+            ]
+        );
+        let ls = Cli::try_parse_from(["berth", "ls"]).expect("parse ls");
+        let ls = super::invocation(&ls);
+        assert!(ls.global, "`ls` runs outside any project");
+        assert!(ls.settings.is_empty());
+        assert_eq!(ls.limit, crate::followup::Limit::WaitTimeout);
+    }
+
     fn minimal_config_dir() -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system clock")
-            .as_nanos();
+        let nanos = crate::test_support::unique_stamp();
         let dir = crate::test_support::temp_root().join(format!(
             "berth-dispatch-run-{}-{}",
             std::process::id(),

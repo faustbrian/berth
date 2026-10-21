@@ -52,7 +52,6 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use std::path::{Path, PathBuf};
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::check_app_services;
 
@@ -91,10 +90,7 @@ mod tests {
         fn new(unhealthy_status: &str, healthy_status: &str) -> Self {
             let root = crate::test_support::temp_root().join(format!(
                 "berth-doctor-repair-{}",
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("time")
-                    .as_nanos()
+                crate::test_support::unique_stamp()
             ));
             fs::create_dir_all(&root).expect("create temp fixture");
             let docker_log_path = root.join("docker.log");

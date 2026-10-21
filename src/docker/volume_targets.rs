@@ -100,7 +100,7 @@ fn uses_default_named_data_volume(service: &ServiceConfig) -> bool {
 pub(crate) fn remove_service_volumes(service: &ServiceConfig) -> Result<()> {
     // A shared-backed service's data is its tenant.
     if service.runtime.shared.is_some() {
-        return crate::shared::drop_tenant(service);
+        return crate::shared::purge_tenant(service);
     }
     for volume in collect_named_volume_targets(service)? {
         if crate::docker::is_dry_run() {

@@ -25,9 +25,21 @@ pub(super) fn sql_context(service: &ServiceConfig) -> Result<SqlContext> {
         image: service.image.clone(),
         container_name: service.container_name()?,
         db_name: service.database.as_deref().unwrap_or("app").to_owned(),
-        username: service.username.as_deref().unwrap_or("root").to_owned(),
+        // The image's own superuser when none is configured, as the piped
+        // client assumes (`docker/exec/args.rs`).
+        username: service
+            .username
+            .clone()
+            .unwrap_or_else(|| default_username(driver).to_owned()),
         password: service.password.as_deref().unwrap_or("secret").to_owned(),
     })
+}
+
+fn default_username(driver: Driver) -> &'static str {
+    match driver {
+        Driver::Postgres => "postgres",
+        _ => "root",
+    }
 }
 
 pub(super) fn sql_driver(service: &ServiceConfig) -> Result<Driver> {
@@ -68,6 +80,11 @@ pub(super) fn run_postgres_exec(
     args: &[String],
     context: &str,
 ) -> Result<Output> {
+    run_docker_command_owned(&postgres_exec_args(ctx, program, args), context)
+}
+
+/// `docker exec` arguments running a PostgreSQL program in the container.
+pub(super) fn postgres_exec_args(ctx: &SqlContext, program: &str, args: &[String]) -> Vec<String> {
     let mut command = vec![
         "exec".to_owned(),
         ctx.container_name.clone(),
@@ -76,7 +93,7 @@ pub(super) fn run_postgres_exec(
         ctx.username.clone(),
     ];
     command.extend(args.iter().cloned());
-    run_docker_command_owned(&command, context)
+    command
 }
 
 pub(super) fn run_mysql_exec(
@@ -85,6 +102,15 @@ pub(super) fn run_mysql_exec(
     args: &[String],
     context: &str,
 ) -> Result<Output> {
+    run_docker_command_owned(&mysql_exec_args(ctx, program, args), context)
+}
+
+/// `docker exec` arguments running a MySQL program in the container.
+pub(super) fn mysql_exec_args(
+    ctx: &SqlContext,
+    program: crate::docker::MysqlProgram,
+    args: &[String],
+) -> Vec<String> {
     // The password goes in the client's environment, never an argument.
     let mut command = vec![
         "exec".to_owned(),
@@ -96,7 +122,7 @@ pub(super) fn run_mysql_exec(
     command.extend(crate::docker::MYSQL_LOCAL_TCP.map(ToOwned::to_owned));
     command.extend(["-u".to_owned(), ctx.username.clone()]);
     command.extend(args.iter().cloned());
-    run_docker_command_owned(&command, context)
+    command
 }
 
 pub(super) fn ensure_command_success(output: &Output, failure_prefix: &str) -> Result<()> {
@@ -126,8 +152,6 @@ mod tests {
     use crate::docker;
     use std::fs;
     use std::io::Write;
-    use std::time::SystemTime;
-    use std::time::UNIX_EPOCH;
 
     use super::*;
 
@@ -135,10 +159,7 @@ mod tests {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-fake-docker-{}-{}",
             std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         // A clock tick is coarse: two parallel tests could share a name and
         // remove each other's fake binary.
@@ -232,8 +253,13 @@ mod tests {
 
         let ctx = sql_context(&target).expect("sql context");
         assert_eq!(ctx.db_name, "app");
-        assert_eq!(ctx.username, "root");
+        // PostgreSQL's own superuser, as the restore client assumes.
+        assert_eq!(ctx.username, "postgres");
         assert_eq!(ctx.password, "secret");
+
+        let mut mysql = service(Driver::Mysql);
+        mysql.username = None;
+        assert_eq!(sql_context(&mysql).expect("mysql").username, "root");
     }
 
     #[test]

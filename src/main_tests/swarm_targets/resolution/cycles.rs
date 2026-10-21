@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn resolve_swarm_targets_rejects_dependency_cycles() -> Result<()> {
-    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let nonce = crate::test_support::unique_stamp();
     let base = crate::test_support::temp_root().join(format!("berth-swarm-cycle-test-{nonce}"));
     std::fs::create_dir_all(base.join("api"))?;
     std::fs::create_dir_all(base.join("bill"))?;

@@ -54,6 +54,14 @@ pub(crate) fn up(service: &ServiceConfig) -> Result<()> {
     }
     {
         let _lock = server::lock(target)?;
+        // Noted before anything is made there, so a purge visits the server
+        // even when provisioning fails partway (a role without its
+        // database) or is interrupted.
+        if let (Some(project), Some(instance)) =
+            (&service.runtime.project, &service.runtime.instance)
+        {
+            super::tenant_record::note(project, instance, &target.server)?;
+        }
         server::ensure_running(target)?;
         let password = service.password.clone().unwrap_or_default();
         let sql = match target.engine {
@@ -140,7 +148,10 @@ pub(crate) fn detach(service: &ServiceConfig) -> Result<()> {
         ]);
         return Ok(());
     }
-    let _lock = server::lock(target)?;
+    // Only this instance changes its network's aliases (`attach`, under the
+    // server's lock, takes this lock too): the server's own lock, which
+    // other projects hold, is not waited for.
+    let _aliases = alias_lock(service)?;
     let Some(current) = aliases(&target.server, network)? else {
         return Ok(());
     };
@@ -153,7 +164,8 @@ pub(crate) fn detach(service: &ServiceConfig) -> Result<()> {
 }
 
 /// Drops the service's tenant (its database, the `_test_N` databases
-/// ParaTest made for it, and its role). The tenant is recreated by the next
+/// ParaTest made for it, and its role), to be provisioned again: a reset,
+/// or a test run's fresh database. The tenant is recreated by the next
 /// `up`; its password stays until the instance state is purged.
 ///
 /// # Errors
@@ -170,6 +182,59 @@ pub(crate) fn drop_tenant(service: &ServiceConfig) -> Result<()> {
                 .is_some_and(|rest| rest.starts_with("_test_"))
     };
     drop_matching(&service.name, target, &database, &|name: &str| name == user)
+}
+
+/// Drops the service's tenant for good (`down --purge --service`). When the
+/// instance has no tenant left on the server, the server leaves its record,
+/// so a later whole-instance purge does not start it.
+///
+/// # Errors
+///
+/// Returns an error when the server cannot be reached or refuses the drop.
+pub(crate) fn purge_tenant(service: &ServiceConfig) -> Result<()> {
+    let target = target(service)?;
+    let (Some(project), Some(instance)) = (&service.runtime.project, &service.runtime.instance)
+    else {
+        return drop_tenant(service);
+    };
+    let mine = |name: &str| super::naming::belongs_to_instance(name, project, instance);
+    let mysql_prefix = super::naming::mysql_user_prefix(project, instance);
+    let mysql_user = |name: &str| name.starts_with(&mysql_prefix);
+    // A server the record does not list is treated as a whole-instance purge
+    // treats it: never started or waited on for a tenant it does not hold.
+    if !crate::docker::is_dry_run()
+        && let Some(servers) = super::tenant_record::servers(project, instance)?
+        && !servers.contains(&target.server)
+        && !unlisted_holds_tenant(target, &mine, &mysql_user)
+    {
+        return Ok(());
+    }
+    drop_tenant(service)?;
+    if crate::docker::is_dry_run() {
+        return Ok(());
+    }
+    // A server that was never created holds nothing to read (reading it
+    // would make its admin secret).
+    if !server_exists(&target.server).context(
+        "dropped the tenant, but could not check its shared server to update the instance's \
+         record of servers",
+    )? {
+        return Ok(());
+    }
+    // Under the server's lock, as `up` notes a server before provisioning
+    // there: no tenant of the instance can appear meanwhile.
+    let _lock = server::lock(target).context(
+        "dropped the tenant, but could not lock its shared server to update the instance's \
+         record of servers",
+    )?;
+    // A server that cannot be read stays on the record: a later purge then
+    // visits it, which is safe.
+    if matches!(holds_tenant(target, &mine, &mysql_user), Ok(false)) {
+        super::tenant_record::forget(project, instance, &target.server).context(
+            "dropped the tenant, but could not update the instance's record of shared servers",
+        )?;
+    }
+    Ok(())
 }
 
 /// Drops every tenant of the instance on every shared server of this
@@ -194,7 +259,21 @@ pub(crate) fn drop_instance_tenants(project: &str, instance: &str) -> Result<()>
     let mysql_prefix = super::naming::mysql_user_prefix(project, instance);
     let mysql_user = |name: &str| name.starts_with(&mysql_prefix);
     let mut failures = Vec::new();
+    // A server the instance's record lists (or every server, without a
+    // record) is visited, and started if it is stopped. Another one is only
+    // looked at while it runs (a tenant may have outlived an earlier
+    // record), once, without its lock or waiting for it to answer, unless it
+    // holds a tenant of the instance: purging an instance never starts, or
+    // waits on, another project's server, and one that does not answer is
+    // skipped like a stopped one.
+    let recorded = super::tenant_record::servers(project, instance)?;
     for target in server::installation_servers()? {
+        let listed = recorded
+            .as_ref()
+            .is_none_or(|servers| servers.contains(&target.server));
+        if !listed && !unlisted_holds_tenant(&target, &database, &mysql_user) {
+            continue;
+        }
         let dropped = match target.engine {
             // PostgreSQL roles are named like their databases.
             SharedEngine::Postgres => drop_matching("down", &target, &database, &database),
@@ -216,6 +295,79 @@ pub(crate) fn drop_instance_tenants(project: &str, instance: &str) -> Result<()>
         None => Ok(()),
         Some(first) => Err(first.context(format!("failed to drop tenants of {instance}"))),
     }
+}
+
+/// Whether a server the instance's record does not list holds a tenant of
+/// the instance after all (one may have outlived an earlier record): read
+/// once while it runs, without its lock or waiting for it to answer. One
+/// that is stopped, does not answer or cannot be inspected is skipped with
+/// a line naming it; purging never starts, or waits on, another project's
+/// server.
+fn unlisted_holds_tenant(
+    target: &SharedTarget,
+    database: &impl Fn(&str) -> bool,
+    mysql_user: &impl Fn(&str) -> bool,
+) -> bool {
+    let skipped = |why: &str| {
+        output::event(
+            "down",
+            LogLevel::Info,
+            &format!(
+                "Skipped shared server {}: {why}, and this instance has no tenant on record \
+                 there",
+                target.server
+            ),
+            Persistence::Transient,
+        );
+    };
+    // `container_state` tells a missing server from one the engine did not
+    // answer for.
+    match crate::docker::container_state(&target.server) {
+        crate::docker::ContainerState::Running => {
+            match super::best_effort(|| holds_tenant(target, database, mysql_user)) {
+                Ok(held) => held,
+                Err(error) => {
+                    skipped(&format!("it did not answer ({error:#})"));
+                    false
+                }
+            }
+        }
+        crate::docker::ContainerState::NotRunning(_) => {
+            skipped("it is stopped");
+            false
+        }
+        crate::docker::ContainerState::Missing => false,
+        crate::docker::ContainerState::Unknown => {
+            skipped("the engine did not report its state");
+            false
+        }
+    }
+}
+
+/// Whether the running server holds a database or role (user) of the
+/// instance, read without its lock (a purge then takes it to drop them).
+fn holds_tenant(
+    target: &SharedTarget,
+    database: &impl Fn(&str) -> bool,
+    mysql_user: &impl Fn(&str) -> bool,
+) -> Result<bool> {
+    let listing = match target.engine {
+        SharedEngine::Postgres => postgres::list_names_sql(),
+        SharedEngine::Mysql | SharedEngine::Mariadb => mysql::list_names_sql(),
+        SharedEngine::Redis | SharedEngine::Valkey => {
+            return Ok(server::admin_sql(target, &redis::list_users_commands())?
+                .lines()
+                .map(str::trim)
+                .any(|user| !user.is_empty() && user != "default" && database(user)));
+        }
+    };
+    let role: &dyn Fn(&str) -> bool = match target.engine {
+        SharedEngine::Mysql | SharedEngine::Mariadb => mysql_user,
+        _ => database,
+    };
+    let (databases, roles) =
+        super::listing::select_names(&server::admin_sql(target, &listing)?, database, &role)?;
+    Ok(!databases.is_empty() || !roles.is_empty())
 }
 
 /// Drops the databases `database` matches and the roles (users) `role`
@@ -363,18 +515,43 @@ pub(crate) fn status(service: &ServiceConfig) -> Option<String> {
     })
 }
 
+/// Whether the server exists; an engine that does not say is an error (a
+/// reset or purge must not skip a server it could not see).
 fn server_exists(server: &str) -> Result<bool> {
-    let output = crate::docker::run_docker_output(
-        &["inspect", "--type", "container", server],
-        "failed to inspect the shared server",
-    )?;
-    Ok(output.status.success())
+    match crate::docker::container_state(server) {
+        crate::docker::ContainerState::Running | crate::docker::ContainerState::NotRunning(_) => {
+            Ok(true)
+        }
+        crate::docker::ContainerState::Missing => Ok(false),
+        crate::docker::ContainerState::Unknown => anyhow::bail!(
+            "the engine did not report the state of shared server {server}, so nothing was \
+             dropped there: run the command again"
+        ),
+    }
+}
+
+/// The lock on the instance network's aliases on its shared servers: only
+/// the instance's own `attach` and `detach` change them, by disconnecting
+/// and reconnecting, so it is taken around every read that decides a change
+/// (after the server's lock, where both are held). Endpoints are also
+/// removed outright without it: by a whole-instance purge
+/// (`purge_instance_objects`, with no other command of the instance
+/// running), and with the server itself, under the server's lock, by a
+/// recreate (`ensure_running`) or `berth gc`.
+fn alias_lock(service: &ServiceConfig) -> Result<Option<crate::home::HostLock>> {
+    match (&service.runtime.project, &service.runtime.instance) {
+        (Some(project), Some(instance)) => Ok(Some(crate::home::HostLock::acquire(&format!(
+            "aliases_{project}_{instance}"
+        ))?)),
+        _ => Ok(None),
+    }
 }
 
 /// Puts the server on the instance network under the service's name, next
 /// to the names of the instance's other shared services on that server.
 /// Must hold the server's lock.
 fn attach(service: &ServiceConfig, target: &SharedTarget) -> Result<()> {
+    let _aliases = alias_lock(service)?;
     let Some(network) = &service.runtime.network else {
         return Ok(());
     };
@@ -403,7 +580,7 @@ fn aliases(server: &str, network: &str) -> Result<Option<Vec<String>>> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         // A server that does not exist (never created, or removed) is
         // attached nowhere.
-        if stderr.to_ascii_lowercase().contains("no such") {
+        if crate::docker::reports_missing_container(&stderr) {
             return Ok(None);
         }
         anyhow::bail!(

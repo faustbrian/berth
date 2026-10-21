@@ -95,8 +95,6 @@ mod tests {
     use crate::docker;
     use std::fs;
     use std::io::Write;
-    use std::time::SystemTime;
-    use std::time::UNIX_EPOCH;
 
     fn with_fake_docker<F, T>(script: &str, test: F) -> T
     where
@@ -104,10 +102,7 @@ mod tests {
     {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-image-pull-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         // A clock tick is coarse: two parallel tests could share a name and
         // remove each other's fake binary.

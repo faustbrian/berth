@@ -150,7 +150,7 @@ pub(crate) struct UpArgs {
     /// Skip starting workspace swarm dependencies
     #[arg(long, default_value_t = false)]
     pub(crate) no_deps: bool,
-    /// Apply configured data seed files after startup
+    /// Apply configured data seed files after startup, to databases that hold nothing of their own yet
     #[arg(long, default_value_t = false)]
     pub(crate) seed: bool,
     #[arg(long, default_value_t = default_parallelism())]

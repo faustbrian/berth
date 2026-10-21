@@ -5,16 +5,12 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 fn temporary_project_root() -> PathBuf {
     let root = crate::test_support::temp_root().join(format!(
         "berth-main-test-dispatch-{}-{}",
         std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time")
-            .as_nanos()
+        crate::test_support::unique_stamp()
     ));
     drop(fs::remove_dir_all(&root));
     fs::create_dir_all(&root).expect("create temporary project root");
@@ -64,10 +60,7 @@ where
 {
     let dir = crate::test_support::temp_root().join(format!(
         "berth-dispatch-open-curl-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time")
-            .as_nanos()
+        crate::test_support::unique_stamp()
     ));
     fs::create_dir_all(&dir).expect("create temp curl dir");
     let script = dir.join("curl");
@@ -101,10 +94,7 @@ where
 {
     let marker_dir = crate::test_support::temp_root().join(format!(
         "berth-dispatch-open-browser-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time")
-            .as_nanos()
+        crate::test_support::unique_stamp()
     ));
     fs::create_dir_all(&marker_dir).expect("create marker dir");
     let marker = marker_dir.join("invoked");

@@ -96,25 +96,18 @@ pub(crate) fn stop_pid(pid: u32) -> Result<()> {
 mod tests {
     use std::fs;
     use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_log_path(name: &str) -> std::path::PathBuf {
         crate::test_support::temp_root().join(format!(
             "berth-daemon-log-{name}-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ))
     }
 
     fn mock_binary(name: &str, script: &str) -> String {
         let root = crate::test_support::temp_root().join(format!(
             "berth-daemon-binary-{name}-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         drop(fs::remove_dir_all(&root));
         fs::create_dir_all(&root).expect("create temp root");

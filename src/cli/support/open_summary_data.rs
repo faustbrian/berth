@@ -38,7 +38,6 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     static SUMMARY_FIXTURE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -97,10 +96,7 @@ mod tests {
             "berth-summary-{}-{}-{}",
             std::process::id(),
             id,
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&bin_dir).expect("temp dir");
 

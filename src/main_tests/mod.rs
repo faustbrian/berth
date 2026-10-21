@@ -9,7 +9,6 @@ use crate::swarm::{
 use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 mod cli_flags;
 mod dependency_guards;

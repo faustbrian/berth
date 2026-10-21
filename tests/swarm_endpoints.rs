@@ -71,6 +71,29 @@ const WORKSPACE: &str = "schema_version: 9\nproject: ws\nproject_type: project\n
 
 struct Workspace {
     base: PathBuf,
+    /// This workspace's gateway HTTPS port; HTTP is the one below it. Never
+    /// the default 8443/8080, which a real gateway on the machine may hold.
+    https_port: u16,
+}
+
+/// A loopback port free for the gateway's HTTPS listener, with the port
+/// below it free for HTTP. From 2001–9799: under every OS's ephemeral range
+/// (Linux's starts at 32768), under berth's own stable ports (20000–59999)
+/// and apart from the other test binaries' ranges (10001+, 20000+).
+fn free_port() -> u16 {
+    static NEXT: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(0);
+    let base = u16::try_from(std::process::id() % 3900).expect("offset");
+    loop {
+        let step = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let candidate = 2_001 + ((base + step) % 3900) * 2;
+        // A connect probe, not a bind: a listener bound here could leak into
+        // a `berth` another test thread spawns (macOS sets close-on-exec only
+        // after creating a socket). A refused connection means it is free.
+        let free = |port: u16| std::net::TcpStream::connect(("127.0.0.1", port)).is_err();
+        if free(candidate) && free(candidate - 1) {
+            return candidate;
+        }
+    }
 }
 
 impl Workspace {
@@ -98,7 +121,10 @@ impl Workspace {
         let docker = base.join("bin/docker");
         std::fs::write(&docker, FAKE_DOCKER).expect("fake docker");
         std::fs::set_permissions(&docker, std::fs::Permissions::from_mode(0o755)).expect("chmod");
-        Self { base }
+        Self {
+            base,
+            https_port: free_port(),
+        }
     }
 
     fn project(&self, name: &str) -> PathBuf {
@@ -120,6 +146,8 @@ impl Workspace {
             .env("HOME", self.base.join("user-home"))
             .env("BERTH_HOME", self.base.join("home"))
             .env("FAKE_STATE", self.base.join("state"))
+            .env("BERTH_GATEWAY_HTTPS_PORT", self.https_port.to_string())
+            .env("BERTH_GATEWAY_HTTP_PORT", (self.https_port - 1).to_string())
             .env_remove("BERTH_INSTANCE")
             .env_remove("BERTH_ENGINE")
             .stdin(std::process::Stdio::null())

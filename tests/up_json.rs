@@ -87,7 +87,26 @@ case "$1" in
             n=$(cat "$S/horizon" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$S/horizon"
             [ "$n" -le 2 ] && { echo 'Horizon is inactive.'; exit 1; } ;;
         esac ;;
-      *" -i "*) cat >/dev/null; echo "SET"; echo "CREATE TABLE" ;;
+      # A seed first asks whether the database has tables (FAKE_TABLES).
+      # FAKE_SEEDED_HAS_TABLES: tables exist once a seed ran.
+      *pg_class*)
+        # FAKE_SEEDED_COUNT_FAILS: the count once a seed ran is unreadable.
+        if [ -n "$FAKE_SEEDED_COUNT_FAILS" ] && [ -f "$S/seeded" ]; then echo 'not a count';
+        elif [ -n "$FAKE_SEEDED_HAS_TABLES" ] && [ -f "$S/seeded" ]; then echo 1; else echo "${FAKE_TABLES:-0}"; fi ;;
+      *" -i "*)
+        # Only the seed file's own body: a reachability probe sends `SELECT 1;`.
+        # FAKE_SEED_SLEEP: a seed that takes a while, so a second run overlaps it.
+        body=$(cat)
+        case "$body" in *"INSERT INTO seed_marker"*)
+          [ -n "$FAKE_SEED_SLEEP" ] && sleep "$FAKE_SEED_SLEEP"
+          echo seeded >> "$S/seeded"
+          # FAKE_SEED_FAILS: a statement of the seed fails after others ran.
+          [ -n "$FAKE_SEED_FAILS" ] && echo 'psql:<stdin>:2: ERROR:  syntax error at or near "INSRT"' >&2 ;;
+        esac
+        echo "SET"; echo "CREATE TABLE"
+        printf '%s\n' "$body" > "$S/last-body"
+        tok=$(grep -v '^[[:space:]]*$' "$S/last-body" | tail -n 2 | sed -n 's/.*berth-dump-end \([0-9a-f][0-9a-f]*\).*/\1/p' | tail -n 1); [ -n "$tok" ] && echo "berth-dump-end $tok"; grep -q 'berth-db' "$S/last-body" && { for a in "$@"; do db="$a"; done; echo "berth-db $db"; }
+        case "$*" in *berth-backend-end*) printf ' berth-backend-start 7\n berth-backend-end 7 true\nberth-rollback on\n' ;; esac ;;
     esac
     exit 0 ;;
 esac
@@ -557,6 +576,259 @@ fn seed_restores_never_write_ahead_of_the_document() {
     assert!(up.status.success(), "{}", text(&up.stderr));
     let document = one_document(&up.stdout);
     assert_eq!(document["status"], "ready");
+}
+
+#[test]
+fn a_seed_goes_only_into_an_empty_database() {
+    let fixture = Fixture::new("seed-once");
+    std::fs::write(
+        fixture.base.join("project/seed.sql"),
+        "INSERT INTO seed_marker VALUES (1);\n",
+    )
+    .expect("seed");
+    fixture.write_project(&PROJECT.replace(
+        "    preset: postgres\n    isolation: dedicated\n",
+        "    preset: postgres\n    isolation: dedicated\n    seed_file: seed.sql\n",
+    ));
+    let up = fixture.berth(&["up", "--seed"], &[("FAKE_TABLES", "3")]);
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    let output = format!("{}{}", text(&up.stdout), text(&up.stderr));
+    assert!(output.contains("Skipped data seed"), "{output}");
+    assert!(
+        output.contains("restore --service db --reset --file"),
+        "{output}"
+    );
+    assert!(
+        !fixture.base.join("state/seeded").exists(),
+        "a database with tables is never seeded again"
+    );
+    let empty = fixture.berth(&["up", "--seed"], &[("FAKE_TABLES", "0")]);
+    assert!(empty.status.success(), "{}", text(&empty.stderr));
+    assert!(
+        fixture.base.join("state/seeded").exists(),
+        "an empty one is"
+    );
+}
+
+#[test]
+fn two_seeds_at_once_fill_an_empty_database_once() {
+    let fixture = Fixture::new("seed-race");
+    std::fs::write(
+        fixture.base.join("project/seed.sql"),
+        "INSERT INTO seed_marker VALUES (1);\n",
+    )
+    .expect("seed");
+    fixture.write_project(&PROJECT.replace(
+        "    preset: postgres\n    isolation: dedicated\n",
+        "    preset: postgres\n    isolation: dedicated\n    seed_file: seed.sql\n",
+    ));
+    // The first up makes the instance; the seeds race on the next two.
+    fixture.berth(&["up"], &[]);
+    let env = [("FAKE_SEEDED_HAS_TABLES", "1"), ("FAKE_SEED_SLEEP", "2")];
+    let runs: Vec<_> = std::thread::scope(|scope| {
+        let first = scope.spawn(|| fixture.berth(&["up", "--seed"], &env));
+        let second = scope.spawn(|| fixture.berth(&["up", "--seed"], &env));
+        vec![first.join().expect("first"), second.join().expect("second")]
+    });
+    for run in &runs {
+        assert!(run.status.success(), "{}", text(&run.stderr));
+    }
+    let seeded = std::fs::read_to_string(fixture.base.join("state/seeded")).unwrap_or_default();
+    assert_eq!(seeded.lines().count(), 1, "seeded once: {seeded:?}");
+    // The seed lock is the instance's: a purge removes it.
+    let purge = fixture.berth(&["down", "--purge"], &[]);
+    assert!(purge.status.success(), "{}", text(&purge.stderr));
+    let locks: Vec<_> = std::fs::read_dir(fixture.base.join("home/locks"))
+        .expect("locks")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("seed"))
+        .collect();
+    assert!(locks.is_empty(), "{locks:?}");
+}
+
+#[test]
+fn a_database_name_with_a_slash_is_still_seeded() {
+    let fixture = Fixture::new("seed-slash");
+    std::fs::write(
+        fixture.base.join("project/seed.sql"),
+        "INSERT INTO seed_marker VALUES (1);\n",
+    )
+    .expect("seed");
+    // PostgreSQL allows `/` in a name; nothing named after the database may
+    // take it for a directory.
+    fixture.write_project(&PROJECT.replace(
+        "    preset: postgres\n    isolation: dedicated\n",
+        "    preset: postgres\n    isolation: dedicated\n    database: shop/main\n    seed_file: seed.sql\n",
+    ));
+    let up = fixture.berth(&["up", "--seed"], &[("FAKE_TABLES", "0")]);
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    assert!(fixture.base.join("state/seeded").exists(), "seeded");
+}
+
+#[test]
+fn a_seed_that_failed_partway_says_how_to_re_seed() {
+    let fixture = Fixture::new("seed-partial");
+    std::fs::write(
+        fixture.base.join("project/seed.sql"),
+        "INSERT INTO seed_marker VALUES (1);\nINSRT 2;\n",
+    )
+    .expect("seed");
+    fixture.write_project(&PROJECT.replace(
+        "    preset: postgres\n    isolation: dedicated\n",
+        "    preset: postgres\n    isolation: dedicated\n    seed_file: seed.sql\n",
+    ));
+    let env = [("FAKE_SEEDED_HAS_TABLES", "1"), ("FAKE_SEED_FAILS", "1")];
+    let up = fixture.berth(&["up", "--seed"], &env);
+    assert!(!up.status.success(), "a failed seed fails");
+    let stderr = text(&up.stderr);
+    // The tables it left make a plain retry skip it.
+    assert!(
+        stderr.contains("re-seed with") && stderr.contains("restore --service db --reset --file"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_seed_whose_tables_cannot_be_counted_is_not_applied() {
+    let fixture = Fixture::new("seed-uncounted");
+    std::fs::write(
+        fixture.base.join("project/seed.sql"),
+        "INSERT INTO seed_marker VALUES (1);\n",
+    )
+    .expect("seed");
+    fixture.write_project(&PROJECT.replace(
+        "    preset: postgres\n    isolation: dedicated\n",
+        "    preset: postgres\n    isolation: dedicated\n    seed_file: seed.sql\n",
+    ));
+    let up = fixture.berth(&["up", "--seed"], &[("FAKE_TABLES", "not a count")]);
+    assert!(!up.status.success(), "an unknown table count fails");
+    assert!(
+        !fixture.base.join("state/seeded").exists(),
+        "a database that may hold tables is not seeded"
+    );
+}
+
+#[test]
+fn a_failed_seed_whose_leftovers_cannot_be_counted_still_names_the_reseed() {
+    let fixture = Fixture::new("seed-partial-uncounted");
+    std::fs::write(
+        fixture.base.join("project/seed.sql"),
+        "INSERT INTO seed_marker VALUES (1);\nINSRT 2;\n",
+    )
+    .expect("seed");
+    fixture.write_project(&PROJECT.replace(
+        "    preset: postgres\n    isolation: dedicated\n",
+        "    preset: postgres\n    isolation: dedicated\n    seed_file: seed.sql\n",
+    ));
+    let env = [("FAKE_SEEDED_COUNT_FAILS", "1"), ("FAKE_SEED_FAILS", "1")];
+    let up = fixture.berth(&["up", "--seed"], &env);
+    assert!(!up.status.success(), "a failed seed fails");
+    let stderr = text(&up.stderr);
+    assert!(
+        stderr.contains("whether it left anything is unknown")
+            && stderr.contains("restore --service db --reset --file"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_failed_seed_that_left_nothing_counted_still_names_the_reseed() {
+    // What it made may be nothing the count sees (an extension).
+    let fixture = Fixture::new("seed-partial-uncounted-empty");
+    std::fs::write(
+        fixture.base.join("project/seed.sql"),
+        "INSERT INTO seed_marker VALUES (1);\nINSRT 2;\n",
+    )
+    .expect("seed");
+    fixture.write_project(&PROJECT.replace(
+        "    preset: postgres\n    isolation: dedicated\n",
+        "    preset: postgres\n    isolation: dedicated\n    seed_file: seed.sql\n",
+    ));
+    let up = fixture.berth(&["up", "--seed"], &[("FAKE_SEED_FAILS", "1")]);
+    assert!(!up.status.success(), "a failed seed fails");
+    let stderr = text(&up.stderr);
+    assert!(
+        stderr.contains("run `up --seed` again")
+            && stderr.contains("restore --service db --reset --file"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_service_s_cpu_and_memory_caps_reach_its_container() {
+    let fixture = Fixture::new("limits");
+    fixture.write_project(
+        &PROJECT
+            .replace(
+                "    preset: postgres\n    isolation: dedicated\n",
+                "    preset: postgres\n    isolation: dedicated\n    cpus: 2\n    memory: 512m\n",
+            )
+            .replace(
+                "    preset: laravel\n",
+                "    preset: laravel\n    cpus: 0.5\n    memory: 1g\n",
+            ),
+    );
+    let up = fixture.berth(&["up", "--no-wait"], &[]);
+    assert!(up.status.success(), "{}", text(&up.stderr));
+    let log = std::fs::read_to_string(fixture.base.join("state/log")).expect("log");
+    let run = |service: &str| {
+        log.lines()
+            .find(|line| line.starts_with("run -d") && line.contains(&format!("_{service} ")))
+            .unwrap_or_default()
+            .to_owned()
+    };
+    assert!(
+        run("db").contains("--cpus 2 --memory 512m --memory-swap 512m"),
+        "{}",
+        run("db")
+    );
+    assert!(
+        run("app").contains("--cpus 0.5 --memory 1g --memory-swap 1g"),
+        "{}",
+        run("app")
+    );
+    // A command against the app while it is not running runs in a one-off
+    // container, capped the same.
+    let down = fixture.berth(&["down"], &[]);
+    assert!(down.status.success(), "{}", text(&down.stderr));
+    let composer = fixture.berth(&["composer", "--version"], &[]);
+    assert!(composer.status.success(), "{}", text(&composer.stderr));
+    let log = std::fs::read_to_string(fixture.base.join("state/log")).expect("log");
+    let one_off = log
+        .lines()
+        .rfind(|line| line.starts_with("run --rm") && line.contains("composer"))
+        .unwrap_or_default();
+    assert!(
+        one_off.contains("--cpus 0.5 --memory 1g --memory-swap 1g"),
+        "{one_off}"
+    );
+    // A cap the engine would reject fails before anything starts.
+    fixture.write_project(&PROJECT.replace(
+        "    preset: postgres\n    isolation: dedicated\n",
+        "    preset: postgres\n    isolation: dedicated\n    memory: lots\n",
+    ));
+    let bad = fixture.berth(&["up", "--no-wait"], &[]);
+    assert!(!bad.status.success());
+    assert!(
+        text(&bad.stderr).contains("`memory: lots` must be a positive size"),
+        "{}",
+        text(&bad.stderr)
+    );
+}
+
+#[test]
+fn a_missing_seed_file_fails_even_when_the_database_has_tables() {
+    let fixture = Fixture::new("seed-missing");
+    fixture.write_project(&PROJECT.replace(
+        "    preset: postgres\n    isolation: dedicated\n",
+        "    preset: postgres\n    isolation: dedicated\n    seed_file: missing.sql\n",
+    ));
+    let up = fixture.berth(&["up", "--seed"], &[("FAKE_TABLES", "3")]);
+    assert!(!up.status.success(), "a missing seed file is never skipped");
+    let output = format!("{}{}", text(&up.stdout), text(&up.stderr));
+    assert!(output.contains("missing.sql"), "{output}");
+    assert!(!output.contains("Skipped data seed"), "{output}");
 }
 
 #[test]

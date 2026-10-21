@@ -82,7 +82,6 @@ mod tests {
     use super::preview_global_prune_candidates;
     use crate::docker;
     use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn with_fake_docker<F, T>(script: &str, test: F) -> T
     where
@@ -90,10 +89,7 @@ mod tests {
     {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-prune-preview-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&bin_dir).expect("temp dir");
         let binary = bin_dir.join("docker");

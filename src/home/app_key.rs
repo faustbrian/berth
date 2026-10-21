@@ -21,6 +21,7 @@ pub(crate) fn app_key(project: &str, instance: &str) -> Result<String> {
     if cfg!(test) {
         return Ok(format!("base64:{}=", "A".repeat(43)));
     }
+    super::instance_dir(project, instance)?;
     super::secret_file::read_or_create(
         &Path::new("instances").join(project).join(instance),
         FILE_NAME,

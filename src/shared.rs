@@ -14,10 +14,14 @@ mod postgres;
 mod redis;
 mod server;
 mod server_network;
+mod tenant_query;
+mod tenant_record;
 
 pub(crate) use assign::assign_shared_target;
 pub(crate) use best_effort::best_effort;
 pub(crate) use gc::collect_servers;
 pub(crate) use lifecycle::{
-    detach, drop_instance_tenants, drop_tenant, refuse_server_operation, status, up,
+    detach, drop_instance_tenants, drop_tenant, purge_tenant, refuse_server_operation, status, up,
 };
+pub(crate) use tenant_query::tenant_query;
+pub(crate) use tenant_record::mark_every_server;

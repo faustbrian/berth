@@ -74,7 +74,6 @@ mod tests {
     use super::{PrepareUpContextOptions, prepare_up_context};
     use crate::config::{Config, ProjectType};
     use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn config() -> Config {
         Config {
@@ -91,10 +90,7 @@ mod tests {
     fn prepare_up_context_resolves_injected_env_even_without_dependencies() -> anyhow::Result<()> {
         let root = crate::test_support::temp_root().join(format!(
             "berth-up-preflight-no-deps-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&root)?;
         crate::config::project_file::write_test_config_file(

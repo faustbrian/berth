@@ -115,6 +115,8 @@ mod tests {
             javascript: None,
             container_name: None,
             publish: None,
+            cpus: None,
+            memory: None,
             isolation: None,
         })?;
 

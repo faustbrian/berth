@@ -81,15 +81,11 @@ mod tests {
     use super::{probe_http_status, run_curl_command_with_body};
     use std::fs;
     use std::io::Write;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn with_fake_curl(script_body: &str, test_url: &str) -> Option<u16> {
         let tmp = crate::test_support::temp_root().join(format!(
             "berth-curl-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&tmp).expect("temp dir");
         let curl = tmp.join("curl");
@@ -113,10 +109,7 @@ mod tests {
     fn with_fake_curl_output(script_body: &str, test_url: &str) -> Option<std::process::Output> {
         let tmp = crate::test_support::temp_root().join(format!(
             "berth-curl-output-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&tmp).expect("temp dir");
         let curl = tmp.join("curl");

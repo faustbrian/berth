@@ -79,10 +79,7 @@ mod tests {
     }
 
     fn unique_path(suffix: &str) -> PathBuf {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("unix epoch")
-            .as_nanos();
+        let nanos = crate::test_support::unique_stamp();
         crate::test_support::temp_root().join(format!("berth-env-update-{suffix}-{nanos}.env"))
     }
 

@@ -116,15 +116,11 @@ fn project_key(project_root: &Path) -> String {
 mod tests {
     use super::{DaemonSession, clear_session, daemon_log_path, load_session, save_session};
     use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_home(name: &str) -> std::path::PathBuf {
         let home = crate::test_support::temp_root().join(format!(
             "berth-daemon-state-{name}-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         drop(fs::remove_dir_all(&home));
         fs::create_dir_all(&home).expect("create temp home");
@@ -134,10 +130,7 @@ mod tests {
     fn temp_project_root(name: &str) -> std::path::PathBuf {
         let root = crate::test_support::temp_root().join(format!(
             "berth-daemon-project-{name}-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         drop(fs::remove_dir_all(&root));
         fs::create_dir_all(root.join("nested")).expect("create temp root");

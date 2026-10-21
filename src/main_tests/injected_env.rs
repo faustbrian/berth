@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn project_dependency_injected_env_resolves_base_url_from_domain() -> Result<()> {
-    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let nonce = crate::test_support::unique_stamp();
     let workspace =
         crate::test_support::temp_root().join(format!("berth-project-deps-env-{nonce}"));
     let api_root = workspace.join("api");
@@ -58,7 +58,7 @@ root = "location"
 
 #[test]
 fn project_dependency_injected_env_resolves_when_workspace_config_is_project_root() -> Result<()> {
-    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let nonce = crate::test_support::unique_stamp();
     let api_root =
         crate::test_support::temp_root().join(format!("berth-project-root-workspace-{nonce}"));
     let location_root = api_root.join("location");
@@ -135,7 +135,7 @@ fn injected_tokens_name_the_source_container_on_its_network() -> Result<()> {
 
 #[test]
 fn project_dependency_injected_env_is_empty_outside_swarm_workspace() -> Result<()> {
-    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let nonce = crate::test_support::unique_stamp();
     let root = crate::test_support::temp_root().join(format!("berth-project-no-workspace-{nonce}"));
     std::fs::create_dir_all(&root)?;
     crate::config::project_file::write_test_config_file(
@@ -152,7 +152,7 @@ fn project_dependency_injected_env_is_empty_outside_swarm_workspace() -> Result<
 
 #[test]
 fn project_dependency_runner_is_noop_outside_swarm_workspace() -> Result<()> {
-    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let nonce = crate::test_support::unique_stamp();
     let root =
         crate::test_support::temp_root().join(format!("berth-project-deps-runner-noop-{nonce}"));
     std::fs::create_dir_all(&root)?;
@@ -181,7 +181,7 @@ fn project_dependency_runner_is_noop_outside_swarm_workspace() -> Result<()> {
 
 #[test]
 fn a_test_run_whose_source_checkout_predates_berth_says_how_to_fix_it() -> Result<()> {
-    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let nonce = crate::test_support::unique_stamp();
     let workspace =
         crate::test_support::temp_root().join(format!("berth-project-deps-legacy-{nonce}"));
     let api_root = workspace.join("api");
@@ -232,7 +232,7 @@ root = "location"
 
 #[test]
 fn a_test_run_whose_source_was_never_cloned_names_the_commands_that_clone() -> Result<()> {
-    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let nonce = crate::test_support::unique_stamp();
     let workspace =
         crate::test_support::temp_root().join(format!("berth-project-deps-absent-{nonce}"));
     let api_root = workspace.join("api");

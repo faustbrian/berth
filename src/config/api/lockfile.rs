@@ -75,7 +75,6 @@ mod tests {
     use crate::config::{Config, Driver, Kind, Lockfile, ProjectRootPathOptions, ServiceConfig};
     use std::fs;
     use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn service(name: &str, image: &str) -> ServiceConfig {
         ServiceConfig {
@@ -140,10 +139,7 @@ mod tests {
     fn temp_dir() -> std::path::PathBuf {
         let path = crate::test_support::temp_root().join(format!(
             "berth-lockfile-tests-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         drop(fs::remove_dir_all(&path));
         fs::create_dir_all(&path).expect("create temp project");

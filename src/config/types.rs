@@ -20,7 +20,7 @@ pub use extra_route::ExtraRoute;
 pub use lockfile::{LockedImage, Lockfile};
 pub use service::ServiceConfig;
 pub use service_hook::{HookOnError, HookPhase, HookRun, ServiceHook};
-pub use service_runtime::{ServiceRuntime, SharedEngine, SharedTarget};
+pub use service_runtime::{ResourceLimits, ServiceRuntime, SharedEngine, SharedTarget};
 pub(crate) use swarm::SwarmInjectEnv;
 pub use swarm::SwarmTarget;
 pub use swarm_git::SwarmGit;

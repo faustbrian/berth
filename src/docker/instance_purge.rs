@@ -79,13 +79,18 @@ pub(crate) fn purge_instance_objects(project: &str, instance: &str) -> Result<()
             record(
                 &mut failures,
                 &["network", "disconnect", "--force", &network, &server],
-                &["is not connected", "not found", "no such"],
+                &[
+                    "is not connected",
+                    "not found",
+                    "no such container",
+                    "no such network",
+                ],
             );
         }
         record(
             &mut failures,
             &["network", "rm", &network],
-            &["not found", "no such"],
+            &["not found", "no such network"],
         );
     }
 

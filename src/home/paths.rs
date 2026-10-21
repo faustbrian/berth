@@ -40,6 +40,9 @@ pub(crate) fn remove_instance_state(project: &str, instance: &str) -> Result<()>
     for lock in [
         format!("instance_{project}_{instance}.lock"),
         format!("lease_{project}_{instance}.lock"),
+        format!("tenants_{project}_{instance}.lock"),
+        format!("seed_{project}_{instance}.lock"),
+        format!("aliases_{project}_{instance}.lock"),
     ] {
         let path = home_path(&Path::new("locks").join(lock))?;
         match std::fs::remove_file(&path) {
@@ -60,6 +63,79 @@ pub(crate) fn remove_instance_state(project: &str, instance: &str) -> Result<()>
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error).with_context(|| format!("failed to inspect {}", dir.display())),
     }
+}
+
+/// Creates (if needed) and returns `~/.berth/instances/{project}/{instance}`.
+/// Creating it also starts the instance's empty record of the shared
+/// servers it has tenants on (`shared/tenant_record.rs`): a new instance
+/// has none yet. A directory that already exists without one (made before
+/// berth 10.3.0) gets no record, so its purge visits every server.
+///
+/// # Errors
+///
+/// Returns an error when the directory or the record cannot be made.
+pub(crate) fn instance_dir(project: &str, instance: &str) -> Result<PathBuf> {
+    let parent = private_dir(&Path::new("instances").join(project))?;
+    let dir = parent.join(instance);
+    if std::fs::symlink_metadata(&dir).is_err() {
+        // Made whole elsewhere and renamed into place, so no other run sees
+        // the directory before its record (and skips making one).
+        let staging = private_dir(Path::new("instance-staging"))?;
+        sweep_staging(&staging)?;
+        let staged = staging.join(format!("{project}_{instance}_{}", std::process::id()));
+        match std::fs::remove_dir_all(&staged) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("failed to delete {}", staged.display()));
+            }
+        }
+        std::fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&staged)
+            .with_context(|| format!("failed to create {}", staged.display()))?;
+        let made = std::fs::write(staged.join("shared-servers"), "")
+            .with_context(|| format!("failed to start the tenant record in {}", staged.display()))
+            .and_then(|()| {
+                std::fs::rename(&staged, &dir)
+                    .with_context(|| format!("failed to create {}", dir.display()))
+            });
+        if made.is_err() {
+            drop(std::fs::remove_dir_all(&staged));
+        }
+        // Another run may have put its own in place meanwhile.
+        if let Err(error) = made
+            && std::fs::symlink_metadata(&dir).is_err()
+        {
+            return Err(error);
+        }
+    }
+    ensure_private_component(&dir)?;
+    Ok(dir)
+}
+
+/// Removes what runs that died while making an instance directory left in
+/// `staging` (`{project}_{instance}_{pid}` of a process that is gone).
+fn sweep_staging(staging: &Path) -> Result<()> {
+    let entries = std::fs::read_dir(staging)
+        .with_context(|| format!("failed to read {}", staging.display()))?;
+    for entry in entries {
+        let path = entry
+            .with_context(|| format!("failed to read {}", staging.display()))?
+            .path();
+        let pid = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .and_then(|name| name.rsplit_once('_'))
+            .and_then(|(_, pid)| pid.parse::<u32>().ok())
+            .filter(|pid| *pid != 0)
+            .and_then(|pid| i32::try_from(pid).ok());
+        if pid.is_some_and(|pid| !super::process_alive(pid)) {
+            drop(std::fs::remove_dir_all(&path));
+        }
+    }
+    Ok(())
 }
 
 /// Creates (if needed) and returns a user-private directory below the berth

@@ -162,10 +162,7 @@ mod tests {
         let path = crate::test_support::temp_root().join(format!(
             "berth-lock-cmd-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         std::fs::remove_dir_all(&path).ok();
         std::fs::create_dir_all(&path).expect("create project root");
@@ -188,10 +185,7 @@ mod tests {
     {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-lock-cmd-docker-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         // A clock tick is coarse: two parallel tests could share a name and
         // remove each other's fake binary.

@@ -2,10 +2,7 @@ use super::*;
 
 #[test]
 fn load_config_with_parses_swarm_injected_env_rules() {
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("clock should be after unix epoch")
-        .as_nanos();
+    let nonce = crate::test_support::unique_stamp();
     let root = crate::test_support::temp_root().join(format!("berth-config-swarm-inject-{nonce}"));
     std::fs::create_dir_all(&root).expect("create temp config directory");
 
@@ -44,10 +41,7 @@ fn load_config_with_parses_swarm_injected_env_rules() {
 
 #[test]
 fn load_config_with_rejects_unknown_swarm_inject_token() {
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("clock should be after unix epoch")
-        .as_nanos();
+    let nonce = crate::test_support::unique_stamp();
     let root =
         crate::test_support::temp_root().join(format!("berth-config-swarm-inject-token-{nonce}"));
     std::fs::create_dir_all(&root).expect("create temp config directory");

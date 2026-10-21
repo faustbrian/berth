@@ -50,6 +50,19 @@ fn alive(pid: i32) -> bool {
     }
 }
 
+/// A stamp unique within this test process, for fixture names: the clock
+/// alone is too coarse (microseconds on macOS), so tests running in
+/// parallel could share a name and remove each other's fixtures.
+pub(crate) fn unique_stamp() -> String {
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or_default();
+    let count = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    format!("{nanos}-{count}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::{alive, temp_root};

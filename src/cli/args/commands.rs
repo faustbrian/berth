@@ -62,7 +62,7 @@ pub(crate) enum Commands {
     Start(StartArgs),
     /// Create or converge this checkout's instance (`--wait --json` for agents)
     Up(UpArgs),
-    /// Converge services and apply configured data seeds
+    /// Converge services and apply configured data seeds (to databases that hold nothing of their own yet)
     Apply(ApplyArgs),
     /// Pull latest images and restart selected services
     Update(UpdateArgs),

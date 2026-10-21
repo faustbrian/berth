@@ -40,7 +40,6 @@ mod tests {
     use crate::{config::Driver, config::Kind, config::ServiceConfig, docker};
     use std::fs;
     use std::io::Write;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::check_php_extensions;
 
@@ -106,10 +105,7 @@ mod tests {
     fn check_php_extensions_returns_error_when_module_inspection_fails() {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-php-extensions-fail-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&bin_dir).expect("temp dir");
         let binary = bin_dir.join("docker");

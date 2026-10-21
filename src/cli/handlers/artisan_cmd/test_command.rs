@@ -84,15 +84,11 @@ mod tests {
     use super::{build_artisan_test_command, should_bootstrap_playwright};
     use std::collections::HashMap;
     use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_root(name: &str) -> PathBuf {
         let root = crate::test_support::temp_root().join(format!(
             "berth-artisan-test-command-{name}-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         std::fs::create_dir_all(&root).expect("create temp root");
         root

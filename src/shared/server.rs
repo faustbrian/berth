@@ -305,8 +305,15 @@ fn image_pgdata(image: &str, installation: &str) -> Result<String> {
     ];
     let output =
         crate::docker::run_docker_output_owned(&args, "failed to read the image's PGDATA")?;
+    // A failed run is the engine's failure, not the image's answer.
+    if !output.status.success() {
+        anyhow::bail!(
+            "failed to start image {image} to read its PGDATA: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
     let path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-    if !output.status.success() || !path.starts_with('/') {
+    if !path.starts_with('/') {
         anyhow::bail!(
             "image {image} does not declare PGDATA, so berth cannot keep a shared server's \
              data; use `isolation: dedicated`"

@@ -35,7 +35,6 @@ mod tests {
     use super::check_runtime_availability;
     use std::fs;
     use std::io::Write;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn with_fake_runtime<F, T>(script_template: &str, test: F) -> T
     where
@@ -43,10 +42,7 @@ mod tests {
     {
         let root = crate::test_support::temp_root().join(format!(
             "berth-doctor-runtime-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&root).expect("create temp root");
         let log_path = root.join("runtime.log");

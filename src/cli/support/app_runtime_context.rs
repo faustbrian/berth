@@ -82,7 +82,6 @@ mod tests {
     use crate::config::{Config, Driver, Kind, ServiceConfig};
     use std::fs;
     use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn app_service() -> ServiceConfig {
         ServiceConfig {
@@ -146,10 +145,7 @@ mod tests {
         let cfg = config();
         let workspace_root = crate::test_support::temp_root().join(format!(
             "berth-workspace-root-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&workspace_root).expect("create workspace root");
         crate::config::project_file::write_test_config_file(
@@ -177,10 +173,7 @@ mod tests {
     fn resolve_app_runtime_context_uses_config_path() -> anyhow::Result<()> {
         let dir = crate::test_support::temp_root().join(format!(
             "berth-app-runtime-context-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(&dir).expect("create temp workspace");
@@ -213,10 +206,7 @@ mod tests {
     -> anyhow::Result<()> {
         let workspace_root = crate::test_support::temp_root().join(format!(
             "berth-app-runtime-context-injected-env-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         let location_root = workspace_root.join("location");
         fs::create_dir_all(&location_root).expect("create dependency workspace");

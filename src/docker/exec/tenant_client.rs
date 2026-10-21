@@ -8,9 +8,11 @@ use crate::config::{Driver, ServiceConfig};
 /// Which of the tenant's programs the throwaway container runs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum TenantProgram {
-    /// The interactive or piped client (`psql`, `mysql`/`mariadb`,
-    /// `redis-cli`); `restore` streams a dump into it.
+    /// The interactive client (`psql`, `mysql`/`mariadb`, `redis-cli`).
     Client,
+    /// The client `restore` streams a dump into: `psql -f -` names each
+    /// error's line, which the restore reads (psql exits 0 whatever failed).
+    Piped,
     /// The dump program (`pg_dump`, `mysqldump`/`mariadb-dump`).
     Dump,
 }
@@ -49,14 +51,27 @@ pub(super) fn tenant_client_run_args(
         .ok_or_else(|| anyhow::anyhow!("service '{}' has no tenant password", service.name))?;
     let host = service.name.as_str();
     let port = service.default_port().to_string();
+    let piped = matches!(program, TenantProgram::Piped);
     let (program, password_env, client_args): (&str, &str, Vec<String>) = match service.driver {
         Driver::Postgres => (
             match program {
-                TenantProgram::Client => "psql",
+                TenantProgram::Client | TenantProgram::Piped => "psql",
                 TenantProgram::Dump => "pg_dump",
             },
             "PGPASSWORD",
-            vec![
+            match program {
+                // Every instance's tenant is a role of its own: a dump that
+                // names its owner or grants fails to restore into another.
+                TenantProgram::Dump => vec!["--no-owner".to_owned(), "--no-privileges".to_owned()],
+                // As the dedicated restore client (`args.rs`).
+                TenantProgram::Piped => super::psql_restore::psql_restore_args()
+                    .into_iter()
+                    .skip(1)
+                    .collect(),
+                TenantProgram::Client => Vec::new(),
+            }
+            .into_iter()
+            .chain([
                 "-h".to_owned(),
                 host.to_owned(),
                 "-p".to_owned(),
@@ -64,13 +79,16 @@ pub(super) fn tenant_client_run_args(
                 "-U".to_owned(),
                 username.to_owned(),
                 database(service)?.to_owned(),
-            ],
+            ])
+            .collect(),
         ),
         Driver::Mysql => (
             crate::docker::mysql_program(
                 &service.image,
                 match program {
-                    TenantProgram::Client => crate::docker::MysqlProgram::Client,
+                    TenantProgram::Client | TenantProgram::Piped => {
+                        crate::docker::MysqlProgram::Client
+                    }
                     TenantProgram::Dump => crate::docker::MysqlProgram::Dump,
                 },
             ),
@@ -97,6 +115,9 @@ pub(super) fn tenant_client_run_args(
             // `--no-tablespaces`: dumping tablespaces needs the global
             // PROCESS privilege, which a tenant does not have.
             .chain((program == TenantProgram::Dump).then(|| "--no-tablespaces".to_owned()))
+            // A restore reads berth's own rows after the dump, without
+            // column names (as the dedicated client, `args.rs`).
+            .chain((program == TenantProgram::Piped).then(|| "--skip-column-names".to_owned()))
             .chain([database(service)?.to_owned()])
             .collect(),
         ),
@@ -133,6 +154,21 @@ pub(super) fn tenant_client_run_args(
         "no-new-privileges".to_owned(),
         "-e".to_owned(),
         format!("{password_env}={password}"),
+    ]);
+    // A restore reads psql's own errors (`psql:<stdin>:3: error: …`), which
+    // follow the client's locale; the server's are English for the tenant
+    // role (`lc_messages`, set when it is provisioned). The session starts
+    // with standard strings, whatever the tenant set for its role or
+    // database, as the dedicated client's does (`piped_client_env`).
+    if program == "psql" && piped {
+        args.extend([
+            "-e".to_owned(),
+            "LC_ALL=C".to_owned(),
+            "-e".to_owned(),
+            "PGOPTIONS=-c standard_conforming_strings=on".to_owned(),
+        ]);
+    }
+    args.extend([
         "--entrypoint".to_owned(),
         program.to_owned(),
         service.image.clone(),

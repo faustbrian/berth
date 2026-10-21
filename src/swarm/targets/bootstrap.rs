@@ -123,9 +123,7 @@ mod tests {
 
     #[test]
     fn bootstrap_swarm_targets_clones_missing_roots_with_git_config() -> Result<()> {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos();
+        let nonce = crate::test_support::unique_stamp();
         let base = crate::test_support::temp_root().join(format!("berth-swarm-bootstrap-{nonce}"));
         let source = base.join("source");
         let workspace = base.join("workspace");

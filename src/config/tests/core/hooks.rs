@@ -2,10 +2,7 @@ use super::*;
 
 #[test]
 fn load_config_with_parses_service_hooks() {
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("clock should be after unix epoch")
-        .as_nanos();
+    let nonce = crate::test_support::unique_stamp();
     let root = crate::test_support::temp_root().join(format!("berth-config-hooks-{nonce}"));
     std::fs::create_dir_all(&root).expect("create temp config directory");
 

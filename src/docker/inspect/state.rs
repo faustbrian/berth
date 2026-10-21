@@ -33,11 +33,7 @@ pub(crate) fn container_state(container_name: &str) -> ContainerState {
             ContainerState::NotRunning(status)
         };
     }
-    // Docker says "No such object", Podman "no such container".
-    if String::from_utf8_lossy(&output.stderr)
-        .to_ascii_lowercase()
-        .contains("no such")
-    {
+    if crate::docker::reports_missing_container(&String::from_utf8_lossy(&output.stderr)) {
         ContainerState::Missing
     } else {
         ContainerState::Unknown
@@ -88,6 +84,20 @@ mod tests {
             ),
             ContainerState::Unknown,
             "an engine that failed to answer says nothing about the container"
+        );
+        assert_eq!(
+            with_docker(
+                "echo 'failed to connect to the docker API at unix:///x/docker.sock: dial unix /x/docker.sock: connect: no such file or directory' >&2; exit 1",
+                || container_state("app")
+            ),
+            ContainerState::Unknown,
+            "a stopped engine's missing socket is no missing container"
+        );
+        assert_eq!(
+            with_docker("echo 'Error: no such container app' >&2; exit 125", || {
+                container_state("app")
+            }),
+            ContainerState::Missing
         );
     }
 }

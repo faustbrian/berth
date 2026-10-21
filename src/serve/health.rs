@@ -179,7 +179,6 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn make_target(driver: Driver) -> ServiceConfig {
         ServiceConfig {
@@ -245,10 +244,7 @@ mod tests {
     {
         let bin_dir = PathBuf::from("/tmp").join(format!(
             "berth-serve-health-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&bin_dir).expect("temp dir");
         let curl = bin_dir.join("curl");
@@ -278,10 +274,7 @@ mod tests {
     {
         let bin_dir = PathBuf::from("/tmp").join(format!(
             "berth-serve-health-script-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&bin_dir).expect("temp dir");
         let curl = bin_dir.join("curl");

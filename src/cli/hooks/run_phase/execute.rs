@@ -41,7 +41,6 @@ pub(super) const fn hook_phase_label(phase: HookPhase) -> &'static str {
 mod tests {
     use std::io::Write;
     use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::config::{
         Driver, HookOnError, HookPhase, HookRun, Kind, ServiceConfig, ServiceHook,
@@ -166,10 +165,7 @@ mod tests {
     fn execute_hook_runs_script() {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-hook-script-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         std::fs::create_dir_all(&bin_dir).expect("fake script dir");
         let script = bin_dir.join("hook.sh");

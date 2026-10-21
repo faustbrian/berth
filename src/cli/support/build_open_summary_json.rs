@@ -29,7 +29,6 @@ mod tests {
     use serde_json::Value;
     use std::fs;
     use std::io::Write;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn make_target() -> ServiceConfig {
         ServiceConfig {
@@ -83,10 +82,7 @@ mod tests {
     {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-summary-json-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&bin_dir).expect("temp dir");
         let curl = bin_dir.join("curl");

@@ -40,6 +40,7 @@ pub(super) fn build_run_args(
     }
 
     args.extend(crate::network::network_run_args(service, true));
+    args.extend(crate::docker::resource_limit_args(service));
     append_run_options(&mut args, service, container_name);
     append_host_gateway_mapping(&mut args, service);
     append_labels(&mut args, service, container_name)?;

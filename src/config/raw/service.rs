@@ -110,4 +110,12 @@ pub(crate) struct RawServiceConfig {
     /// the instance's own). Defaults to `shared` where berth supports it.
     #[serde(default)]
     pub isolation: Option<super::super::Isolation>,
+    /// The most CPUs the service's container may use (`2`, `0.5`):
+    /// `--cpus`.
+    #[serde(default)]
+    pub cpus: Option<f64>,
+    /// The most memory the service's container may use (`512m`, `2g`):
+    /// `--memory`, with no swap beyond it.
+    #[serde(default)]
+    pub memory: Option<String>,
 }

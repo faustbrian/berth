@@ -121,8 +121,6 @@ pub fn prune_stopped_container(service: &ServiceConfig) -> Result<()> {
 mod tests {
     use std::fs;
     use std::io::Write;
-    use std::time::SystemTime;
-    use std::time::UNIX_EPOCH;
 
     use crate::config::{Driver, Kind, ServiceConfig};
     use crate::docker;
@@ -178,13 +176,8 @@ mod tests {
     where
         F: FnOnce() -> T,
     {
-        let bin_dir = crate::test_support::temp_root().join(format!(
-            "berth-ops-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ));
+        let bin_dir = crate::test_support::temp_root()
+            .join(format!("berth-ops-{}", crate::test_support::unique_stamp()));
         // A clock tick is coarse: two parallel tests could share a name and
         // remove each other's fake binary.
         let bin_dir = docker::unique_test_path(bin_dir);
@@ -340,5 +333,35 @@ mod tests {
         docker::with_dry_run_lock(|| {
             super::prune_stopped_container(&db).expect("prune stopped");
         });
+    }
+
+    #[test]
+    fn prune_reports_a_missing_container_but_fails_when_the_engine_does_not_answer() {
+        let db = service("db", Kind::Database, Driver::Postgres);
+        with_fake_docker("echo 'Error: No such object: db' >&2; exit 1", || {
+            super::prune_stopped_container(&db).expect("a missing container is skipped")
+        });
+        let error = with_fake_docker(
+            "echo 'Cannot connect to the Docker daemon' >&2; exit 1",
+            || super::prune_stopped_container(&db).expect_err("an unanswered inspect fails"),
+        );
+        assert!(
+            format!("{error:#}").contains("the container engine did not answer"),
+            "{error:#}"
+        );
+        // The state answers but the label inspect does not.
+        let error = with_fake_docker(
+            "case \"$*\" in *State.Status*) echo exited ;; *) echo 'Cannot connect to the Docker daemon' >&2; exit 1 ;; esac",
+            || super::prune_stopped_container(&db).expect_err("a failed label read fails"),
+        );
+        assert!(
+            format!("{error:#}").contains("could not read the labels"),
+            "{error:#}"
+        );
+        // A stopped engine: its socket is the missing thing, not the container.
+        with_fake_docker(
+            "echo 'dial unix /x/docker.sock: connect: no such file or directory' >&2; exit 1",
+            || super::prune_stopped_container(&db).expect_err("a stopped engine fails"),
+        );
     }
 }

@@ -6,8 +6,8 @@ use anyhow::Result;
 
 use crate::config::ServiceConfig;
 use crate::docker::{
-    LABEL_INSTALLATION, LABEL_MANAGED, VALUE_MANAGED_TRUE, inspect_label, inspect_status,
-    is_dry_run, print_docker_command,
+    LABEL_INSTALLATION, LABEL_MANAGED, VALUE_MANAGED_TRUE, inspect_label, is_dry_run,
+    print_docker_command,
 };
 use crate::output::{self, LogLevel, Persistence};
 
@@ -67,24 +67,46 @@ pub(super) fn prune_stopped_container(service: &ServiceConfig) -> Result<()> {
         return Ok(());
     }
 
-    let Some(status) = inspect_status(&container_name) else {
-        output::event(
-            &service.name,
-            LogLevel::Info,
-            &format!("Skipped pruning container {container_name} because it was not found"),
-            Persistence::Persistent,
-        );
-        return Ok(());
+    let status = match crate::docker::inspect::container_state(&container_name) {
+        crate::docker::inspect::ContainerState::Running => "running".to_owned(),
+        crate::docker::inspect::ContainerState::NotRunning(status) => status,
+        crate::docker::inspect::ContainerState::Missing => {
+            output::event(
+                &service.name,
+                LogLevel::Info,
+                &format!("Skipped pruning container {container_name} because it was not found"),
+                Persistence::Persistent,
+            );
+            return Ok(());
+        }
+        // A failed `inspect` says nothing about the container: pruning must
+        // not report it gone while it may still run.
+        crate::docker::inspect::ContainerState::Unknown => anyhow::bail!(
+            "could not inspect container {container_name}: the container engine did not answer, \
+             so nothing was pruned; prune again once it answers ({})",
+            crate::followup::doctor()
+        ),
     };
 
     let Some(managed_label) = inspect_label(&container_name, LABEL_MANAGED) else {
-        output::event(
-            &service.name,
-            LogLevel::Info,
-            &format!("Skipped pruning container {container_name} because labels are unavailable"),
-            Persistence::Persistent,
+        // The inspect failed: gone since (skip), or the engine stopped
+        // answering, which must not pass as a skip.
+        if crate::docker::inspect::container_state(&container_name)
+            == crate::docker::inspect::ContainerState::Missing
+        {
+            output::event(
+                &service.name,
+                LogLevel::Info,
+                &format!("Skipped pruning container {container_name} because it was not found"),
+                Persistence::Persistent,
+            );
+            return Ok(());
+        }
+        anyhow::bail!(
+            "could not read the labels of container {container_name}: the container engine did \
+             not answer, so nothing was pruned; prune again once it answers ({})",
+            crate::followup::doctor()
         );
-        return Ok(());
     };
     if !is_berth_managed_label(&managed_label) {
         output::event(

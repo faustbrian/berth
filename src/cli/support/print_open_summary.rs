@@ -54,7 +54,6 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn make_target() -> ServiceConfig {
         ServiceConfig {
@@ -108,10 +107,7 @@ mod tests {
     {
         let marker_dir = crate::test_support::temp_root().join(format!(
             "berth-print-open-summary-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&marker_dir).expect("create marker dir");
         let marker = marker_dir.join("invoked");

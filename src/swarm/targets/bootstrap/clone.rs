@@ -71,5 +71,12 @@ fn build_clone_command(git: &crate::config::SwarmGit) -> Command {
         .stdin(Stdio::null())
         .stdout(output::child_stdout())
         .stderr(Stdio::inherit());
+    // Unit tests clone fixture repositories: the developer's global git
+    // configuration (such as a `core.hooksPath` with a Git LFS hook) must not
+    // decide whether they pass.
+    #[cfg(test)]
+    command
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1");
     command
 }

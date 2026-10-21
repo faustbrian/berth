@@ -655,16 +655,10 @@ mod tests {
     use crate::javascript::{JavaScriptRuntime, detect_node_package_manager};
     use std::fs;
     use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_root(prefix: &str) -> PathBuf {
-        let root = crate::test_support::temp_root().join(format!(
-            "{prefix}-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ));
+        let root = crate::test_support::temp_root()
+            .join(format!("{prefix}-{}", crate::test_support::unique_stamp()));
         drop(fs::remove_dir_all(&root));
         fs::create_dir_all(&root).expect("create temp root");
         root

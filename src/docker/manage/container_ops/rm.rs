@@ -8,7 +8,7 @@ use crate::config::ServiceConfig;
 use crate::output::{self, LogLevel, Persistence};
 
 use super::super::super::{inspect_status, is_dry_run, print_docker_command};
-use super::docker_cmd::{docker_output, try_docker_output};
+use super::docker_cmd::{docker_output, engine_failure, reports_missing, try_docker_output};
 
 /// Rms rm as part of the docker manage container ops rm workflow.
 pub(super) fn rm(service: &ServiceConfig, force: bool) -> Result<()> {
@@ -29,9 +29,8 @@ pub(super) fn rm(service: &ServiceConfig, force: bool) -> Result<()> {
         && status == "running"
     {
         anyhow::bail!(
-            "Container '{}' is still running. Stop it first with 'berth stop --service {}' or use --force",
-            container_name,
-            service.name
+            "container {container_name} is still running; stop it first with {}, or pass `--force`",
+            crate::followup::for_service(service, &format!("stop --service {}", service.name))
         );
     }
 
@@ -47,13 +46,15 @@ pub(super) fn rm(service: &ServiceConfig, force: bool) -> Result<()> {
             &format!("Removed container {container_name}"),
             Persistence::Persistent,
         );
-    } else {
+    } else if reports_missing(&output) {
         output::event(
             &service.name,
             LogLevel::Info,
             &format!("Skipped removing container {container_name} because it does not exist"),
             Persistence::Persistent,
         );
+    } else {
+        return Err(engine_failure("remove", &container_name, &output));
     }
 
     Ok(())

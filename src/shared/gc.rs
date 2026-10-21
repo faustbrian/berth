@@ -166,16 +166,29 @@ fn tenants(target: &SharedTarget) -> Result<Vec<String>> {
     Ok(names)
 }
 
+/// Whether an engine's error says what it was asked to remove is gone.
+type Gone = fn(&str) -> bool;
+
 fn remove(target: &SharedTarget) -> Result<()> {
-    for args in [
-        vec!["rm", "-f", "-v", target.server.as_str()],
-        vec!["volume", "rm", &format!("{}-data", target.server)],
-    ] {
+    // Only the engine saying the server or volume is gone counts as gone: a
+    // stopped engine ("dial unix …: no such file or directory") must not
+    // lead to deleting the admin secret of a server that still exists.
+    let volume = format!("{}-data", target.server);
+    let steps: [(Vec<&str>, Gone); 2] = [
+        (
+            vec!["rm", "-f", "-v", target.server.as_str()],
+            crate::docker::reports_missing_container,
+        ),
+        (vec!["volume", "rm", volume.as_str()], |stderr| {
+            stderr.to_ascii_lowercase().contains("no such volume")
+        }),
+    ];
+    for (args, gone) in steps {
         let args: Vec<String> = args.into_iter().map(ToOwned::to_owned).collect();
         let output =
             crate::docker::run_docker_output_owned(&args, "failed to remove a shared server")?;
-        let stderr = String::from_utf8_lossy(&output.stderr).to_ascii_lowercase();
-        if !output.status.success() && !stderr.contains("no such") {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !output.status.success() && !gone(&stderr) {
             anyhow::bail!("docker {}: {}", args.join(" "), stderr.trim());
         }
     }

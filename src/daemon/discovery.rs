@@ -122,15 +122,11 @@ mod tests {
     use super::{DiscoveryOptions, discover_projects};
     use std::fs;
     use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_root(name: &str) -> PathBuf {
         let root = crate::test_support::temp_root().join(format!(
             "berth-daemon-discovery-{name}-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         drop(fs::remove_dir_all(&root));
         fs::create_dir_all(&root).expect("create temp root");
@@ -205,9 +201,9 @@ mod tests {
         let root = temp_root("invalid");
         let invalid = root.join("invalid");
         fs::create_dir_all(&invalid).expect("create invalid dir");
-        crate::config::project_file::write_test_config_file(
+        fs::write(
             invalid.join(".berth.yaml"),
-            "schema_version = 1\nservice = []\n",
+            "schema_version: 9\nproject: bad\nservices:\n  db:\n    preset: no-such-preset\n",
         )
         .expect("write invalid config");
 

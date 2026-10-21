@@ -49,7 +49,6 @@ mod tests {
     use crate::config::{Driver, Kind, LockedImage, ProjectRootPathOptions, ServiceConfig};
     use std::fs;
     use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn config_with_service(name: &str, image: &str) -> crate::config::Config {
         crate::config::Config {
@@ -107,10 +106,7 @@ mod tests {
     fn temp_root() -> std::path::PathBuf {
         let root = crate::test_support::temp_root().join(format!(
             "berth-repro-tests-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         drop(fs::remove_dir_all(&root));
         fs::create_dir_all(&root).expect("create temp root");

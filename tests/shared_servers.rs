@@ -58,6 +58,9 @@ case "$1 $2" in
       prev="$arg"
     done
     set -- $rest; net="$1"; ctr="$2"
+    # `connect-hold`: the reconnect of an alias change waits (between its
+    # disconnect and connect) until the file goes.
+    [ -f "$S/connect-hold" ] && { : > "$S/connect-waiting"; while [ -f "$S/connect-hold" ]; do sleep 0.05; done; }
     [ -f "$S/att/$ctr/$net" ] && { echo "Error: endpoint with name $ctr already exists in network $net" >&2; exit 1; }
     mkdir -p "$S/att/$ctr"; : > "$S/att/$ctr/$net"
     for a in $aliases; do echo "$a" >> "$S/att/$ctr/$net"; done
@@ -71,15 +74,26 @@ case "$1 $2" in
 esac
 case "$1" in
   run)
-    case "$*" in *"--entrypoint printenv"*) echo /var/lib/postgresql/data; exit 0 ;; esac
+    case "$*" in *"--entrypoint printenv"*)
+      [ -n "$FAKE_PROBE_FAIL" ] && { echo "docker: Error response from daemon: NotFound: parent snapshot does not exist" >&2; exit 125; }
+      echo /var/lib/postgresql/data; exit 0 ;; esac
     case "$*" in *"--entrypoint sh"*) cat > "$S/acl-seed"; exit 0 ;; esac
     # A throwaway client: records its stdin and whether a password reached
     # its environment, then exits as asked.
     case "$*" in *" --rm "*)
       cat > "$S/client-stdin"
+      # FAKE_TENANT_LOGIN_FAILS: the tenant's own login is refused.
+      [ -n "$FAKE_TENANT_LOGIN_FAILS" ] && { echo 'psql: error: connection to server at "db" (172.18.0.2), port 5432 failed: FATAL:  password authentication failed for user "tenant"' >&2; exit 2; }
       for var in PGPASSWORD MYSQL_PWD REDISCLI_AUTH; do
         eval "value=\${$var:-}"; [ -n "$value" ] && echo "$var" >> "$S/client-env"
       done
+      # A dump prints FAKE_DUMP_OUT before it exits as asked; a restore's
+      # psql prints berth's markers (`docker/exec/psql_restore.rs`).
+      [ -n "$FAKE_DUMP_OUT" ] && printf '%s' "$FAKE_DUMP_OUT"
+      # FAKE_SWITCHED: the dump ran on into another connection (`\\c`).
+      # A client echoes berth's token after the dump (and MySQL's database).
+      tok=$(grep -v '^[[:space:]]*$' "$S/client-stdin" | tail -n 2 | sed -n 's/.*berth-dump-end \([0-9a-f][0-9a-f]*\).*/\1/p' | tail -n 1); [ -n "$tok" ] && echo "berth-dump-end $tok"; grep -q 'berth-db' "$S/client-stdin" && { for a in "$@"; do db="$a"; done; echo "berth-db $db"; }
+      case "$*" in *berth-backend-end*) [ -z "$FAKE_OLD_SERVER" ] && printf ' berth-backend-start 7\n'; [ "$FAKE_OLD_SERVER" = 9 ] && echo 'psql:<stdin>:1: ERROR:  function pg_catalog.txid_current_if_assigned() does not exist' >&2; printf ' berth-backend-end %s true\nberth-rollback on\n' "${FAKE_SWITCHED:-7}" ;; esac
       exit "${FAKE_CLIENT_EXIT:-0}" ;;
     esac
     name=""; prev=""; : > "$S/labels"
@@ -94,7 +108,12 @@ case "$1" in
     [ -n "$net" ] && { mkdir -p "$S/att/$name"; : > "$S/att/$name/$net"; }
     [ -n "$POSTGRES_PASSWORD" ] && echo "set" > "$S/run-env-$name"
     exit 0 ;;
-  rm|stop|start|kill|pause|unpause) [ "$1" = rm ] && for arg in "$@"; do rm -f "$S/c/$arg"; rm -rf "$S/att/$arg"; done; exit 0 ;;
+  rm|stop|start|kill|pause|unpause)
+    # FAKE_RM_DIAL: the engine went away (its socket is gone).
+    [ "$1" = rm ] && [ -n "$FAKE_RM_DIAL" ] && { echo 'failed to connect to the docker API at unix:///x/docker.sock: dial unix /x/docker.sock: connect: no such file or directory' >&2; exit 1; }
+    [ "$1" = rm ] && for arg in "$@"; do rm -f "$S/c/$arg"; rm -rf "$S/att/$arg"; done
+    [ "$1" = start ] && for arg in "$@"; do rm -f "$S/stopped-$arg"; done
+    exit 0 ;;
   ps)
     case "$*" in
       *network=*"label=dev.berth.managed=true"*)
@@ -112,6 +131,26 @@ case "$1" in
   exec)
     case "$*" in *"'php' 'artisan' 'test'"*) [ -n "$FAKE_TEST_SLEEP" ] && sleep "$FAKE_TEST_SLEEP"; exit 0 ;; esac
     cat > "$S/last-sql"; cat "$S/last-sql" >> "$S/sql"
+    tok=$(grep -v '^[[:space:]]*$' "$S/last-sql" | tail -n 2 | sed -n 's/.*berth-dump-end \([0-9a-f][0-9a-f]*\).*/\1/p' | tail -n 1); [ -n "$tok" ] && echo "berth-dump-end $tok"; grep -q 'berth-db' "$S/last-sql" && { for a in "$@"; do db="$a"; done; echo "berth-db $db"; }
+    case "$*" in *berth-backend-end*) [ -z "$FAKE_OLD_SERVER" ] && printf ' berth-backend-start 7\n'; [ "$FAKE_OLD_SERVER" = 9 ] && echo 'psql:<stdin>:1: ERROR:  function pg_catalog.txid_current_if_assigned() does not exist' >&2; printf ' berth-backend-end %s true\nberth-rollback on\n' "${FAKE_SWITCHED:-7}" ;; esac
+    # FAKE_CLIENT_FATAL: the database refuses the restore's client (a role
+    # that may not set the English messages it asks for).
+    # FAKE_CLIENT_NO_DB: the client's database (its last argument) is gone.
+    # FAKE_CLIENT_NO_DB=de: the server says so in German; its catalog,
+    # asked through the `postgres` database, says the same.
+    for a in "$@"; do db="$a"; done
+    # FAKE_NO_MAINTENANCE: the server's `postgres` database refuses too.
+    if [ -n "$FAKE_NO_MAINTENANCE" ] && [ "$db" = postgres ]; then
+      echo 'psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  database "postgres" does not exist' >&2; exit 2
+    fi
+    if [ -n "$FAKE_CLIENT_NO_DB" ] && [ "$db" = postgres ] && grep -q pg_database "$S/last-sql"; then
+      printf '   ?column?\n---------------\n berth: absent\n(1 row)\n\n'; exit 0
+    fi
+    if [ -n "$FAKE_CLIENT_NO_DB" ] && grep -qx 'SELECT 1;' "$S/last-sql"; then
+      [ "$FAKE_CLIENT_NO_DB" = de ] && { echo "psql: Fehler: Verbindung zum Server auf Socket »/var/run/postgresql/.s.PGSQL.5432« fehlgeschlagen: FATAL:  Datenbank »${db}« existiert nicht" >&2; exit 2; }
+      echo "psql: error: connection to server on socket \"/var/run/postgresql/.s.PGSQL.5432\" failed: FATAL:  database \"$db\" does not exist" >&2; exit 2
+    fi
+    [ -n "$FAKE_CLIENT_FATAL" ] && grep -qx 'SELECT 1;' "$S/last-sql" && { echo 'psql: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: FATAL:  permission denied to set parameter "lc_messages"' >&2; exit 2; }
     # FAKE_SERVER=exits stops the shared server on its first admin query,
     # FAKE_SERVER=badauth rejects the admin password, FAKE_SERVER=norole
     # answers with a permanent connection error.
@@ -153,6 +192,8 @@ case "$1" in
     exit 0 ;;
   inspect)
     name=""; for arg in "$@"; do name="$arg"; done
+    # `inspect-fails-<name>`: the engine does not answer for that container.
+    [ -f "$S/inspect-fails-$name" ] && { echo "Error response from daemon: context deadline exceeded" >&2; exit 1; }
     [ -f "$S/c/$name" ] || { echo "Error: No such object: $name" >&2; exit 1; }
     case "$*" in
       *NetworkSettings.Networks*)
@@ -685,6 +726,174 @@ fn dedicated_isolation_keeps_a_container_of_the_instance_own() {
 }
 
 #[test]
+fn a_dedicated_database_that_refuses_the_client_is_never_reset() {
+    let host = Host::new("dedicated-refuses");
+    let project = PROJECT.replace(
+        "    preset: postgres\n",
+        "    preset: postgres\n    isolation: dedicated\n    password: secret123\n",
+    );
+    let a = host.checkout("a", &project);
+    host.ok(&a, &["up", "--no-wait"]);
+    std::fs::write(a.join("dump.sql"), "CREATE TABLE users (id int);\n").expect("dump");
+    host.clear();
+    let restore = bounded_output(
+        host.command(
+            &a,
+            &[
+                "restore",
+                "--service",
+                "db",
+                "--reset",
+                "--file",
+                "dump.sql",
+            ],
+            "",
+            "",
+        )
+        .env("FAKE_CLIENT_FATAL", "1"),
+    );
+    let stderr = text(&restore.stderr);
+    assert!(!restore.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("refuses berth's database client, so nothing was changed")
+            && stderr.contains("permission denied to set parameter")
+            && stderr.contains("to be a superuser"),
+        "{stderr}"
+    );
+    // A dedicated reset runs as `psql -c` arguments: the call log has it.
+    let calls = format!("{}{}", host.calls(), host.sql());
+    assert!(!calls.contains("DROP DATABASE"), "{calls}");
+}
+
+#[test]
+fn a_reset_restore_recreates_a_dedicated_database_that_is_gone() {
+    let host = Host::new("dedicated-no-db");
+    let project = PROJECT.replace(
+        "    preset: postgres\n",
+        "    preset: postgres\n    isolation: dedicated\n    password: secret123\n",
+    );
+    let a = host.checkout("a", &project);
+    host.ok(&a, &["up", "--no-wait"]);
+    std::fs::write(a.join("dump.sql"), "CREATE TABLE users (id int);\n").expect("dump");
+    let restore = |args: &[&str]| {
+        host.clear();
+        bounded_output(host.command(&a, args, "", "").env("FAKE_CLIENT_NO_DB", "1"))
+    };
+    // Without `--reset` nothing would create it: refused as before.
+    let plain = restore(&["restore", "--service", "db", "--file", "dump.sql"]);
+    assert!(!plain.status.success(), "{}", text(&plain.stderr));
+    assert!(
+        text(&plain.stderr).contains("does not exist"),
+        "{}",
+        text(&plain.stderr)
+    );
+    // `--reset` creates it, so the missing database is no reason to refuse.
+    let reset = restore(&[
+        "restore",
+        "--service",
+        "db",
+        "--reset",
+        "--file",
+        "dump.sql",
+    ]);
+    assert!(reset.status.success(), "{}", text(&reset.stderr));
+    let calls = format!("{}{}", host.calls(), host.sql());
+    assert!(calls.contains("CREATE DATABASE"), "{calls}");
+    // A server answering in another language: its catalog says it is gone.
+    host.clear();
+    let german = bounded_output(
+        host.command(
+            &a,
+            &[
+                "restore",
+                "--service",
+                "db",
+                "--reset",
+                "--file",
+                "dump.sql",
+            ],
+            "",
+            "",
+        )
+        .env("FAKE_CLIENT_NO_DB", "de"),
+    );
+    assert!(german.status.success(), "{}", text(&german.stderr));
+}
+
+#[test]
+fn a_reset_into_a_missing_database_on_an_old_server_creates_nothing() {
+    // The service's database is gone, so the version is asked of the
+    // server's `postgres` database before the reset creates it.
+    let host = Host::new("dedicated-no-db-old");
+    let project = PROJECT.replace(
+        "    preset: postgres\n",
+        "    preset: postgres\n    isolation: dedicated\n    password: secret123\n",
+    );
+    let a = host.checkout("a", &project);
+    host.ok(&a, &["up", "--no-wait"]);
+    std::fs::write(a.join("dump.sql"), "CREATE TABLE users (id int);\n").expect("dump");
+    host.clear();
+    let reset = bounded_output(
+        host.command(
+            &a,
+            &[
+                "restore",
+                "--service",
+                "db",
+                "--reset",
+                "--file",
+                "dump.sql",
+            ],
+            "",
+            "",
+        )
+        .env("FAKE_CLIENT_NO_DB", "1")
+        .env("FAKE_OLD_SERVER", "1"),
+    );
+    assert!(!reset.status.success());
+    assert!(
+        text(&reset.stderr).contains("older than 10.7"),
+        "{}",
+        text(&reset.stderr)
+    );
+    let calls = format!("{}{}", host.calls(), host.sql());
+    assert!(
+        !calls.contains("CREATE DATABASE") && !calls.contains("DROP"),
+        "{calls}"
+    );
+    // Its `postgres` database cannot be asked either: refused all the same.
+    host.clear();
+    let unasked = bounded_output(
+        host.command(
+            &a,
+            &[
+                "restore",
+                "--service",
+                "db",
+                "--reset",
+                "--file",
+                "dump.sql",
+            ],
+            "",
+            "",
+        )
+        .env("FAKE_CLIENT_NO_DB", "1")
+        .env("FAKE_NO_MAINTENANCE", "1"),
+    );
+    assert!(!unasked.status.success());
+    assert!(
+        text(&unasked.stderr).contains("could not ask its `postgres` database"),
+        "{}",
+        text(&unasked.stderr)
+    );
+    let calls = format!("{}{}", host.calls(), host.sql());
+    assert!(
+        !calls.contains("CREATE DATABASE") && !calls.contains("DROP"),
+        "{calls}"
+    );
+}
+
+#[test]
 fn a_foreign_container_under_the_server_name_is_never_adopted() {
     let host = Host::new("foreign");
     let a = host.checkout("a", PROJECT);
@@ -1182,7 +1391,7 @@ fn a_redis_purge_deletes_the_instance_users_and_their_keys_only() {
     assert!(
         calls
             .lines()
-            .any(|line| line == format!("done sh 16 {mine}:")),
+            .any(|line| line.starts_with(&format!("done sh 16 {mine}:"))),
         "all 16 databases in one exec, for the tenant's prefix: {calls}"
     );
 }
@@ -1303,6 +1512,25 @@ fn gc_removes_a_shared_server_no_instance_uses_with_its_volume_and_secret() {
         "its admin secret is gone"
     );
     assert!(host.servers().is_empty());
+}
+
+#[test]
+fn gc_keeps_the_admin_secret_when_the_engine_cannot_remove_the_server() {
+    let host = Host::new("gc-dial");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    host.ok(&a, &["down", "--purge"]);
+    let output = host
+        .command(&host.base, &["gc", "--json"], "", "")
+        .env("FAKE_RM_DIAL", "1")
+        .output()
+        .expect("gc");
+    assert!(!output.status.success(), "{}", text(&output.stdout));
+    assert!(
+        host.base.join("home/shared").join(&server).exists(),
+        "a server the engine did not remove keeps its admin secret"
+    );
 }
 
 #[test]
@@ -1508,6 +1736,66 @@ fn reaping_in_passing_skips_a_shared_server_that_refuses_connections() {
 }
 
 #[test]
+fn a_reset_on_a_server_where_the_checks_cannot_hold_drops_nothing() {
+    // PostgreSQL before 10.7 (and 11.0, 11.1) lets a dump hide its errors:
+    // berth's start query returns no row there, and the check before the
+    // reset refuses it.
+    let host = Host::new("reset-old-server");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    std::fs::write(
+        a.join("dump.sql"),
+        "CREATE TABLE restored_marker (id int);\n",
+    )
+    .expect("dump");
+    host.clear();
+    let restore = bounded_output(
+        host.command(
+            &a,
+            &[
+                "restore",
+                "--service",
+                "db",
+                "--reset",
+                "--file",
+                "dump.sql",
+            ],
+            "",
+            "",
+        )
+        .env("FAKE_OLD_SERVER", "9"),
+    );
+    assert!(!restore.status.success());
+    // A 9.x server's end query errors too: the version is still named.
+    assert!(
+        text(&restore.stderr).contains("older than 10.7"),
+        "{}",
+        text(&restore.stderr)
+    );
+    assert!(!host.sql().contains("DROP"), "{}", host.sql());
+    // Without `--reset` too: the dump never runs.
+    host.clear();
+    let plain = bounded_output(
+        host.command(
+            &a,
+            &["restore", "--service", "db", "--file", "dump.sql"],
+            "",
+            "",
+        )
+        .env("FAKE_OLD_SERVER", "1"),
+    );
+    assert!(!plain.status.success());
+    assert!(
+        text(&plain.stderr).contains("older than 10.7"),
+        "{}",
+        text(&plain.stderr)
+    );
+    // The tenant's client is a throwaway container: its stdin is logged.
+    let stdin = std::fs::read_to_string(host.base.join("state/client-stdin")).unwrap_or_default();
+    assert!(!stdin.contains("restored_marker"), "{stdin}");
+}
+
+#[test]
 fn a_reset_restore_reprovisions_only_the_instance_tenant() {
     let host = Host::new("reset");
     let a = host.checkout("a", PROJECT);
@@ -1620,6 +1908,27 @@ fn restore_and_dump_of_a_shared_tenant_run_in_a_throwaway_client_for_every_sql_e
             run.contains(&format!("--entrypoint {client} ")) && run.contains(" -h db "),
             "{label}: the dump goes to the tenant's own client: {run}"
         );
+        // Its errors are judged by their English wording.
+        assert_eq!(
+            run.contains("-e LC_ALL=C "),
+            client == "psql",
+            "{label}: {run}"
+        );
+        // Each error comes with the statement that failed, and the session
+        // starts with standard strings whatever the tenant set for its role.
+        if client == "psql" {
+            assert!(
+                run.contains(" -X -b -v ON_ERROR_ROLLBACK=on -c ")
+                    && run.contains(" -f - -c ")
+                    && run.contains("berth-backend-end"),
+                "{run}"
+            );
+            assert!(
+                run.contains("-e PGOPTIONS=-c standard_conforming_strings=on "),
+                "{run}"
+            );
+        }
+
         assert!(
             !calls.lines().any(|line| line.starts_with("exec")
                 && line.contains(&server)
@@ -1647,7 +1956,10 @@ fn restore_and_dump_of_a_shared_tenant_run_in_a_throwaway_client_for_every_sql_e
             run.contains(&format!("--entrypoint {dump} ")) && run.contains(" -h db "),
             "{label}: the dump program runs in a throwaway container: {run}"
         );
-        if client != "psql" {
+        if client == "psql" {
+            // A dump naming its roles fails to restore into another tenant.
+            assert!(run.contains("--no-owner --no-privileges"), "{label}: {run}");
+        } else {
             assert!(run.contains("--no-tablespaces"), "{label}: {run}");
         }
         assert!(
@@ -2351,4 +2663,1219 @@ fn a_corrupt_mysql_admin_secret_says_to_delete_the_file_after_removing_the_serve
         "{stderr}"
     );
     assert!(!stderr.contains("openssl rand"), "{stderr}");
+}
+
+#[test]
+fn a_reset_restore_from_a_bad_dump_drops_nothing() {
+    let host = Host::new("reset-bad-file");
+    let checkout = host.checkout("a", PROJECT);
+    host.ok(&checkout, &["up", "--no-wait"]);
+    std::fs::write(checkout.join("empty.sql"), "").expect("empty dump");
+    std::fs::write(checkout.join("plain.sql.gz"), "select 1;").expect("not gzip");
+    std::fs::create_dir_all(checkout.join("backups")).expect("directory");
+    // `gzip < /dev/null`: valid gzip that decompresses to nothing.
+    let empty_gzip: [u8; 20] = [
+        31, 139, 8, 0, 0, 0, 0, 0, 0, 255, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    std::fs::write(checkout.join("nothing.sql.gz"), empty_gzip).expect("gzip of nothing");
+    // Gzip under a plain name, as `berth dump --gzip --file backup.sql` writes.
+    std::fs::write(checkout.join("backup.sql"), empty_gzip).expect("gzip, plain name");
+    // A pg_dump without its closing line: the transfer was cut short.
+    std::fs::write(
+        checkout.join("cut.sql"),
+        "--\n-- PostgreSQL database dump\n--\n\nCREATE TABLE users (id int);\n",
+    )
+    .expect("cut-short dump");
+    // Hypertable chunks live in TimescaleDB's own schemas: a tenant of a
+    // shared server cannot write them.
+    std::fs::write(
+        checkout.join("hyper.sql"),
+        "--\n-- PostgreSQL database dump\n--\n\nCREATE TABLE \
+         _timescaledb_internal._hyper_1_1_chunk (t timestamptz);\n\n--\n-- PostgreSQL \
+         database dump complete\n--\n",
+    )
+    .expect("hypertable dump");
+    let file = |name| vec!["restore", "--service", "db", "--reset", "--file", name];
+    // stdin is empty here, as when the command feeding it failed.
+    let cases = [
+        ("empty file", file("empty.sql"), "is empty (0 bytes)"),
+        ("missing file", file("missing.sql"), "no SQL dump at"),
+        ("directory", file("backups"), "is not a dump file"),
+        (
+            "plain file read as gzip",
+            file("plain.sql.gz"),
+            "is not gzip-compressed",
+        ),
+        (
+            "gzip of nothing",
+            file("nothing.sql.gz"),
+            "empty once decompressed",
+        ),
+        (
+            "gzip read as plain SQL",
+            file("backup.sql"),
+            "pass `--gzip`",
+        ),
+        (
+            "empty stdin",
+            vec!["restore", "--service", "db", "--reset"],
+            "is empty, so there is nothing to restore",
+        ),
+        (
+            "cut-short dump",
+            file("cut.sql"),
+            "is cut short: its dump tool's end-of-dump line is missing",
+        ),
+        (
+            "hypertables into a shared server",
+            file("hyper.sql"),
+            "set `isolation: dedicated` on the service",
+        ),
+    ];
+    for (case, args, reason) in cases {
+        host.clear();
+        let restore = host.berth(&checkout, &args);
+        assert!(
+            text(&restore.stderr).contains(reason),
+            "{case}: {}",
+            text(&restore.stderr)
+        );
+        assert!(
+            !restore.status.success(),
+            "{case}: {}",
+            text(&restore.stderr)
+        );
+        // `--reset` must not drop the data a bad dump was meant to replace.
+        assert!(
+            !host.sql().contains("DROP DATABASE"),
+            "{case}: {}",
+            host.sql()
+        );
+    }
+}
+
+#[test]
+fn a_dump_on_stdin_without_its_end_line_fails_the_restore() {
+    use std::io::Write;
+    let host = Host::new("stdin-cut");
+    let checkout = host.checkout("a", PROJECT);
+    host.ok(&checkout, &["up", "--no-wait"]);
+    let mut child = host
+        .command(&checkout, &["restore", "--service", "db"], "", "")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn");
+    child
+        .stdin
+        .take()
+        .expect("stdin")
+        .write_all(b"--\n-- PostgreSQL database dump\n--\n\nCREATE TABLE users (id int);\n")
+        .expect("write");
+    let restore = child.wait_with_output().expect("restore");
+    let stderr = text(&restore.stderr);
+    assert!(
+        !restore.status.success(),
+        "a cut-short stream never succeeds"
+    );
+    // Kept and checked in full first, as a `--file` dump: refused before
+    // anything is changed.
+    assert!(
+        stderr.contains("stdin is cut short") && stderr.contains("nothing was changed"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_dump_that_ran_on_another_connection_fails_the_restore() {
+    // psql's output reaches berth's markers whatever the service kind: a
+    // dump that switched connection, even quietly, never reports success.
+    for (label, project) in [
+        ("shared", PROJECT.to_owned()),
+        (
+            "dedicated",
+            PROJECT.replace(
+                "    preset: postgres\n",
+                "    preset: postgres\n    isolation: dedicated\n",
+            ),
+        ),
+    ] {
+        let host = Host::new(&format!("switched-{label}"));
+        let checkout = host.checkout("a", &project);
+        host.ok(&checkout, &["up", "--no-wait"]);
+        std::fs::write(checkout.join("dump.sql"), "CREATE TABLE users (id int);\n").expect("dump");
+        let restore = bounded_output(
+            host.command(
+                &checkout,
+                &["restore", "--service", "db", "--file", "dump.sql"],
+                "",
+                "",
+            )
+            .env("FAKE_SWITCHED", "8"),
+        );
+        assert!(!restore.status.success(), "{label}");
+        assert!(
+            text(&restore.stderr).contains("switched database connection"),
+            "{label}: {}",
+            text(&restore.stderr)
+        );
+    }
+}
+
+#[test]
+fn a_shared_backed_service_refuses_cpu_and_memory_caps() {
+    // A tenant has no container of its own to cap.
+    let host = Host::new("shared-limits");
+    let checkout = host.checkout(
+        "a",
+        &PROJECT.replace(
+            "    preset: postgres\n",
+            "    preset: postgres\n    cpus: 2\n",
+        ),
+    );
+    let up = bounded_output(&mut host.command(&checkout, &["up", "--no-wait"], "", ""));
+    assert!(!up.status.success());
+    let stderr = text(&up.stderr);
+    assert!(
+        stderr.contains("`cpus`") && stderr.contains("isolation: dedicated"),
+        "{stderr}"
+    );
+}
+
+/// The one instance directory of project `shop` under the berth home.
+fn instance_dir(host: &Host) -> PathBuf {
+    let mut dirs: Vec<_> = std::fs::read_dir(host.base.join("home/instances/shop"))
+        .expect("instances")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .collect();
+    assert_eq!(dirs.len(), 1, "{dirs:?}");
+    dirs.pop().expect("instance")
+}
+
+#[test]
+fn purging_an_instance_visits_only_the_shared_servers_it_has_tenants_on() {
+    // Another checkout's shared server is stopped; this checkout's services
+    // are all dedicated, so its purge never starts or locks that server.
+    let host = Host::new("purge-own-servers");
+    let shared = host.checkout("a", PROJECT);
+    host.ok(&shared, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    std::fs::write(
+        host.base.join("state").join(format!("stopped-{server}")),
+        b"",
+    )
+    .expect("stop");
+    let dedicated = host.checkout(
+        "b",
+        &PROJECT.replace(
+            "    preset: postgres\n",
+            "    preset: postgres\n    isolation: dedicated\n",
+        ),
+    );
+    host.ok(&dedicated, &["up", "--no-wait"]);
+    host.clear();
+    let purge = host.ok(&dedicated, &["down", "--purge"]);
+    // It says which server it left alone, and why.
+    assert!(
+        text(&purge.stderr).contains(&format!("Skipped shared server {server}: it is stopped")),
+        "{}",
+        text(&purge.stderr)
+    );
+    // Its state may be read; it is never started, run in or changed.
+    let calls = host.calls();
+    assert!(
+        !calls
+            .lines()
+            .any(|line| line.contains(&server) && !line.starts_with("inspect")),
+        "the purge touched {server}: {calls}"
+    );
+}
+
+#[test]
+fn an_instance_without_a_tenant_record_is_purged_from_every_server() {
+    // Made before the record existed: its tenants are found by name, even
+    // on a stopped server (an unlisted one would be skipped).
+    let host = Host::new("purge-legacy");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    let mine = env_json(&host, &a)["environment"]["DB_DATABASE"]
+        .as_str()
+        .expect("tenant")
+        .to_owned();
+    std::fs::remove_file(instance_dir(&host).join("shared-servers")).expect("legacy instance");
+    std::fs::write(
+        host.base.join("state").join(format!("stopped-{server}")),
+        b"",
+    )
+    .expect("stop");
+    host.clear();
+    let purge = host.berth_with(&a, &["down", "--purge"], &format!("postgres {mine}"));
+    assert!(purge.status.success(), "{}", text(&purge.stderr));
+    assert!(
+        host.calls()
+            .lines()
+            .any(|line| line.starts_with("start") && line.contains(&server)),
+        "{}",
+        host.calls()
+    );
+    assert!(
+        host.sql()
+            .contains(&format!("DROP DATABASE IF EXISTS \"{mine}\" WITH (FORCE);")),
+        "its tenant was dropped on {server}: {}",
+        host.sql()
+    );
+}
+
+#[test]
+fn a_dry_run_whole_purge_names_the_tenant_drop_and_runs_nothing() {
+    let host = Host::new("purge-dry-run");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    host.clear();
+    let preview = host.ok(&a, &["--dry-run", "down", "--purge"]);
+    let shown = format!("{}{}", text(&preview.stdout), text(&preview.stderr));
+    assert!(shown.contains("Drop every tenant of"), "{shown}");
+    assert!(
+        !host
+            .calls()
+            .lines()
+            .any(|line| line.starts_with("exec") && line.contains(&server)),
+        "{}",
+        host.calls()
+    );
+}
+
+#[test]
+fn a_listed_server_whose_state_is_unknown_fails_the_purge_and_keeps_it_findable() {
+    // The instance's db moved to a dedicated server, so only the record
+    // names the shared one; an engine that does not answer for it must not
+    // count as no server.
+    let host = Host::new("purge-listed-unknown");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    std::fs::write(
+        a.join(".berth.yaml"),
+        PROJECT.replace(
+            "    preset: postgres\n",
+            "    preset: postgres\n    isolation: dedicated\n",
+        ),
+    )
+    .expect("dedicated");
+    let state = instance_dir(&host);
+    std::fs::write(host.base.join(format!("state/inspect-fails-{server}")), "").expect("fail");
+    host.clear();
+    let purge = host.berth(&a, &["down", "--purge"]);
+    assert!(!purge.status.success(), "{}", text(&purge.stderr));
+    assert!(!host.sql().contains("DROP"), "{}", host.sql());
+    assert_eq!(
+        std::fs::read_to_string(state.join("shared-servers")).expect("record"),
+        "*\n"
+    );
+}
+
+#[test]
+fn every_server_mark_survives_a_later_up_and_service_purge() {
+    let host = Host::new("purge-mark-survives");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let state = instance_dir(&host);
+    let failed = bounded_output(
+        host.command(&a, &["down", "--purge"], "", "")
+            .env("FAKE_SERVER", "norole"),
+    );
+    assert!(!failed.status.success());
+    host.ok(&a, &["up", "--no-wait"]);
+    host.ok(&a, &["down", "--purge", "--service", "db"]);
+    let record = std::fs::read_to_string(state.join("shared-servers")).expect("record");
+    assert!(record.lines().any(|line| line == "*"), "{record:?}");
+}
+
+#[test]
+fn a_purge_that_leaves_tenants_marks_every_server_for_the_next() {
+    // Its state goes, but the tenants it could not drop stay findable.
+    let host = Host::new("purge-failed-tenants");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let state = instance_dir(&host);
+    let purge = bounded_output(
+        host.command(&a, &["down", "--purge"], "", "")
+            .env("FAKE_SERVER", "norole"),
+    );
+    assert!(!purge.status.success(), "{}", text(&purge.stderr));
+    assert_eq!(
+        std::fs::read_to_string(state.join("shared-servers")).expect("record"),
+        "*\n",
+        "the next purge visits every server"
+    );
+    assert!(
+        !state.join("lease.json").exists(),
+        "the purged instance gets no lease back"
+    );
+}
+
+#[test]
+fn a_running_server_the_record_misses_without_a_tenant_is_left_alone() {
+    // Another checkout's server runs, held by another berth process; this
+    // dedicated instance has no tenant there, so its purge only reads it:
+    // it neither waits on its lock nor drops anything on it.
+    let host = Host::new("purge-running-unlisted");
+    let shared = host.checkout("a", PROJECT);
+    host.ok(&shared, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    let dedicated = host.checkout(
+        "b",
+        &PROJECT.replace(
+            "    preset: postgres\n",
+            "    preset: postgres\n    isolation: dedicated\n",
+        ),
+    );
+    host.ok(&dedicated, &["up", "--no-wait"]);
+    host.clear();
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(host.base.join(format!("home/locks/shared-{server}.lock")))
+        .expect("server lock");
+    held.lock().expect("hold the server's lock");
+    host.ok(&dedicated, &["down", "--purge"]);
+    drop(held);
+    let sql = host.sql();
+    assert!(
+        !sql.contains("DROP"),
+        "the purge dropped something on {server}: {sql}"
+    );
+}
+
+#[test]
+fn a_running_server_the_record_misses_that_does_not_answer_is_skipped() {
+    // Another checkout's server refuses connections (restarting, say): the
+    // dedicated instance's purge neither waits for it nor fails over it.
+    let host = Host::new("purge-unanswering-unlisted");
+    let shared = host.checkout("a", PROJECT);
+    host.ok(&shared, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    let dedicated = host.checkout(
+        "b",
+        &PROJECT.replace(
+            "    preset: postgres\n",
+            "    preset: postgres\n    isolation: dedicated\n",
+        ),
+    );
+    host.ok(&dedicated, &["up", "--no-wait"]);
+    std::fs::write(host.base.join("state/refuse"), "").expect("refuse");
+    let purge = bounded_output(
+        host.command(&dedicated, &["down", "--purge"], "", "")
+            .env("FAKE_SERVER", "refusing"),
+    );
+    assert!(purge.status.success(), "{}", text(&purge.stderr));
+    assert!(
+        text(&purge.stderr).contains(&format!(
+            "Skipped shared server {server}: it did not answer"
+        )),
+        "{}",
+        text(&purge.stderr)
+    );
+}
+
+#[test]
+fn a_server_the_record_misses_whose_state_is_unknown_is_skipped_and_named() {
+    let host = Host::new("purge-unknown-unlisted");
+    let shared = host.checkout("a", PROJECT);
+    host.ok(&shared, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    let dedicated = host.checkout(
+        "b",
+        &PROJECT.replace(
+            "    preset: postgres\n",
+            "    preset: postgres\n    isolation: dedicated\n",
+        ),
+    );
+    host.ok(&dedicated, &["up", "--no-wait"]);
+    std::fs::write(host.base.join(format!("state/inspect-fails-{server}")), "").expect("fail");
+    let purge = host.ok(&dedicated, &["down", "--purge"]);
+    assert!(
+        text(&purge.stderr).contains(&format!(
+            "Skipped shared server {server}: the engine did not report its state"
+        )),
+        "{}",
+        text(&purge.stderr)
+    );
+}
+
+#[test]
+fn a_server_left_with_no_tenant_of_the_instance_leaves_its_record() {
+    // Purging the instance's only shared service drops its tenant: a later
+    // purge of the rest no longer visits (or starts) that server.
+    let host = Host::new("purge-forget-server");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    let record = instance_dir(&host).join("shared-servers");
+    assert_eq!(
+        std::fs::read_to_string(&record).expect("record"),
+        format!("{server}\n")
+    );
+    host.ok(&a, &["down", "--purge", "--service", "db"]);
+    assert_eq!(std::fs::read_to_string(&record).expect("record"), "");
+    // While another tenant of the instance stays there (another runtime
+    // environment's), the server stays on the record.
+    host.ok(&a, &["up", "--no-wait"]);
+    let mine = env_json(&host, &a)["environment"]["DB_DATABASE"]
+        .as_str()
+        .expect("tenant")
+        .to_owned();
+    let staging = format!("{}__db__staging", mine.trim_end_matches("__db"));
+    let purge = host.berth_with(
+        &a,
+        &["down", "--purge", "--service", "db"],
+        &format!("postgres {staging}"),
+    );
+    assert!(purge.status.success(), "{}", text(&purge.stderr));
+    assert_eq!(
+        std::fs::read_to_string(&record).expect("record"),
+        format!("{server}\n")
+    );
+}
+
+#[test]
+fn after_a_failed_purge_the_retry_visits_and_starts_every_server() {
+    // The `*` mark brings a stopped server, holding the tenants the purge
+    // could not drop, back into the retry.
+    let host = Host::new("purge-retry-every-server");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    let mine = env_json(&host, &a)["environment"]["DB_DATABASE"]
+        .as_str()
+        .expect("tenant")
+        .to_owned();
+    let failed = bounded_output(
+        host.command(&a, &["down", "--purge"], "", "")
+            .env("FAKE_SERVER", "norole"),
+    );
+    assert!(!failed.status.success(), "{}", text(&failed.stderr));
+    std::fs::write(
+        host.base.join("state").join(format!("stopped-{server}")),
+        b"",
+    )
+    .expect("stop");
+    host.clear();
+    let retry = host.berth_with(&a, &["down", "--purge"], &format!("postgres {mine}"));
+    assert!(retry.status.success(), "{}", text(&retry.stderr));
+    assert!(
+        host.calls()
+            .lines()
+            .any(|line| line.starts_with("start") && line.contains(&server)),
+        "the stopped server was started: {}",
+        host.calls()
+    );
+    assert!(
+        host.sql()
+            .contains(&format!("DROP DATABASE IF EXISTS \"{mine}\" WITH (FORCE);")),
+        "{}",
+        host.sql()
+    );
+}
+
+#[test]
+fn a_reset_keeps_its_server_on_the_record_and_never_writes_it() {
+    // A reset drops and provisions again: the server stays listed, and a
+    // record that cannot be written does not stop it.
+    let host = Host::new("reset-record");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    let state = instance_dir(&host);
+    std::fs::write(
+        a.join("dump.sql"),
+        "CREATE TABLE restored_marker (id int);\n",
+    )
+    .expect("dump");
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o500)).expect("read-only");
+    let restore = host.berth_with(
+        &a,
+        &[
+            "restore",
+            "--service",
+            "db",
+            "--reset",
+            "--file",
+            "dump.sql",
+        ],
+        "",
+    );
+    std::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o700)).expect("writable");
+    assert!(restore.status.success(), "{}", text(&restore.stderr));
+    assert!(host.sql().contains("CREATE DATABASE"), "{}", host.sql());
+    assert_eq!(
+        std::fs::read_to_string(state.join("shared-servers")).expect("record"),
+        format!("{server}\n")
+    );
+}
+
+#[test]
+fn a_whole_purge_leaves_a_server_its_record_dropped_alone() {
+    let host = Host::new("purge-whole-after-forget");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    host.ok(&a, &["down", "--purge", "--service", "db"]);
+    std::fs::write(
+        host.base.join("state").join(format!("stopped-{server}")),
+        b"",
+    )
+    .expect("stop");
+    host.clear();
+    host.ok(&a, &["down", "--purge"]);
+    assert!(
+        !host
+            .calls()
+            .lines()
+            .any(|line| line.starts_with("start") && line.contains(&server)),
+        "{}",
+        host.calls()
+    );
+}
+
+#[test]
+fn a_reset_fails_when_the_engine_does_not_say_whether_its_server_exists() {
+    // Taking an unanswered inspect for a missing server would keep the old
+    // data under a reset that reports success.
+    let host = Host::new("reset-unknown-server");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    std::fs::write(
+        a.join("dump.sql"),
+        "CREATE TABLE restored_marker (id int);\n",
+    )
+    .expect("dump");
+    std::fs::write(host.base.join(format!("state/inspect-fails-{server}")), "").expect("fail");
+    host.clear();
+    let restore = host.berth_with(
+        &a,
+        &[
+            "restore",
+            "--service",
+            "db",
+            "--reset",
+            "--file",
+            "dump.sql",
+        ],
+        "",
+    );
+    assert!(!restore.status.success());
+    assert!(
+        !host.sql().contains("DROP"),
+        "nothing was dropped: {}",
+        host.sql()
+    );
+    // A purge of the service fails too, instead of reporting a drop it never
+    // made.
+    let purge = host.berth_with(&a, &["down", "--purge", "--service", "db"], "");
+    assert!(!purge.status.success(), "{}", text(&purge.stderr));
+}
+
+#[test]
+fn a_stop_during_another_alias_change_still_detaches_its_service() {
+    // Changing aliases disconnects, then reconnects: a stop that looked
+    // meanwhile would see the server detached and leave its own alias on.
+    let host = Host::new("alias-change-race");
+    let a = host.checkout("a", TWO_DATABASES);
+    host.ok(&a, &["up", "--no-wait"]);
+    assert_eq!(attachment(&host, "berth_shop_a-"), ["analytics", "db"]);
+    let server = host.servers().pop().expect("server");
+    let instance = instance_dir(&host)
+        .file_name()
+        .expect("instance")
+        .to_string_lossy()
+        .into_owned();
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(
+            host.base
+                .join(format!("home/locks/aliases_shop_{instance}.lock")),
+        )
+        .expect("alias lock");
+    held.lock().expect("hold the instance's alias lock");
+    // Mid-change: disconnected, about to reconnect with both names.
+    let attached = std::fs::read_dir(host.base.join("state/att").join(&server))
+        .expect("attachments")
+        .filter_map(Result::ok)
+        .find(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("berth_shop_a-")
+        })
+        .expect("instance network")
+        .path();
+    let aliases = std::fs::read(&attached).expect("aliases");
+    std::fs::remove_file(&attached).expect("disconnect");
+    let log = host.base.join("state/stop-stderr");
+    let mut child = host
+        .command(&a, &["stop", "--service", "analytics"], "", "")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::fs::File::create(&log).expect("stderr log"))
+        .spawn()
+        .expect("stop");
+    // Until the stop waits on the alias lock (or exits without it, as it
+    // would without the lock): the change goes on only then.
+    let notice = format!("the aliases_shop_{instance} lock, which another berth process holds");
+    let started = std::time::Instant::now();
+    let exited_early = loop {
+        if child.try_wait().expect("poll stop").is_some() {
+            break true;
+        }
+        if std::fs::read_to_string(&log)
+            .unwrap_or_default()
+            .contains(&notice)
+        {
+            break false;
+        }
+        let stuck = started.elapsed() > std::time::Duration::from_secs(60);
+        if stuck {
+            drop(child.kill());
+            drop(child.wait());
+        }
+        assert!(
+            !stuck,
+            "the stop neither waited nor exited: {}",
+            std::fs::read_to_string(&log).unwrap_or_default()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    std::fs::write(&attached, aliases).expect("reconnect");
+    drop(held);
+    let status = child.wait().expect("stop exits");
+    let stderr = std::fs::read_to_string(&log).unwrap_or_default();
+    assert!(
+        !exited_early,
+        "the stop did not wait for the change: {stderr}"
+    );
+    assert!(status.success(), "{stderr}");
+    assert_eq!(attachment(&host, "berth_shop_a-"), ["db"]);
+}
+
+#[test]
+fn a_stop_during_an_up_s_reconnect_waits_for_it_and_detaches() {
+    // `up --service analytics` reconnects the server with both names; a stop
+    // of db meanwhile must wait for that, then take its own name off.
+    let host = Host::new("alias-attach-race");
+    let a = host.checkout("a", TWO_DATABASES);
+    host.ok(&a, &["up", "--no-wait"]);
+    host.ok(&a, &["stop", "--service", "analytics"]);
+    assert_eq!(attachment(&host, "berth_shop_a-"), ["db"]);
+    let instance = instance_dir(&host)
+        .file_name()
+        .expect("instance")
+        .to_string_lossy()
+        .into_owned();
+    let hold = host.base.join("state/connect-hold");
+    let waiting = host.base.join("state/connect-waiting");
+    std::fs::write(&hold, "").expect("hold");
+    let quiet = |command: &mut Command, log: &Path| {
+        command
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::fs::File::create(log).expect("log"))
+            .spawn()
+            .expect("spawn")
+    };
+    let up_log = host.base.join("state/up-stderr");
+    let mut up = quiet(
+        &mut host.command(&a, &["up", "--no-wait", "--service", "analytics"], "", ""),
+        &up_log,
+    );
+    let started = std::time::Instant::now();
+    let until = |done: &dyn Fn() -> bool, what: &str, children: &mut [&mut std::process::Child]| {
+        while !done() {
+            let stuck = started.elapsed() > std::time::Duration::from_secs(60);
+            if stuck {
+                drop(std::fs::remove_file(&hold));
+                for child in children.iter_mut() {
+                    drop(child.kill());
+                    drop(child.wait());
+                }
+            }
+            assert!(!stuck, "{what}");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    };
+    until(
+        &|| waiting.exists(),
+        "up never reached its reconnect",
+        &mut [&mut up],
+    );
+    let stop_log = host.base.join("state/stop-stderr");
+    let mut stop = quiet(
+        &mut host.command(&a, &["stop", "--service", "db"], "", ""),
+        &stop_log,
+    );
+    let notice = format!("the aliases_shop_{instance} lock, which another berth process holds");
+    // The stop waits on the alias lock, or (without the up holding it)
+    // exits at once, having seen the server detached.
+    loop {
+        if std::fs::read_to_string(&stop_log)
+            .unwrap_or_default()
+            .contains(&notice)
+        {
+            break;
+        }
+        let failed =
+            stop.try_wait().expect("poll stop").is_some() || started.elapsed().as_secs() > 60;
+        if failed {
+            drop(stop.kill());
+            drop(stop.wait());
+            drop(std::fs::remove_file(&hold));
+            drop(up.kill());
+            drop(up.wait());
+        }
+        assert!(
+            !failed,
+            "the stop did not wait for the up's alias change: {}",
+            std::fs::read_to_string(&stop_log).unwrap_or_default()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    std::fs::remove_file(&hold).expect("release");
+    let up_status = up.wait().expect("up exits");
+    let stop_status = stop.wait().expect("stop exits");
+    assert!(
+        up_status.success(),
+        "{}",
+        std::fs::read_to_string(&up_log).unwrap_or_default()
+    );
+    assert!(
+        stop_status.success(),
+        "{}",
+        std::fs::read_to_string(&stop_log).unwrap_or_default()
+    );
+    assert_eq!(attachment(&host, "berth_shop_a-"), ["analytics"]);
+}
+
+#[test]
+fn a_redis_server_leaves_the_record_only_with_the_instance_s_last_user() {
+    let host = Host::new("purge-forget-redis");
+    let a = host.checkout("a", REDIS_PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let record = instance_dir(&host).join("shared-servers");
+    let server = std::fs::read_to_string(&record)
+        .expect("record")
+        .trim()
+        .to_owned();
+    assert!(server.starts_with("berth_shared_redis_"), "{server}");
+    let mine = env_json(&host, &a)["environment"]["REDIS_USERNAME"]
+        .as_str()
+        .expect("user")
+        .to_owned();
+    let staging = format!("{}__cache__staging", mine.trim_end_matches("__cache"));
+    // Another runtime environment's user stays: so does the server.
+    let kept = host.berth_with(
+        &a,
+        &["down", "--purge", "--service", "cache"],
+        &format!("default {staging}"),
+    );
+    assert!(kept.status.success(), "{}", text(&kept.stderr));
+    assert_eq!(
+        std::fs::read_to_string(&record).expect("record"),
+        format!("{server}\n")
+    );
+    host.ok(&a, &["up", "--no-wait"]);
+    let gone = host.berth_with(&a, &["down", "--purge", "--service", "cache"], "default");
+    assert!(gone.status.success(), "{}", text(&gone.stderr));
+    assert_eq!(std::fs::read_to_string(&record).expect("record"), "");
+}
+
+#[test]
+fn a_dead_runs_half_made_instance_directory_is_swept() {
+    // A run that died between making an instance directory and moving it
+    // into place leaves it in `instance-staging`; the next new instance
+    // removes it (a live run's stays).
+    let host = Host::new("staging-sweep");
+    let staging = host.base.join("home/instance-staging");
+    let dead = staging.join(format!("shop_old-1a2b3c_{}", i32::MAX));
+    let live = staging.join(format!("shop_other-1a2b3c_{}", std::process::id()));
+    for dir in [&dead, &live] {
+        std::fs::create_dir_all(dir).expect("staging");
+    }
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    assert!(!dead.exists(), "the dead run's staging was swept");
+    assert!(live.exists(), "a live run's staging stays");
+}
+
+#[test]
+fn a_mysql_server_leaves_the_record_only_with_the_instance_s_last_user() {
+    // A MySQL tenant's user is not named like its schema: it alone keeps
+    // the server on the record.
+    let host = Host::new("purge-forget-mysql");
+    let a = host.checkout("a", &mysql_project("mysql:8.4"));
+    host.ok(&a, &["up", "--no-wait"]);
+    let record = instance_dir(&host).join("shared-servers");
+    let server = std::fs::read_to_string(&record)
+        .expect("record")
+        .trim()
+        .to_owned();
+    assert!(server.starts_with("berth_shared_mysql_"), "{server}");
+    let user = env_json(&host, &a)["environment"]["DB_USERNAME"]
+        .as_str()
+        .expect("user")
+        .to_owned();
+    let kept = host.berth_with(&a, &["down", "--purge", "--service", "db"], &user);
+    assert!(kept.status.success(), "{}", text(&kept.stderr));
+    assert_eq!(
+        std::fs::read_to_string(&record).expect("record"),
+        format!("{server}\n")
+    );
+    host.ok(&a, &["up", "--no-wait"]);
+    let gone = host.berth_with(&a, &["down", "--purge", "--service", "db"], "");
+    assert!(gone.status.success(), "{}", text(&gone.stderr));
+    assert_eq!(std::fs::read_to_string(&record).expect("record"), "");
+}
+
+#[test]
+fn purges_after_the_record_dropped_a_server_neither_start_nor_wait_on_it() {
+    let host = Host::new("purge-after-forget");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    host.ok(&a, &["down", "--purge", "--service", "db"]);
+    // A second purge of the service, with the server stopped: not started.
+    std::fs::write(
+        host.base.join("state").join(format!("stopped-{server}")),
+        b"",
+    )
+    .expect("stop");
+    host.clear();
+    let again = host.ok(&a, &["down", "--purge", "--service", "db"]);
+    assert!(
+        !host
+            .calls()
+            .lines()
+            .any(|line| line.starts_with("start") && line.contains(&server)),
+        "{}",
+        host.calls()
+    );
+    assert!(
+        text(&again.stderr).contains(&format!("Skipped shared server {server}: it is stopped")),
+        "{}",
+        text(&again.stderr)
+    );
+    // Running, and held by another berth process: the whole purge does not
+    // wait for it.
+    std::fs::remove_file(host.base.join("state").join(format!("stopped-{server}"))).expect("start");
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(host.base.join(format!("home/locks/shared-{server}.lock")))
+        .expect("server lock");
+    held.lock().expect("hold the server's lock");
+    host.ok(&a, &["down", "--purge"]);
+    drop(held);
+}
+
+#[test]
+fn a_running_server_is_checked_for_tenants_its_record_misses() {
+    // A lease removed by hand makes a new, empty record for an old instance:
+    // its tenants on a running server are still found and dropped.
+    let host = Host::new("purge-empty-record");
+    let a = host.checkout("a", PROJECT);
+    host.ok(&a, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    let mine = env_json(&host, &a)["environment"]["DB_DATABASE"]
+        .as_str()
+        .expect("tenant")
+        .to_owned();
+    std::fs::write(instance_dir(&host).join("shared-servers"), "").expect("empty record");
+    host.clear();
+    // A tenant no current service owns (another runtime environment's):
+    // only the instance-wide check finds it.
+    let staging = format!("{}__db__staging", mine.trim_end_matches("__db"));
+    let purge = host.berth_with(
+        &a,
+        &["down", "--purge"],
+        &format!("postgres {mine} {staging}"),
+    );
+    assert!(purge.status.success(), "{}", text(&purge.stderr));
+    let sql = host.sql();
+    assert!(
+        sql.contains(&format!(
+            "DROP DATABASE IF EXISTS \"{staging}\" WITH (FORCE);"
+        )),
+        "its tenant was dropped on {server}: {sql}"
+    );
+}
+
+#[test]
+fn a_new_instances_record_starts_with_its_state_whatever_made_it() {
+    // `env` makes b's state (no lease) before its first `up`: its record is
+    // there from the start and empty, so its purge leaves a's stopped
+    // server alone.
+    let host = Host::new("purge-env-first");
+    let shared = host.checkout("a", PROJECT);
+    host.ok(&shared, &["up", "--no-wait"]);
+    let server = host.servers().pop().expect("server");
+    let dedicated = host.checkout(
+        "b",
+        &PROJECT.replace(
+            "    preset: postgres\n",
+            "    preset: postgres\n    isolation: dedicated\n",
+        ),
+    );
+    host.ok(&dedicated, &["env", "--json"]);
+    let state = std::fs::read_dir(host.base.join("home/instances/shop"))
+        .expect("instances")
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| !path.join("lease.json").exists())
+        .expect("b's state");
+    assert_eq!(
+        std::fs::read_to_string(state.join("shared-servers")).expect("record"),
+        ""
+    );
+    host.ok(&dedicated, &["up", "--no-wait"]);
+    std::fs::write(
+        host.base.join("state").join(format!("stopped-{server}")),
+        b"",
+    )
+    .expect("stop");
+    host.clear();
+    host.ok(&dedicated, &["down", "--purge"]);
+    assert!(
+        !host
+            .calls()
+            .lines()
+            .any(|line| line.contains(&server) && !line.starts_with("inspect")),
+        "{}",
+        host.calls()
+    );
+}
+
+#[test]
+fn a_tenant_that_failed_to_provision_is_still_on_the_record() {
+    // Its role may exist without its database: the purge visits the server.
+    let host = Host::new("purge-failed-provision");
+    let a = host.checkout("a", PROJECT);
+    std::fs::write(host.base.join("state/tenant-fails"), b"").expect("fail provisioning");
+    let up = bounded_output(&mut host.command(&a, &["up", "--no-wait"], "", ""));
+    assert!(!up.status.success());
+    let server = host.servers().pop().expect("server");
+    assert_eq!(
+        std::fs::read_to_string(instance_dir(&host).join("shared-servers")).expect("record"),
+        format!("{server}\n")
+    );
+    std::fs::remove_file(host.base.join("state/tenant-fails")).expect("heal");
+    host.ok(&a, &["down", "--purge"]);
+    let locks: Vec<_> = std::fs::read_dir(host.base.join("home/locks"))
+        .expect("locks")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with("tenants_") || name.starts_with("aliases_"))
+        .collect();
+    assert!(
+        locks.is_empty(),
+        "the purge removed its tenant-record and alias locks: {locks:?}"
+    );
+}
+
+#[test]
+fn purging_every_service_of_an_instance_removes_its_lease() {
+    let host = Host::new("purge-every-service");
+    let a = host.checkout(
+        "a",
+        "schema_version: 9\nproject: shop\nservices:\n  db:\n    preset: postgres\n    isolation: dedicated\n",
+    );
+    host.ok(&a, &["up", "--no-wait"]);
+    let state = instance_dir(&host);
+    assert!(state.join("lease.json").exists());
+    host.ok(&a, &["down", "--purge", "--service", "db"]);
+    assert!(!state.exists(), "the lease and the rest of its state went");
+}
+
+#[test]
+fn a_whole_dump_on_stdin_restores_for_either_service_kind() {
+    use std::io::Write;
+    for (label, project) in [
+        ("shared", PROJECT.to_owned()),
+        (
+            "dedicated",
+            PROJECT.replace(
+                "    preset: postgres\n",
+                "    preset: postgres\n    isolation: dedicated\n",
+            ),
+        ),
+    ] {
+        let host = Host::new(&format!("stdin-whole-{label}"));
+        let checkout = host.checkout("a", &project);
+        host.ok(&checkout, &["up", "--no-wait"]);
+        let mut child = host
+            .command(&checkout, &["restore", "--service", "db"], "", "")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .expect("spawn");
+        child
+            .stdin
+            .take()
+            .expect("stdin")
+            .write_all(b"CREATE TABLE users (id int);\n")
+            .expect("write");
+        let restore = child.wait_with_output().expect("restore");
+        assert!(
+            restore.status.success(),
+            "{label}: {}",
+            text(&restore.stderr)
+        );
+    }
+}
+
+#[test]
+fn a_tenant_whose_login_is_refused_is_never_reset() {
+    let host = Host::new("tenant-login");
+    let checkout = host.checkout("a", PROJECT);
+    host.ok(&checkout, &["up", "--no-wait"]);
+    std::fs::write(checkout.join("dump.sql"), "CREATE TABLE users (id int);\n").expect("dump");
+    host.clear();
+    let restore = bounded_output(
+        host.command(
+            &checkout,
+            &[
+                "restore",
+                "--service",
+                "db",
+                "--reset",
+                "--file",
+                "dump.sql",
+            ],
+            "",
+            "",
+        )
+        .env("FAKE_TENANT_LOGIN_FAILS", "1"),
+    );
+    let stderr = text(&restore.stderr);
+    assert!(!restore.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("refuses berth's database client, so nothing was changed")
+            && stderr.contains("password authentication failed"),
+        "{stderr}"
+    );
+    let calls = format!("{}{}", host.calls(), host.sql());
+    assert!(!calls.contains("DROP DATABASE"), "{calls}");
+}
+
+#[test]
+fn a_dry_run_restore_never_prints_the_dump() {
+    let host = Host::new("dry-run-restore");
+    let checkout = host.checkout("a", PROJECT);
+    host.ok(&checkout, &["up", "--no-wait"]);
+    std::fs::write(
+        checkout.join("dump.sql"),
+        "CREATE TABLE secret_rows (id int);\n",
+    )
+    .expect("dump");
+    let restore = host.berth(
+        &checkout,
+        &[
+            "--dry-run",
+            "restore",
+            "--service",
+            "db",
+            "--file",
+            "dump.sql",
+        ],
+    );
+    assert!(restore.status.success(), "{}", text(&restore.stderr));
+    assert!(
+        !text(&restore.stdout).contains("secret_rows"),
+        "{}",
+        text(&restore.stdout)
+    );
+}
+
+#[test]
+fn a_reset_restore_that_cannot_reach_the_tenant_drops_nothing() {
+    let host = Host::new("reset-unreachable");
+    let checkout = host.checkout("a", PROJECT);
+    host.ok(&checkout, &["up", "--no-wait"]);
+    // `down` detaches the server; its data stays.
+    host.ok(&checkout, &["down"]);
+    std::fs::write(checkout.join("ok.sql"), "CREATE TABLE t (id int);\n").expect("dump");
+    host.clear();
+    let restore = host.berth(
+        &checkout,
+        &["restore", "--service", "db", "--reset", "--file", "ok.sql"],
+    );
+    assert!(!restore.status.success(), "{}", text(&restore.stderr));
+    assert!(
+        text(&restore.stderr).contains(" up` first"),
+        "{}",
+        text(&restore.stderr)
+    );
+    assert!(!host.sql().contains("DROP DATABASE"), "{}", host.sql());
+}
+
+#[test]
+fn a_dump_that_fails_part_way_leaves_nothing_behind() {
+    let host = Host::new("dump-fails");
+    let checkout = host.checkout("a", PROJECT);
+    host.ok(&checkout, &["up", "--no-wait"]);
+    std::fs::write(checkout.join("backup.sql"), "previous dump").expect("old dump");
+    let failing = |args: &[&str]| {
+        bounded_output(
+            host.command(&checkout, args, "", "")
+                .env("FAKE_DUMP_OUT", "CREATE TABLE half")
+                .env("FAKE_CLIENT_EXIT", "1"),
+        )
+    };
+    let to_file = failing(&["dump", "--service", "db", "--file", "backup.sql"]);
+    assert!(!to_file.status.success(), "{}", text(&to_file.stderr));
+    assert_eq!(
+        std::fs::read_to_string(checkout.join("backup.sql")).expect("old"),
+        "previous dump",
+        "a failed dump keeps the previous one"
+    );
+    let partials = std::fs::read_dir(&checkout)
+        .expect("checkout")
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".berth-partial")
+        })
+        .count();
+    assert_eq!(partials, 0, "no partial dump is left");
+    let to_stdout = failing(&["dump", "--service", "db", "--stdout"]);
+    assert!(!to_stdout.status.success(), "{}", text(&to_stdout.stderr));
+    assert!(
+        to_stdout.stdout.is_empty(),
+        "a failed dump never reaches a pipe"
+    );
+}
+
+#[test]
+fn a_failed_image_probe_reports_the_engines_error_not_a_missing_pgdata() {
+    let host = Host::new("probe-fails");
+    let checkout = host.checkout("a", PROJECT);
+    let up = bounded_output(
+        host.command(&checkout, &["up", "--no-wait"], "", "")
+            .env("FAKE_PROBE_FAIL", "1"),
+    );
+    assert!(!up.status.success(), "{}", text(&up.stderr));
+    let stderr = text(&up.stderr);
+    assert!(
+        stderr.contains("parent snapshot does not exist"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("does not declare PGDATA"), "{stderr}");
 }

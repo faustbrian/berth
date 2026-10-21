@@ -129,7 +129,6 @@ mod tests {
     use std::collections::HashMap;
     use std::fs;
     use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn mysql_service(name: &str) -> ServiceConfig {
         ServiceConfig {
@@ -183,10 +182,7 @@ mod tests {
     {
         let root = crate::test_support::temp_root().join(format!(
             "berth-post-restore-connection-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(root.join("config")).expect("create config directory");
         fs::write(root.join("config/database.php"), content).expect("write database config");

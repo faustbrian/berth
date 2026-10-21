@@ -25,8 +25,6 @@ pub(super) fn inspect_label(container_name: &str, key: &str) -> Option<String> {
 mod tests {
     use std::fs;
     use std::io::Write;
-    use std::time::SystemTime;
-    use std::time::UNIX_EPOCH;
 
     use super::inspect_label;
     use crate::docker::with_docker_command;
@@ -41,10 +39,7 @@ mod tests {
     fn inspect_label_reads_value_from_inspect_output() {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-inspect-label-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&bin_dir).expect("fake docker dir");
         let binary = bin_dir.join("docker");

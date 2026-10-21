@@ -22,7 +22,7 @@ pub(super) fn run_docker_step(
     }
 
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-    if stderr.to_ascii_lowercase().contains("no such container") {
+    if crate::docker::reports_missing_container(&stderr) {
         return Ok(StepOutcome::Missing);
     }
 

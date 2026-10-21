@@ -19,7 +19,7 @@ pub(crate) fn record_root(project: &str, instance: &str, root: &Path) -> Result<
     if cfg!(test) || crate::docker::is_dry_run() {
         return Ok(());
     }
-    let dir = crate::home::private_dir(&Path::new("instances").join(project).join(instance))?;
+    let dir = crate::home::instance_dir(project, instance)?;
     let path = dir.join(FILE_NAME);
     if path.exists() {
         return Ok(());

@@ -26,8 +26,23 @@ pub(crate) fn handle_restore(
     cli::support::ensure_sql_service(svc, "restore")?;
 
     match options.file {
-        Some(path) => database::restore(svc, path, options.reset, options.gzip)?,
-        None => database::restore_stdin(svc, options.reset, options.gzip)?,
+        Some(path) => database::restore(
+            svc,
+            path,
+            database::RestoreOptions {
+                reset: options.reset,
+                gzip: options.gzip,
+                origin: database::DumpOrigin::FileFlag,
+            },
+        )?,
+        None => database::restore_stdin(
+            svc,
+            database::RestoreOptions {
+                reset: options.reset,
+                gzip: options.gzip,
+                origin: database::DumpOrigin::Stdin,
+            },
+        )?,
     }
 
     if options.migrate || options.schema_dump {

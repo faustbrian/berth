@@ -610,3 +610,38 @@ fn a_float_schema_version_and_a_second_document_are_rejected() {
         "{message}"
     );
 }
+
+#[test]
+fn an_empty_environment_file_is_not_told_to_run_init() {
+    let dir = temp_dir("empty-env-file");
+    std::fs::create_dir_all(&dir).expect("dir");
+    let env_file = dir.join(".berth.staging.yaml");
+    // Alone in its directory, `berth init` there does work.
+    let alone = format!(
+        "{:#}",
+        parse_project_file("", &env_file).expect_err("empty")
+    );
+    assert!(alone.contains("berth init"), "{alone}");
+    assert!(
+        alone.contains("point `--config` at the .berth.yaml"),
+        "{alone}"
+    );
+    std::fs::write(dir.join(".berth.yaml"), "").expect("base");
+    let message = format!(
+        "{:#}",
+        parse_project_file("", &env_file).expect_err("empty")
+    );
+    assert!(!message.contains("berth init"), "{message}");
+    assert!(message.contains("copy .berth.yaml into it"), "{message}");
+    let other = format!(
+        "{:#}",
+        parse_project_file("", &dir.join("dev.yaml")).expect_err("empty")
+    );
+    assert!(!other.contains("berth init"), "{other}");
+    let relative = format!(
+        "{:#}",
+        parse_project_file("", Path::new(".berth.yaml")).expect_err("empty")
+    );
+    assert!(relative.contains("berth init` in .)"), "{relative}");
+    std::fs::remove_dir_all(&dir).expect("cleanup");
+}

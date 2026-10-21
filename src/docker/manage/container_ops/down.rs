@@ -8,7 +8,7 @@ use crate::config::ServiceConfig;
 use crate::output::{self, LogLevel, Persistence};
 
 use super::super::super::{is_dry_run, print_docker_command};
-use super::docker_cmd::docker_output;
+use super::docker_cmd::{docker_output, engine_failure, reports_missing};
 
 /// Downs down as part of the docker manage container ops down workflow.
 pub(super) fn down(service: &ServiceConfig, timeout: u64) -> Result<()> {
@@ -38,13 +38,15 @@ pub(super) fn down(service: &ServiceConfig, timeout: u64) -> Result<()> {
             &format!("Stopped container {container_name}"),
             Persistence::Persistent,
         );
-    } else {
+    } else if reports_missing(&stop_output) {
         output::event(
             &service.name,
             LogLevel::Info,
-            &format!("Skipped stopping container {container_name} because it is not running"),
+            &format!("Skipped stopping container {container_name} because it does not exist"),
             Persistence::Persistent,
         );
+    } else {
+        return Err(engine_failure("stop", &container_name, &stop_output));
     }
 
     let rm_output = docker_output(
@@ -59,13 +61,16 @@ pub(super) fn down(service: &ServiceConfig, timeout: u64) -> Result<()> {
             &format!("Removed container {container_name}"),
             Persistence::Persistent,
         );
-    } else {
+    } else if reports_missing(&rm_output) {
+        // Gone already: one started with `--rm` removed itself when stopped.
         output::event(
             &service.name,
             LogLevel::Info,
-            &format!("Skipped removing container {container_name} because it was not found"),
+            &format!("Container {container_name} is gone"),
             Persistence::Persistent,
         );
+    } else {
+        return Err(engine_failure("remove", &container_name, &rm_output));
     }
 
     Ok(())

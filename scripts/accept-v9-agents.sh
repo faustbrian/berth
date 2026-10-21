@@ -268,6 +268,7 @@ project_type: project
 services:
   db:
     preset: postgres
+    seed_file: database/seed.sql
   cache:
     preset: redis
   app:
@@ -277,6 +278,10 @@ services:
       SESSION_DRIVER: redis
       QUEUE_CONNECTION: sync
 YAML
+
+# The seed fills only an empty database: one without tables of its own (the
+# default image's TimescaleDB catalog tables do not count).
+printf 'CREATE TABLE seeded (id int);\nINSERT INTO seeded VALUES (1);\n' > "$FIXTURE/database/seed.sql"
 
 cat > "$FIXTURE/database/migrations/2026_01_01_000000_create_markers_table.php" <<'PHP'
 <?php
@@ -507,12 +512,82 @@ agent() {
   printf '%s\n' "$code" > "$out/https.code"
   curl -s --cacert "$ca" --max-time 30 "$url/berth-instance" > "$out/route.body" 2>/dev/null || true
 
+  # A fresh database takes the seed once; a second `--seed` leaves it.
+  "$BERTH" up --wait --seed > "$out/seed.out" 2>&1
+  printf '%s\n' "$?" > "$out/seed.status"
+  "$BERTH" up --wait --seed > "$out/reseed.out" 2>&1
+  printf '%s\n' "$?" > "$out/reseed.status"
+  printf "select 'seeded=' || count(*) from seeded;\n" \
+    | "$BERTH" exec --no-tty --service db > "$out/seeded.out" 2>&1
+
   "$BERTH" artisan --no-tty --non-interactive migrate --force > "$out/migrate.out" 2>&1
   printf '%s\n' "$?" > "$out/migrate.status"
   "$BERTH" artisan --no-tty --non-interactive tinker \
     --execute="DB::table('markers')->insert(['agent' => '$name']); echo DB::table('markers')->pluck('agent')->join(',');" \
     > "$out/markers.out" 2>&1
   printf '%s\n' "$?" > "$out/markers.status"
+
+  # Dump and restore through the tenant client: its own dump round-trips
+  # through `--reset`, and a production-style dump whose owner and grant
+  # lines name a role this server lacks loads with warnings, including a
+  # GRANT inside a transaction (ON_ERROR_ROLLBACK keeps the rest of it). The
+  # same dump with one failing statement must fail the restore.
+  "$BERTH" dump --service db --file "$out/own.sql" > "$out/dump.out" 2>&1
+  printf '%s\n' "$?" > "$out/dump.status"
+  "$BERTH" restore --service db --file "$out/own.sql" --reset > "$out/restore-own.out" 2>&1
+  printf '%s\n' "$?" > "$out/restore-own.status"
+  printf "select 'markers=' || string_agg(agent, ',') from markers;\n" \
+    | "$BERTH" exec --no-tty --service db > "$out/restored-markers.out" 2>&1
+  cat > "$out/foreign.sql" <<'SQL'
+--
+-- PostgreSQL database dump
+--
+
+SET statement_timeout = 0;
+SET SESSION AUTHORIZATION 'acceptance_prod_app';
+CREATE TABLE public.imported (id integer);
+ALTER TABLE public.imported OWNER TO acceptance_prod_app;
+COPY public.imported (id) FROM stdin;
+1
+2
+\.
+GRANT SELECT ON TABLE public.imported TO acceptance_prod_app;
+BEGIN;
+CREATE TABLE public.imported_tx (id integer);
+INSERT INTO public.imported_tx VALUES (1);
+GRANT SELECT ON TABLE public.imported_tx TO acceptance_prod_app;
+COMMIT;
+
+--
+-- PostgreSQL database dump complete
+--
+SQL
+  "$BERTH" restore --service db --file "$out/foreign.sql" --reset > "$out/restore-foreign.out" 2>&1
+  printf '%s\n' "$?" > "$out/restore-foreign.status"
+  printf "select 'rows=' || (select count(*) from imported) || ',' || (select count(*) from imported_tx);\n" \
+    | "$BERTH" exec --no-tty --service db > "$out/foreign-rows.out" 2>&1
+  awk '{ print } $0 == "COMMIT;" { print "SELECT 1/0;" }' "$out/foreign.sql" > "$out/failing.sql"
+  "$BERTH" restore --service db --file "$out/failing.sql" --reset > "$out/restore-failing.out" 2>&1
+  printf '%s\n' "$?" > "$out/restore-failing.status"
+  # A seed's leftovers that are no table (a composite type, a domain over an
+  # array) still make the database not empty, and a dump that hides a quiet
+  # `\c` behind a string berth misreads still fails the restore.
+  printf 'CREATE TYPE leftover AS (a int);\nCREATE DOMAIN tags AS text[];\n' > "$out/leftover.sql"
+  "$BERTH" restore --service db --file "$out/leftover.sql" --reset > "$out/restore-leftover.out" 2>&1
+  printf '%s\n' "$?" > "$out/restore-leftover.status"
+  "$BERTH" up --wait --seed > "$out/leftover-seed.out" 2>&1
+  printf '%s\n' "$?" > "$out/leftover-seed.status"
+  printf "SET standard_conforming_strings = off;\n\\\\set QUIET on\nSELECT 'x\\\\'';\n\\\\c postgres\nSELECT 1;\n" \
+    | "$BERTH" restore --service db > "$out/restore-switch.out" 2>&1
+  printf '%s\n' "$?" > "$out/restore-switch.status"
+  # A dump that leaves a transaction open (psql rolls it back as it exits)
+  # or quits part-way (`\q` ends only psql's reading of it) fails too.
+  printf 'CREATE TABLE before_open (id int);\nBEGIN;\nCREATE TABLE in_open (id int);\n' \
+    | "$BERTH" restore --service db > "$out/restore-open.out" 2>&1
+  printf '%s\n' "$?" > "$out/restore-open.status"
+  printf "CREATE TABLE before_quit (id int);\n\\\\q\nCREATE TABLE after_quit (id int);\n" \
+    | "$BERTH" restore --service db > "$out/restore-quit.out" 2>&1
+  printf '%s\n' "$?" > "$out/restore-quit.status"
 
   # Tools agents run as the container's (invoking) user: Composer and npm
   # need a writable HOME and caches.
@@ -628,6 +703,27 @@ for index in $(seq 1 "$AGENTS"); do
   # Its development database holds only its own marker: no other agent's
   # data is visible.
   check "$name sees only its own data" "$(tail -n 1 "$out/markers.out" | tr -d '[:space:]')" "$name"
+  check "$name seed" "$(cat "$out/seed.status") $(grep -c 'Applied data seed' "$out/seed.out")" "0 1"
+  check "$name second seed skipped" \
+    "$(cat "$out/reseed.status") $(grep -c 'Skipped data seed' "$out/reseed.out")" "0 1"
+  check "$name seeded once" "$(grep -c 'seeded=1$' "$out/seeded.out")" 1
+  check "$name dump" "$(cat "$out/dump.status")" 0
+  check "$name restore of its own dump" "$(cat "$out/restore-own.status")" 0
+  check "$name own dump keeps its data" "$(grep -c "markers=$name\$" "$out/restored-markers.out")" 1
+  check "$name leftovers skip the seed" \
+    "$(cat "$out/restore-leftover.status") $(cat "$out/leftover-seed.status") $(grep -c 'Skipped data seed' "$out/leftover-seed.out")" "0 0 1"
+  check "$name hidden switch fails" \
+    "$([[ "$(cat "$out/restore-switch.status")" != 0 ]] && echo failed) $(grep -c 'switched database connection' "$out/restore-switch.out")" "failed 1"
+  check "$name open transaction fails" \
+    "$([[ "$(cat "$out/restore-open.status")" != 0 ]] && echo failed) $(grep -c 'left a transaction open' "$out/restore-open.out")" "failed 1"
+  check "$name early quit fails" \
+    "$([[ "$(cat "$out/restore-quit.status")" != 0 ]] && echo failed) $(grep -c 'stopped before the end of the dump' "$out/restore-quit.out")" "failed 1"
+  check "$name restore of a foreign dump" "$(cat "$out/restore-foreign.status")" 0
+  check "$name foreign dump loads every row" "$(grep -c 'rows=2,1$' "$out/foreign-rows.out")" 1
+  check "$name foreign dump warns about its roles" \
+    "$(grep -c 'Skipped 4 owner, grant, session-authorization or extension-comment statement' "$out/restore-foreign.out")" 1
+  check "$name failing statement fails the restore" \
+    "$([[ "$(cat "$out/restore-failing.status")" != 0 ]] && echo failed) $(grep -c 'division by zero' "$out/restore-failing.out")" "failed 1"
   check "$name composer as the invoking user" "$(cat "$out/composer.status")" 0
   check "$name npm as the invoking user" "$(cat "$out/npm.status")" 0
   check "$name psql as its tenant" "$(cat "$out/psql.status") $(grep -c "$(jq -r '.credentials.db.username' "$out/up.json")" "$out/psql.out")" "0 1"

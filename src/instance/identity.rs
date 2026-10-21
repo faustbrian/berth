@@ -90,7 +90,9 @@ pub(crate) fn validate_instance_id(id: &str) -> Result<()> {
     if id.len() > MAX_INSTANCE_ID_LEN {
         anyhow::bail!(
             "instance '{id}' (from --instance or BERTH_INSTANCE) is {} bytes; the maximum is \
-             {MAX_INSTANCE_ID_LEN}",
+             {MAX_INSTANCE_ID_LEN} (it goes into each service's 63-byte DNS name with the \
+             project's and service's); shorten it, for example to a short prefix and a \
+             counter",
             id.len()
         );
     }

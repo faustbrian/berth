@@ -160,7 +160,9 @@ impl Fixture {
             .env("BERTH_HOME", self.base.join("home"))
             .env("FAKE_STATE", self.base.join("state"))
             .env("BERTH_GATEWAY_HTTPS_PORT", https_port.to_string())
-            .env_remove("BERTH_GATEWAY_HTTP_PORT")
+            // Never the default 8080: a real gateway on the machine may hold
+            // it (`free_port` keeps the port below it free too).
+            .env("BERTH_GATEWAY_HTTP_PORT", (https_port - 1).to_string())
             .env_remove("BERTH_INSTANCE")
             .env_remove("BERTH_ENGINE")
             .output()

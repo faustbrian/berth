@@ -40,6 +40,16 @@ pub struct ServiceRuntime {
     pub env: Option<String>,
     /// The shared server and tenant backing the service, if it is shared.
     pub shared: Option<SharedTarget>,
+    /// CPU and memory caps of the service's own container (`cpus`,
+    /// `memory`), validated: `--cpus` and `--memory` values.
+    pub limits: ResourceLimits,
+}
+
+/// A container's CPU and memory caps.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ResourceLimits {
+    pub cpus: Option<String>,
+    pub memory: Option<String>,
 }
 
 /// A service backed by a tenant in a shared server.

@@ -116,7 +116,7 @@ pub(crate) fn renew_lease(
     if existing.as_ref() == Some(&lease) {
         return Ok(lease);
     }
-    let dir = crate::home::private_dir(&lease_dir(project, instance))?;
+    let dir = crate::home::instance_dir(project, instance)?;
     let staged = dir.join(format!(".{FILE_NAME}.{}", std::process::id()));
     let body = serde_json::to_string_pretty(&lease).context("failed to render the lease")?;
     std::fs::write(&staged, body)

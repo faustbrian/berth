@@ -37,8 +37,6 @@ mod tests {
     use anyhow::Result;
     use std::fs;
     use std::io::Write;
-    use std::time::SystemTime;
-    use std::time::UNIX_EPOCH;
 
     use crate::config;
     use crate::docker;
@@ -109,10 +107,7 @@ mod tests {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-fake-docker-{}-{}",
             std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&bin_dir).expect("create fake docker dir");
         let binary = bin_dir.join("docker");
@@ -141,7 +136,7 @@ mod tests {
 
         let file = crate::test_support::temp_root().join(format!(
             "berth-dump-cmd-stdout-{}.sql",
-            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+            crate::test_support::unique_stamp()
         ));
 
         docker::with_dry_run_lock(|| {
@@ -168,7 +163,7 @@ mod tests {
         )]);
         let file = crate::test_support::temp_root().join(format!(
             "berth-dump-cmd-file-{}.sql",
-            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+            crate::test_support::unique_stamp()
         ));
 
         let command = fake_docker_binary(r#"printf '%s ' "$@"; printf '\n'; exit 0"#);
@@ -228,7 +223,7 @@ mod tests {
         )]);
         let path = crate::test_support::temp_root().join(format!(
             "berth-dump-cmd-invalid-{}.sql",
-            SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
+            crate::test_support::unique_stamp()
         ));
 
         let result = super::handle_dump(

@@ -81,7 +81,6 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::maybe_open_after_start;
 
@@ -140,10 +139,7 @@ mod tests {
     {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-open-after-start-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&bin_dir).expect("create temp dir");
         let command = bin_dir.join(name);

@@ -10,8 +10,8 @@ use super::super::{resolve_runtime_image, resolve_volume_mapping};
 
 /// Runs a command in a temporary container derived from target runtime settings.
 ///
-/// This mirrors target volume/env wiring so commands behave like in the regular
-/// app container.
+/// This mirrors target volume/env wiring and CPU/memory caps so commands
+/// behave like in the regular app container.
 pub(super) fn run_command_one_off(
     target: &ServiceConfig,
     command: &[String],
@@ -29,6 +29,7 @@ pub(super) fn run_command_one_off(
     crate::network::ensure_service_network(target)?;
     args.extend(crate::network::network_run_args(target, false));
     args.extend(crate::serve::container::least_privilege_run_args(target)?);
+    args.extend(crate::docker::resource_limit_args(target));
     args.push(if tty { "-it" } else { "-i" }.to_owned());
     args.push("-w".to_owned());
     args.push("/app".to_owned());

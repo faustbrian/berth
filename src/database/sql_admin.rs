@@ -9,6 +9,7 @@ use crate::config::ServiceConfig;
 mod common;
 mod create;
 mod dump;
+mod query;
 mod reset;
 
 /// Creates database for downstream execution.
@@ -34,8 +35,8 @@ pub(super) fn reset_database(service: &ServiceConfig) -> Result<()> {
 }
 
 /// Executes dump command for the selected database service.
-pub(super) fn run_dump_command(service: &ServiceConfig) -> Result<std::process::Output> {
-    dump::run_dump_command(service)
+pub(super) fn dump_command_args(service: &ServiceConfig) -> Result<Vec<String>> {
+    dump::dump_command_args(service)
 }
 
 pub(crate) fn ensure_sql_command_success(
@@ -43,4 +44,9 @@ pub(crate) fn ensure_sql_command_success(
     failure_prefix: &str,
 ) -> Result<()> {
     common::ensure_command_success(output, failure_prefix)
+}
+
+/// Runs berth's own read-only `sql` in the service's database.
+pub(crate) fn query(service: &ServiceConfig, sql: &str) -> Result<String> {
+    query::query(service, sql)
 }

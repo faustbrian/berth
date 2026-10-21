@@ -93,13 +93,8 @@ mod tests {
     use super::{handle_ls_command, resolve_execution_targets, validate_swarm_invocation};
     use crate::config::{Config, SwarmTarget};
 
-    use std::time::{SystemTime, UNIX_EPOCH};
-
     fn temp_workspace() -> std::path::PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time")
-            .as_nanos();
+        let nanos = crate::test_support::unique_stamp();
         let path = crate::test_support::temp_root().join(format!("berth-swarm-planning-{nanos}"));
         std::fs::create_dir_all(&path).expect("create workspace");
         path

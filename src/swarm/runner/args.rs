@@ -38,6 +38,10 @@ pub(super) fn swarm_child_args(
     args.push("--project-root".to_owned());
     args.push(target.root.display().to_string());
     let mut child_command = command.to_vec();
+    // Before `--project-root`, as global flags.
+    let globals = crate::followup::child_flags();
+    let at = args.len() - 2;
+    args.splice(at..at, globals);
     if should_enable_publish_all(&child_command) {
         child_command.push("--publish-all".to_owned());
     }

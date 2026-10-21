@@ -86,7 +86,6 @@ pub(crate) fn handle_config_migrate(
 mod tests {
     use anyhow::Result;
     use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::config::{Config, Driver, Kind, ServiceConfig};
 
@@ -152,10 +151,7 @@ mod tests {
     fn temp_root() -> std::path::PathBuf {
         let root = crate::test_support::temp_root().join(format!(
             "berth-config-cmd-tests-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&root).expect("create temp dir");
         root

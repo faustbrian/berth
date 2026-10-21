@@ -116,7 +116,6 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn service(
         name: &str,
@@ -190,10 +189,7 @@ mod tests {
     {
         let dir = crate::test_support::temp_root().join(format!(
             "berth-open-reporting-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&dir).expect("temp dir");
         let script = dir.join("curl");
@@ -224,10 +220,7 @@ mod tests {
     {
         let marker_dir = crate::test_support::temp_root().join(format!(
             "berth-open-reporting-open-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&marker_dir).expect("create marker dir");
         let marker = marker_dir.join("invoked");

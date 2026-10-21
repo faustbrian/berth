@@ -272,6 +272,7 @@ mod failure_message;
 mod health;
 mod image_inspect;
 mod image_pull;
+mod resource_limit_args;
 pub(crate) use container_owner::ensure_own_container;
 mod volume_owner;
 pub(crate) use volume_owner::is_foreign_volume;
@@ -279,6 +280,7 @@ mod inspect;
 mod labels;
 mod logs;
 mod manage;
+mod missing_container;
 mod mysql_program;
 mod ops;
 mod policy;
@@ -304,12 +306,15 @@ pub(crate) use child_exit::{
 };
 pub(crate) use cmd::{
     docker_arg_refs, ensure_docker_output_success, run_docker_output, run_docker_output_owned,
-    run_docker_status, run_docker_status_owned, spawn_docker_stdin_stderr_piped,
-    spawn_docker_stdin_stdout_stderr_piped, spawn_docker_stdout_stderr_piped,
+    run_docker_status, run_docker_status_owned, spawn_docker_stdin_stdout_stderr_piped,
+    spawn_docker_stdout_stderr_piped,
 };
 pub(crate) use engine::RuntimeDiagnosticCheck;
 pub(crate) use engine_exec_failure::is_engine_exec_failure;
-pub(crate) use exec::{build_exec_args, run_tenant_dump};
+pub(crate) use exec::{
+    END_MARKER, ROLLBACK_MARKER, START_MARKER, build_exec_args, ensure_client_reachable,
+    tenant_dump_args,
+};
 pub use exec::{
     exec_command, exec_command_to_stderr, exec_interactive, exec_piped, exec_tenant_client,
 };
@@ -327,11 +332,13 @@ pub(crate) use labels::{
 };
 pub use logs::{LogsOptions, logs, logs_many, logs_prefixed};
 pub use manage::{down, pull, recreate, restart, rm, stop};
+pub(crate) use missing_container::reports_missing_container;
 pub use ops::{
     CpOptions, PruneOptions, StatsOptions, attach, cp, events, inspect_container, kill, pause,
     port, port_output, prune, prune_stopped_container, stats, top, unpause, wait,
 };
 pub(crate) use policy::{DockerPolicyOverrides, set_policy_overrides};
+pub(crate) use resource_limit_args::resource_limit_args;
 pub(crate) use scheduler::{DockerOpClass, with_scheduled_docker_op};
 pub use up::up;
 

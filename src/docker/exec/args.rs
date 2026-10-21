@@ -53,6 +53,30 @@ pub(super) fn client_env(service: &ServiceConfig) -> Vec<String> {
     }
 }
 
+/// [`client_env`] for the piped client a restore streams into. psql's
+/// errors are read, so they must be English: the server's messages follow
+/// `lc_messages`, which the dedicated server's superuser sets per session.
+pub(super) fn piped_client_env(service: &ServiceConfig) -> Vec<String> {
+    let mut env = client_env(service);
+    if service.driver == Driver::Postgres {
+        // A restore reads the server's errors, so it asks for English ones.
+        // Only a superuser may set `lc_messages`: a dedicated service's user
+        // is one (the image creates `POSTGRES_USER` as superuser), and a
+        // database that refuses it fails the reachability probe before a
+        // restore changes anything (`ensure_client_reachable`).
+        // psql lexes the dump by the session's `standard_conforming_strings`,
+        // and berth's line tap follows it with the setting on: the session
+        // starts on, whatever the server's configuration.
+        env.push("PGOPTIONS=-c lc_messages=C -c standard_conforming_strings=on".to_owned());
+        // psql's own errors (`psql:<stdin>:3: error: …`) follow the client's
+        // locale, and an image's `LC_ALL` (timescaledb-ha sets one) outranks
+        // `LC_MESSAGES`. Reading a dump from stdin, psql takes its encoding
+        // from the connection, not the locale.
+        env.push("LC_ALL=C".to_owned());
+    }
+    env
+}
+
 pub(super) fn interactive_client_args(service: &ServiceConfig) -> Vec<String> {
     match service.driver {
         Driver::Postgres => vec![
@@ -133,15 +157,19 @@ pub(super) fn interactive_client_args(service: &ServiceConfig) -> Vec<String> {
 
 pub(super) fn piped_client_args(service: &ServiceConfig) -> Result<Vec<String>> {
     match service.driver {
-        Driver::Postgres => Ok(vec![
-            "psql".to_owned(),
-            "-U".to_owned(),
-            service
-                .username
-                .clone()
-                .unwrap_or_else(|| "postgres".to_owned()),
-            service.database.clone().unwrap_or_else(|| "app".to_owned()),
-        ]),
+        // psql runs the whole dump and exits 0 whatever failed: the restore
+        // reads its errors and berth's markers (`psql_restore.rs`).
+        Driver::Postgres => Ok(super::psql_restore::psql_restore_args()
+            .into_iter()
+            .chain([
+                "-U".to_owned(),
+                service
+                    .username
+                    .clone()
+                    .unwrap_or_else(|| "postgres".to_owned()),
+                service.database.clone().unwrap_or_else(|| "app".to_owned()),
+            ])
+            .collect()),
         Driver::Mysql => {
             Ok([
                 crate::docker::mysql_program(&service.image, crate::docker::MysqlProgram::Client)
@@ -150,6 +178,9 @@ pub(super) fn piped_client_args(service: &ServiceConfig) -> Result<Vec<String>> 
             .into_iter()
             .chain(crate::docker::MYSQL_LOCAL_TCP.map(ToOwned::to_owned))
             .chain([
+                // Batch output without column names: berth reads its own
+                // rows after the dump (`database/restore/process.rs`).
+                "--skip-column-names".to_owned(),
                 "-u".to_owned(),
                 service
                     .username
@@ -211,7 +242,7 @@ mod tests {
 
     use super::{
         build_client_exec_args, build_exec_args, client_env, interactive_client_args,
-        piped_client_args,
+        piped_client_args, piped_client_env,
     };
 
     fn service(
@@ -339,20 +370,69 @@ mod tests {
     }
 
     #[test]
+    fn a_restores_postgres_client_asks_for_english_messages_on_both_sides() {
+        // The restore judges psql's stderr by its English wording: the
+        // server's (`lc_messages`) and psql's own (`LC_ALL`).
+        let postgres = service("db", Driver::Postgres, None, None, Some("app"));
+        let env = piped_client_env(&postgres);
+        assert!(
+            env.contains(
+                &"PGOPTIONS=-c lc_messages=C -c standard_conforming_strings=on".to_owned()
+            ),
+            "{env:?}"
+        );
+        assert!(env.contains(&"LC_ALL=C".to_owned()), "{env:?}");
+        let mysql = service("db", Driver::Mysql, None, None, Some("app"));
+        assert!(
+            !piped_client_env(&mysql)
+                .iter()
+                .any(|var| var.starts_with("PGOPTIONS") || var.starts_with("LC_ALL")),
+            "MySQL's restore reads its exit status"
+        );
+    }
+
+    #[test]
+    fn a_reset_accepts_only_its_own_missing_database() {
+        let named = service("db", Driver::Postgres, None, None, Some("shop"));
+        let unnamed = service("db", Driver::Postgres, None, None, None);
+        let missing = |service: &ServiceConfig, stderr: &str| {
+            super::super::client_reachable::reports_missing_database(service, stderr)
+        };
+        assert!(missing(&named, "FATAL:  database \"shop\" does not exist"));
+        assert!(missing(
+            &named,
+            "ERROR 1049 (42000): Unknown database 'shop'"
+        ));
+        // The client's fallback name, which the reset recreates too.
+        assert!(missing(&unnamed, "FATAL:  database \"app\" does not exist"));
+        assert!(!missing(
+            &named,
+            "FATAL:  database \"other\" does not exist"
+        ));
+        assert!(!missing(&named, "FATAL:  password authentication failed"));
+    }
+
+    #[test]
     fn piped_client_args_supports_only_sql_backends() {
         let redis = service("cache", Driver::Redis, None, None, None);
         assert!(piped_client_args(&redis).is_err());
 
         let postgres = service("db", Driver::Postgres, None, None, Some("database"));
-        assert_eq!(
-            piped_client_args(&postgres).expect("postgres args"),
-            vec![
-                "psql".to_owned(),
-                "-U".to_owned(),
-                "postgres".to_owned(),
-                "database".to_owned()
-            ]
+        let args = piped_client_args(&postgres).expect("postgres args");
+        // berth's markers run around the dump, and the connection comes last.
+        assert_eq!(args[..3], ["psql", "-X", "-b"]);
+        let dump = args.iter().position(|arg| arg == "-").expect("-f -");
+        assert!(
+            args[..dump]
+                .iter()
+                .any(|arg| arg.contains("berth-backend-start"))
         );
+        assert!(
+            args[dump..]
+                .iter()
+                .any(|arg| arg.contains("berth-backend-end"))
+        );
+        assert_eq!(args[args.len() - 3..], ["-U", "postgres", "database"]);
 
         let sqlserver = service(
             "mssql",
@@ -374,6 +454,16 @@ mod tests {
                 "-d".to_owned(),
                 "master".to_owned()
             ]
+        );
+    }
+    #[test]
+    fn a_piped_mysql_client_prints_rows_without_column_names() {
+        // berth reads its own rows after the dump from the client's output.
+        let mysql = service("db", Driver::Mysql, None, None, Some("app"));
+        assert!(
+            piped_client_args(&mysql)
+                .expect("mysql args")
+                .contains(&"--skip-column-names".to_owned())
         );
     }
 }

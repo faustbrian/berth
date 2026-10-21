@@ -13,6 +13,7 @@ use selection::resolve_name_and_image;
 mod conflict;
 mod fields;
 mod hooks;
+mod limits;
 mod selection;
 
 pub(super) fn expand_raw_service(raw: RawServiceConfig) -> Result<ServiceConfig> {
@@ -37,6 +38,8 @@ pub(super) fn expand_raw_service(raw: RawServiceConfig) -> Result<ServiceConfig>
     )?;
 
     let (name, image) = resolve_name_and_image(&raw, defaults.as_ref(), driver)?;
+    let limits = limits::resource_limits(raw.cpus, raw.memory.as_deref())
+        .with_context(|| format!("service '{name}'"))?;
     let authored_credentials =
         raw.database.is_some() || raw.username.is_some() || raw.password.is_some();
     let authored_container_fields: Vec<&'static str> = [
@@ -46,6 +49,8 @@ pub(super) fn expand_raw_service(raw: RawServiceConfig) -> Result<ServiceConfig>
         ("container_port", raw.container_port.is_some()),
         ("restart", raw.restart.is_some()),
         ("hook", !raw.hook.is_empty()),
+        ("cpus", raw.cpus.is_some()),
+        ("memory", raw.memory.is_some()),
     ]
     .into_iter()
     .filter_map(|(field, set)| set.then_some(field))
@@ -134,6 +139,7 @@ pub(super) fn expand_raw_service(raw: RawServiceConfig) -> Result<ServiceConfig>
             isolation: raw.isolation,
             authored_credentials,
             authored_container_fields,
+            limits,
             ..Default::default()
         },
     })

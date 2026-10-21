@@ -35,7 +35,6 @@ mod tests {
     use super::resolve_project_runtime_context;
     use crate::config::{Config, Driver, Kind, ServiceConfig};
     use std::path::Path;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn config() -> Config {
         Config {
@@ -93,10 +92,7 @@ mod tests {
     fn temp_config_path() -> std::path::PathBuf {
         let path = crate::test_support::temp_root().join(format!(
             "berth-project-runtime-context-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         drop(std::fs::remove_dir_all(&path));
         std::fs::create_dir_all(&path).expect("create temp workspace");

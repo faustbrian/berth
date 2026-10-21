@@ -24,7 +24,9 @@ These apply to every command.
 - `--env <NAME>`: a runtime namespace inside the instance (its own containers
   and network; for example `test`).
 - `--instance <ID>`: use this instance ID instead of the one derived from the
-  checkout path (`BERTH_INSTANCE` sets it too).
+  checkout path (`BERTH_INSTANCE` sets it too): lowercase letters, digits and
+  inner hyphens, at most 23 bytes (it goes into each service's 63-byte DNS
+  name with the project's and the service's).
 - `--engine <docker|podman>`: the container engine for this invocation
   (`BERTH_ENGINE` sets it too, and either wins over `container_engine` from
   the project file; the default is `docker`).
@@ -71,8 +73,13 @@ Service fields: `preset`, `kind`, `driver`, `image`, `host`, `port`,
 `smtp_port`, `volumes`, `env`, `command`, `depends_on`, `seed_file`, `hook`,
 `health_path`, `health_statuses`, `restart`, `localhost_tls`, `octane`,
 `octane_workers`, `octane_max_requests`, `php_extensions`,
-`trust_container_ca`, `env_mapping`, `javascript`, `publish` and
-`isolation`.
+`trust_container_ca`, `env_mapping`, `javascript`, `publish`, `isolation`,
+`cpus` and `memory`.
+
+`cpus` (a number, such as `2` or `0.5`) and `memory` (a size such as `512m`
+or `2g`) cap the service's own container (`--cpus`, and `--memory` with no
+swap beyond it), and the one-off container a command runs in while the app
+is not running; a changed cap takes effect with `berth recreate`.
 
 Rules that protect a worktree's project file:
 
@@ -94,7 +101,28 @@ container per instance. `isolation: dedicated` gives a shared-capable
 service its own container; `isolation: shared` is the default for those
 engines. A shared service cannot set `publish`, authored credentials or
 container fields (`volumes`, `env`, `port`, `container_port`, `restart`,
-`hook`). See [`docs/v9/architecture.md`](docs/v9/architecture.md).
+`hook`, `cpus`, `memory`). See [`docs/v9/architecture.md`](docs/v9/architecture.md).
+
+### Restores
+
+`berth restore` checks a dump in full (a file, or stdin kept in a private
+temporary file, which needs room for the whole dump in `TMPDIR`) before it
+changes anything, then judges every error psql reports: only errors that
+leave the data whole are warnings (owner, grant, default-privilege,
+session-authorization and extension-comment statements naming a role the
+server lacks, settings an older server lacks, and row-less writes to an
+extension's own tables), and none past a point where psql may read the dump
+otherwise than berth follows it (a psql command other than pg_dump's, a
+plain string ending in a backslash, or `:LAST_ERROR_MESSAGE`). For
+PostgreSQL, commands berth runs before and after the dump prove it all ran,
+on one connection, with no transaction left open; they need a server of
+version 10.7, 11.2 or later, and an older one is refused before anything
+changes. A MySQL restore must read the dump to its end and finish in the
+service's database, and a dump that
+switches database at a line's start (`mysqldump --databases`) is refused; a
+switch a hand-written dump makes later on a line and reverses, writes into
+another database by qualified names, and a transaction a MySQL dump leaves
+open (the client rolls it back as it exits) are not detected.
 
 ### Routing and host ports
 
@@ -568,12 +596,12 @@ Options:
 - `--port-strategy <PORT_STRATEGY>`: Strategy for assigning ports when randomization is enabled [default: random] [possible values: random, stable]
 - `--port-seed <PORT_SEED>`: Seed used by `--port-strategy stable`
 - `--no-deps`: Skip starting workspace swarm dependencies
-- `--seed`: Apply configured data seed files after startup
+- `--seed`: Apply configured data seed files after startup, to databases that hold nothing of their own yet
 - `--parallel <PARALLEL>`: [default: 4]
 
 ### `berth apply`
 
-Converge services and apply configured data seeds
+Converge services and apply configured data seeds (to databases that hold nothing of their own yet)
 
 ```text
 berth apply [OPTIONS]

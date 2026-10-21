@@ -75,7 +75,8 @@ pub(crate) struct Cli {
     /// Runtime environment namespace (for example: `test`)
     #[arg(global = true, long, value_name = "NAME")]
     pub(crate) env: Option<String>,
-    /// Instance ID for this checkout's environment (default: derived from the project path)
+    /// Instance ID for this checkout's environment: lowercase letters, digits and inner hyphens,
+    /// at most 23 bytes (default: derived from the project path)
     #[arg(global = true, long, value_name = "ID", env = "BERTH_INSTANCE")]
     pub(crate) instance: Option<String>,
     /// Container runtime engine (`docker` or `podman`)

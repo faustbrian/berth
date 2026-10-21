@@ -57,6 +57,7 @@ pub(crate) fn handle_swarm(config: &config::Config, options: HandleSwarmOptions<
         runtime_env: options.runtime_env,
         config_path: options.config_path,
         project_root: options.project_root,
+        dependency_run: false,
     })
 }
 

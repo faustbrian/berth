@@ -62,6 +62,7 @@ pub(crate) fn run_project_swarm_dependencies(
         runtime_env: options.runtime_env,
         config_path: None,
         project_root: Some(context.workspace_root.as_path()),
+        dependency_run: true,
     })
 }
 

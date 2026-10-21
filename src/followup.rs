@@ -31,6 +31,9 @@ pub(crate) struct Invocation {
     pub(crate) global: bool,
     /// The flag that limits this run's readiness waits.
     pub(crate) limit: Limit,
+    /// Settings a swarm child must repeat: `--non-interactive` and the
+    /// Docker and test-pool limits, as `(flag, value)` pairs.
+    pub(crate) settings: Vec<(&'static str, Option<String>)>,
 }
 
 /// How a command limits its readiness waits; each names it differently.
@@ -91,6 +94,30 @@ pub(crate) fn command(args: &str) -> String {
     }
     flags.extend(mode_flags(&invocation));
     render(&flags, args)
+}
+
+/// The global flags a `berth` child of this run (a swarm target) must repeat
+/// to run as the user asked: the requested engine, `--repro`,
+/// `--non-interactive` and the Docker and test-pool limits. Children inherit
+/// `BERTH_ENGINE` but no flags. `--instance` is never passed on, since every
+/// target has its own. They go before the subcommand, so one the swarm
+/// command sets after it (`swarm up --engine docker`) still wins: clap keeps
+/// a subcommand's own value.
+#[must_use]
+pub(crate) fn child_flags() -> Vec<String> {
+    let invocation = invocation();
+    let mut flags = Vec::new();
+    if let Some(engine) = invocation.engine {
+        flags.extend(["--engine".to_owned(), engine_name(engine).to_owned()]);
+    }
+    if invocation.repro {
+        flags.push("--repro".to_owned());
+    }
+    for (flag, value) in &invocation.settings {
+        flags.push((*flag).to_owned());
+        flags.extend(value.clone());
+    }
+    flags
 }
 
 /// How to give this run's readiness waits longer, for a wait that hit its
@@ -180,14 +207,20 @@ pub(crate) fn logs(service: &ServiceConfig) -> String {
     for_service(service, &format!("logs --service {}", service.name))
 }
 
-/// The global flags that pick the engine, the project at `root` and a
-/// preview, for a command a hint assembles itself (the swarm rerun).
+/// The global flags a command a hint assembles itself (the swarm rerun)
+/// needs to run as this run did: the engine, the project at `root`,
+/// `--dry-run`, `--repro` and the recorded settings.
 #[must_use]
 pub(crate) fn context_flags(root: &Path) -> Vec<String> {
     let invocation = invocation();
     let mut flags = engine_flag(&invocation);
     flags.push(project_flag(&invocation, root));
     flags.extend(mode_flags(&invocation));
+    // The settings its children got, so a pasted rerun runs them alike.
+    flags.extend(invocation.settings.iter().map(|(flag, value)| match value {
+        Some(value) => format!("{flag} {}", quote(value)),
+        None => (*flag).to_owned(),
+    }));
     flags
 }
 
@@ -205,10 +238,17 @@ fn mode_flags(invocation: &Invocation) -> Vec<String> {
 /// `--engine` only when the run chose one: a project's configured engine
 /// is read again from its file.
 fn engine_flag(invocation: &Invocation) -> Vec<String> {
-    match invocation.engine {
-        Some(crate::config::ContainerEngine::Podman) => vec!["--engine podman".to_owned()],
-        Some(_) => vec!["--engine docker".to_owned()],
-        None => Vec::new(),
+    invocation
+        .engine
+        .map(|engine| vec![format!("--engine {}", engine_name(engine))])
+        .unwrap_or_default()
+}
+
+/// The `--engine` value that selects `engine`.
+fn engine_name(engine: crate::config::ContainerEngine) -> &'static str {
+    match engine {
+        crate::config::ContainerEngine::Podman => "podman",
+        _ => "docker",
     }
 }
 
@@ -321,6 +361,28 @@ mod tests {
         );
         record(Invocation::default());
         assert_eq!(command("up"), "`berth up`");
+    }
+
+    #[test]
+    fn a_rerun_and_children_keep_the_runs_settings() {
+        record(Invocation {
+            settings: vec![
+                ("--non-interactive", None),
+                ("--docker-retry-budget", Some("3".to_owned())),
+            ],
+            ..Invocation::default()
+        });
+        let flags = super::context_flags(std::path::Path::new("/ws"));
+        assert!(flags.contains(&"--non-interactive".to_owned()), "{flags:?}");
+        assert!(
+            flags.contains(&"--docker-retry-budget 3".to_owned()),
+            "{flags:?}"
+        );
+        assert_eq!(
+            super::child_flags(),
+            ["--non-interactive", "--docker-retry-budget", "3"]
+        );
+        record(Invocation::default());
     }
 
     #[test]

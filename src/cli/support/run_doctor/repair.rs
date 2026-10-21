@@ -91,7 +91,6 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use std::path::{Path, PathBuf};
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     use crate::config::{Config, Driver, Kind, ServiceConfig};
     use crate::docker::with_docker_command;
@@ -149,10 +148,7 @@ mod tests {
         fn new(restart_recovers: bool) -> Self {
             let root = crate::test_support::temp_root().join(format!(
                 "berth-doctor-repair-all-{}",
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("time")
-                    .as_nanos()
+                crate::test_support::unique_stamp()
             ));
             fs::create_dir_all(&root).expect("create fixture dir");
 

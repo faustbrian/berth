@@ -46,6 +46,7 @@ pub(super) fn print_dry_run_container_start(
         crate::docker::ContainerRole::Service,
     )?);
     run_args.extend(crate::network::network_run_args(target, true));
+    run_args.extend(crate::docker::resource_limit_args(target));
     if crate::network::publishes_host_port(target) {
         run_args.push(mapping);
     }

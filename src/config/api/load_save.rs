@@ -73,6 +73,20 @@ fn resolve_project_type(raw: &RawConfig, config_path: &Path) -> Result<ProjectTy
                 config_path.display()
             )
         })?;
+    // Only an app berth runs (Laravel) needs to know which it is; a project
+    // file of databases, caches and other services alone is a project.
+    let has_app = raw.service.iter().any(|service| {
+        service.kind == Some(crate::config::Kind::App)
+            || service.preset.as_deref().is_some_and(|preset| {
+                // An unknown preset fails when the services are expanded.
+                super::super::presets::preset_defaults(preset)
+                    .is_ok_and(|defaults| defaults.kind == crate::config::Kind::App)
+            })
+    });
+    // Whatever composer.json says, if it says anything.
+    if !has_app {
+        return Ok(ProjectType::Project);
+    }
     if !composer_path.exists() {
         anyhow::bail!(
             "{} has no `project_type` and there is no {} to read it from; add `project_type: \
@@ -98,16 +112,16 @@ fn resolve_project_type(raw: &RawConfig, config_path: &Path) -> Result<ProjectTy
         })?;
     let composer_type = composer_json
         .get("type")
-        .and_then(serde_json::Value::as_str)
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "{} has no `project_type` and {} has no \"type\"; add `project_type: project` \
-                 (an app berth runs) or `project_type: library` (a package) to {}",
-                config_path.display(),
-                composer_path.display(),
-                config_path.display()
-            )
-        })?;
+        .and_then(serde_json::Value::as_str);
+    let Some(composer_type) = composer_type else {
+        anyhow::bail!(
+            "{} has no `project_type` and {} has no \"type\"; add `project_type: project` \
+             (an app berth runs) or `project_type: library` (a package) to {}",
+            config_path.display(),
+            composer_path.display(),
+            config_path.display()
+        );
+    };
 
     match composer_type {
         "project" => Ok(ProjectType::Project),
@@ -129,13 +143,9 @@ mod tests {
     use crate::config::ContainerEngine;
     use std::fs;
     use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_root() -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system clock")
-            .as_nanos();
+        let nanos = crate::test_support::unique_stamp();
         let root = crate::test_support::temp_root().join(format!("berth-load-save-{nanos}"));
         drop(fs::remove_dir_all(&root));
         fs::create_dir_all(&root).expect("create temp root");
@@ -182,14 +192,46 @@ mod tests {
         let config_path = root.join(".berth.yaml");
         crate::config::project_file::write_test_config_file(
             &config_path,
-            "schema_version = 1\nservice = []\n",
+            "schema_version = 1\n\n[[service]]\npreset = \"laravel\"\n",
         )
         .expect("write config");
 
         let error =
             load_container_engine_with(LoadConfigPathOptions::new(Some(&config_path), None))
-                .expect_err("project type should be required");
+                .expect_err("an app's project type should be required");
         assert!(error.to_string().contains("has no `project_type`"));
+    }
+
+    #[test]
+    fn a_project_file_without_an_app_ignores_a_type_less_composer_json() {
+        let root = temp_root();
+        let config_path = root.join(".berth.yaml");
+        fs::write(
+            &config_path,
+            "schema_version: 9\nproject: tests\nservices:\n  db:\n    preset: postgres\n    isolation: dedicated\n",
+        )
+        .expect("write config");
+        fs::write(root.join("composer.json"), "{}").expect("write composer");
+        let config =
+            crate::config::load_config_with(LoadConfigPathOptions::new(Some(&config_path), None))
+                .expect("loads without project_type");
+        assert_eq!(config.project_type, crate::config::ProjectType::Project);
+    }
+
+    #[test]
+    fn a_project_file_without_an_app_needs_no_project_type() {
+        // Only an app berth runs needs to know which kind it is.
+        let root = temp_root();
+        let config_path = root.join(".berth.yaml");
+        fs::write(
+            &config_path,
+            "schema_version: 9\nproject: tests\nservices:\n  db:\n    preset: postgres\n    isolation: dedicated\n",
+        )
+        .expect("write config");
+        let config =
+            crate::config::load_config_with(LoadConfigPathOptions::new(Some(&config_path), None))
+                .expect("loads without project_type");
+        assert_eq!(config.project_type, crate::config::ProjectType::Project);
     }
 
     #[test]

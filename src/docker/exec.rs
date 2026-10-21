@@ -10,12 +10,20 @@ use crate::docker::command_failed_in_container;
 
 use super::{is_dry_run, print_docker_command};
 pub(crate) use args::build_exec_args;
-use args::{build_client_exec_args, client_env, interactive_client_args, piped_client_args};
+use args::{
+    build_client_exec_args, client_env, interactive_client_args, piped_client_args,
+    piped_client_env,
+};
 use run::{dry_run_process, run_docker_status, spawn_docker_piped};
 
 mod args;
+mod client_reachable;
+mod psql_restore;
 mod run;
 mod tenant_client;
+
+pub(crate) use client_reachable::ensure_client_reachable;
+pub(crate) use psql_restore::{END_MARKER, ROLLBACK_MARKER, START_MARKER};
 
 use tenant_client::TenantProgram;
 
@@ -49,20 +57,20 @@ pub fn exec_tenant_client(service: &ServiceConfig, tty: bool) -> Result<()> {
     Ok(())
 }
 
-/// Dumps a shared server tenant's database with the dump program in a
-/// throwaway container on the instance network, as the tenant: like the
-/// client, it never runs inside the server every instance shares.
+/// The `docker run` arguments that dump a shared server tenant's database
+/// to stdout, with the dump program in a throwaway container on the
+/// instance network, as the tenant: like the client, it never runs inside
+/// the server every instance shares.
 ///
 /// # Errors
 ///
-/// Returns an error when the server is not running for this instance or
-/// the dump cannot be started.
-pub(crate) fn run_tenant_dump(service: &ServiceConfig) -> Result<std::process::Output> {
+/// Returns an error when the server is not running for this instance.
+pub(crate) fn tenant_dump_args(service: &ServiceConfig) -> Result<Vec<String>> {
     let args = tenant_client::tenant_client_run_args(service, false, TenantProgram::Dump)?;
     if !is_dry_run() {
         ensure_tenant_reachable(service)?;
     }
-    super::run_docker_output_owned(&args, &super::runtime_command_error_context("run"))
+    Ok(args)
 }
 
 /// Fails unless the shared server runs and is attached to this instance
@@ -138,25 +146,31 @@ fn ensure_container_running(service: &ServiceConfig, container_name: &str) -> Re
 /// the instance network: run inside the server, a dump's `\connect` or shell
 /// escape would reach every instance's data.
 pub fn exec_piped(service: &ServiceConfig, tty: bool) -> Result<Child> {
-    if service.runtime.shared.is_some() {
-        let args = tenant_client::tenant_client_run_args(service, false, TenantProgram::Client)?;
-        if is_dry_run() {
-            print_docker_command(&args);
-            return dry_run_process();
-        }
-        ensure_tenant_reachable(service)?;
-        return spawn_docker_piped(&args);
-    }
-    let container_name = service.container_name()?;
-    let client_args = piped_client_args(service)?;
-    let args = build_client_exec_args(&container_name, &client_env(service), &client_args, tty);
-
+    let args = piped_client_command(service, tty)?;
     if is_dry_run() {
         print_docker_command(&args);
         return dry_run_process();
     }
-
     spawn_docker_piped(&args)
+}
+
+/// The `docker` arguments of the service's piped database client.
+fn piped_client_command(service: &ServiceConfig, tty: bool) -> Result<Vec<String>> {
+    if service.runtime.shared.is_some() {
+        let args = tenant_client::tenant_client_run_args(service, false, TenantProgram::Piped)?;
+        if !is_dry_run() {
+            ensure_tenant_reachable(service)?;
+        }
+        return Ok(args);
+    }
+    let container_name = service.container_name()?;
+    let client_args = piped_client_args(service)?;
+    Ok(build_client_exec_args(
+        &container_name,
+        &piped_client_env(service),
+        &client_args,
+        tty,
+    ))
 }
 
 /// Runs `command` in the service container with its stdout sent to berth's
@@ -217,7 +231,6 @@ mod tests {
     use crate::docker;
     use std::fs;
     use std::io::Write;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn with_fake_docker<F, T>(script: &str, test: F) -> T
     where
@@ -225,10 +238,7 @@ mod tests {
     {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-fake-docker-exec-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         fs::create_dir_all(&bin_dir).expect("create temp dir");
 

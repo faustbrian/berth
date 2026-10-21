@@ -134,6 +134,7 @@ fn tenant_password(
     if cfg!(test) {
         return Ok("0".repeat(64));
     }
+    crate::home::instance_dir(project, instance)?;
     crate::home::read_or_create(
         &Path::new("instances")
             .join(project)

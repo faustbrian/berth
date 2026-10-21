@@ -170,7 +170,6 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use std::path::{Path, PathBuf};
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn with_temp_project<F, T>(database_php: &str, test: F) -> T
     where
@@ -178,11 +177,11 @@ mod tests {
     {
         let root = crate::test_support::temp_root().join(format!(
             "berth-post-restore-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
+        // The clock is coarse: parallel tests could share a name and remove
+        // each other's project.
+        let root = crate::docker::unique_test_path(root);
         fs::create_dir_all(root.join("config")).expect("create temp project");
         crate::config::project_file::write_test_config_file(
             root.join(".berth.yaml"),
@@ -202,10 +201,7 @@ mod tests {
     {
         let bin_dir = crate::test_support::temp_root().join(format!(
             "berth-post-restore-docker-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         // A clock tick is coarse: two parallel tests could share a name and
         // remove each other's fake binary.
@@ -312,13 +308,10 @@ return [
     }
 
     fn capture_path() -> PathBuf {
-        crate::test_support::temp_root().join(format!(
+        crate::docker::unique_test_path(crate::test_support::temp_root().join(format!(
             "berth-post-restore-capture-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
-        ))
+            crate::test_support::unique_stamp()
+        )))
     }
 
     #[test]

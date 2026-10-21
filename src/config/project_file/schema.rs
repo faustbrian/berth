@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::Path;
 
-use super::PROJECT_SCHEMA_VERSION;
+use super::{PROJECT_FILE_NAME, PROJECT_SCHEMA_VERSION};
 use crate::config::{ContainerEngine, ProjectType, RawConfig, RawServiceConfig, RawSwarmTarget};
 
 /// Maximum project name length, so `{instance}-{project}-{service}` routes
@@ -40,11 +40,39 @@ pub(crate) fn parse_project_file(content: &str, path: &Path) -> Result<RawConfig
         let line = line.trim();
         line.is_empty() || line.starts_with('#')
     }) {
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+        // A runtime-environment file (`.berth.<env>.yaml`) sits next to a
+        // `.berth.yaml`, which `berth init` refuses to overwrite. Under
+        // `--env` it replaces that file whole (`paths/search.rs`).
+        // Any other file next to a `.berth.yaml` (`--env`'s, or one named
+        // by `--config`) is used instead of it.
+        if name != PROJECT_FILE_NAME && path.with_file_name(PROJECT_FILE_NAME).is_file() {
+            anyhow::bail!(
+                "{} is empty; when selected (by `--env`, or by `--config` naming it) it is used \
+                 instead of .berth.yaml, as a complete project file: copy .berth.yaml into it and \
+                 change what differs, or delete it and select .berth.yaml instead",
+                path.display()
+            );
+        }
+        // `berth init` writes `.berth.yaml`, so a file of another name is
+        // then left behind by `--config`.
+        let then = if name == PROJECT_FILE_NAME {
+            ""
+        } else {
+            ", then point `--config` at the .berth.yaml it writes"
+        };
         anyhow::bail!(
             "{} is empty; a project file needs at least `schema_version: {PROJECT_SCHEMA_VERSION}` \
-             and `project: <name>` (for a starter file, delete it and run `berth init` in {})",
+             and `project: <name>` (for a starter file, delete it and run `berth init` in \
+             {}{then})",
             path.display(),
-            path.parent().unwrap_or_else(|| Path::new(".")).display()
+            path.parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."))
+                .display()
         );
     }
     let file: ProjectFile = crate::config::yaml::from_str(content)

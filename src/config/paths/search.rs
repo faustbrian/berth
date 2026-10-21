@@ -115,10 +115,7 @@ mod tests {
         let dir = crate::test_support::temp_root().join(format!(
             "berth-path-search-{}-{}-{sequence}",
             std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ));
         drop(fs::remove_dir_all(&dir));
         fs::create_dir_all(dir.join("nested")).expect("create nested dir");

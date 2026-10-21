@@ -86,13 +86,34 @@ impl ActiveLease {
     ///
     /// Returns an error when the lease cannot be written.
     pub(super) fn finish(self) -> Result<()> {
-        if !crate::home::home_path(
+        // A purge deleted the instance's state: its directory is gone, or
+        // holds only the record of tenants the purge could not drop.
+        let dir = crate::home::home_path(
             &std::path::Path::new("instances")
                 .join(&self.project)
                 .join(&self.instance),
-        )?
-        .exists()
-        {
+        )?;
+        let purged = match std::fs::read_dir(&dir) {
+            Ok(entries) => {
+                let mut purged = true;
+                for entry in entries {
+                    let name = entry
+                        .map_err(|error| {
+                            anyhow::anyhow!("failed to read {}: {error}", dir.display())
+                        })?
+                        .file_name();
+                    // The record, or one being written (`.shared-servers.<pid>`).
+                    let name = name.to_string_lossy();
+                    purged &= name == "shared-servers" || name.starts_with(".shared-servers.");
+                }
+                purged
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+            Err(error) => {
+                anyhow::bail!("failed to read {}: {error}", dir.display());
+            }
+        };
+        if purged {
             return Ok(());
         }
         crate::instance::renew_lease(

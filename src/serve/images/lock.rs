@@ -110,15 +110,11 @@ fn write_atomic_file(path: &std::path::Path, content: &str) -> Result<()> {
 mod tests {
     use super::{acquire_file_lock, write_atomic_file};
     use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_path(name: &str) -> std::path::PathBuf {
         crate::test_support::temp_root().join(format!(
             "berth-derived-lock-{name}-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("system clock")
-                .as_nanos()
+            crate::test_support::unique_stamp()
         ))
     }
 
